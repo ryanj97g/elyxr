@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
-import 'design/tokens.dart';
 import 'state/session.dart';
 import 'state/settings.dart';
 import 'state/transfers.dart';
@@ -16,24 +15,14 @@ import 'state/transfers.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // The metal chassis IS the window: frameless, transparent-cornered, sized
-  // exactly to the device, not resizable (DESIGN.md — fixed 440×884).
+  // The native launcher owns the window's geometry (frameless, chassis-sized,
+  // transparent — see linux/runner/my_application.cc). window_manager is here
+  // for the interactive parts: dragging by the rail and the screw controls.
   await windowManager.ensureInitialized();
-  const chassis = Size(kAppWidth, kAppHeight);
   await windowManager.waitUntilReadyToShow(
-    const WindowOptions(
-      size: chassis,
-      minimumSize: chassis,
-      maximumSize: chassis,
-      center: true,
-      backgroundColor: Colors.transparent,
-      skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.hidden,
-      title: 'Elyxr',
-    ),
+    const WindowOptions(titleBarStyle: TitleBarStyle.hidden),
     () async {
       await windowManager.setAsFrameless();
-      await windowManager.setResizable(false);
       await windowManager.show();
       await windowManager.focus();
     },

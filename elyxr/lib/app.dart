@@ -103,11 +103,11 @@ class _RootState extends State<_Root> {
 
     final child = session.isFirstRun ? const FirstRunScreen() : const HomeScreen();
 
-    // The window is exactly chassis-sized and transparent, so the metal fills
-    // it and its rounded corners become the window's shape — no void, no chrome.
+    // The window is chassis-sized and transparent, so the metal fills it and
+    // its rounded corners become the window's shape — no void, no chrome.
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: child,
+      body: Center(child: child),
     );
   }
 }
