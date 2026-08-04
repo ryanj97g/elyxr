@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["lymnald", "lymnal-cli", "elyxr-trove"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["macros"] }
+tower-http = { version = "0.5", features = ["trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+argon2 = "0.5"
+blake3 = "1"
+notify = "6"
+ulid = "1"
+toml = "0.8"
+anyhow = "1"
+thiserror = "1"

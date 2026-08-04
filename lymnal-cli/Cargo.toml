@@ -1,0 +1,13 @@
+[package]
+name = "lymnal-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "lymnal"
+path = "src/main.rs"
+
+[dependencies]
+lymnald = { path = "../lymnald" }
+anyhow.workspace = true

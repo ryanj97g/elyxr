@@ -1,0 +1,42 @@
+# Example lymnal config. Normally Elyxr writes this in server mode; it is
+# reproduced here for reference and local runs. Copy to
+# ~/.config/lymnal/config.toml and adjust `bind` to this machine's Tailscale
+# address. Tokens are never written by hand — they are minted at pairing and
+# stored as argon2id hashes.
+
+bind      = "100.127.82.110:7749"   # Tailscale address only — no LAN, no forwarding
+data_dir  = "~/.local/share/lymnal"
+log_level = "info"                  # error|warn|info|debug|trace
+
+[trove]
+name = "Elyxr"
+path = "~/Desktop/Elyxr"            # created on first run
+follow_symlinks = false
+
+# [[token]] entries are added by pairing, not by hand. Shape, for reference:
+# [[token]]
+# label     = "probookrjg"
+# hash      = "argon2id$..."        # never the token itself
+# role      = "owner"               # owner | guest
+# max_bytes = 150_000_000_000
+
+[limits]
+max_bytes      = 150_000_000_000    # stop uploads past this
+warn_at_bytes  = 100_000_000_000    # first warning
+warn_every     =   5_000_000_000    # then every +5 GB
+min_free_bytes =  15_000_000_000    # stop if the drive gets this empty
+
+[download]
+max_loose_files = 5                 # more than this arrives as a zip
+max_conns       = 3
+
+[upload]
+chunk_bytes     = 8_388_608         # 8 MiB
+stale_after_hrs = 48                # abandoned uploads swept
+
+[list]
+default_limit = 500
+max_limit     = 2000
+
+[client]
+cache_bytes = 5_000_000_000         # or 1/4 of free space, min 500 MB
