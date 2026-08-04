@@ -25,7 +25,7 @@ class SettingsController extends ChangeNotifier {
   Density _density = Density.mid;
   bool _dark = true;
   ViewMode _mode = ViewMode.text;
-  bool _trove = false; // is elyxr-trove running (the folder switch)
+  bool _trove = false; // is trove running (the folder switch)
   bool _notify = true;
   int _cache = 10; // 1..20 → 0.5–15 GB
   AppMode _appMode = AppMode.client;

@@ -1,7 +1,7 @@
 //! The temp-file-and-swap save pattern (§03).
 //!
 //! Most programs save by writing a temporary file beside yours, then swapping
-//! the names. elyxr-trove recognises that swap and treats the temporary file as
+//! the names. trove recognises that swap and treats the temporary file as
 //! the new version — so a save in place uploads the swapped-in bytes as the new
 //! version of the target. This is the main work on the client and what the
 //! write tests cover.

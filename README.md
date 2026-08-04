@@ -6,7 +6,7 @@ like a flash drive you plugged in.
 - `lymnal/` — lymnal, the server service (Rust). One binary: `lymnal` runs the
   service, `lymnal <command>` does the troubleshooting operations.
 - `elyxr/` — the desktop app (Flutter, Linux)
-- `elyxr-trove/` — mounts the trove as `~/Elyxr` (Rust, FUSE)
+- `trove/` — mounts the trove as `~/Elyxr` (Rust, FUSE)
 
 ## Build
 

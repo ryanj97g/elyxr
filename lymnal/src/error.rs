@@ -18,7 +18,7 @@ use axum::Json;
 use serde_json::json;
 
 /// The closed set of error codes. The HTTP status and the errno an
-/// elyxr-trove client would hand to other programs both live here, so the
+/// trove client would hand to other programs both live here, so the
 /// three columns of the §09 table can never drift apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrCode {
@@ -83,7 +83,7 @@ impl ErrCode {
         }
     }
 
-    /// The numbered filesystem failure elyxr-trove hands to other programs,
+    /// The numbered filesystem failure trove hands to other programs,
     /// which cannot be given a sentence. `None` for the pairing codes, which
     /// never reach the folder layer.
     pub fn errno(self) -> Option<i32> {
