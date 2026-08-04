@@ -357,20 +357,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "elyxr-trove"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "fuser",
- "libc",
- "serde",
- "serde_json",
- "tempfile",
- "tracing",
- "ureq",
-]
-
-[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1843,6 +1829,20 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "trove"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "fuser",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "ureq",
 ]
 
 [[package]]

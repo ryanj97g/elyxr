@@ -1,4 +1,4 @@
-//! elyxr-trove — answers for the trove folder on the client machine (§03).
+//! trove — answers for the trove folder on the client machine (§03).
 //!
 //! It tells the operating system it will answer for one folder (mounted at
 //! `~/Elyxr` by default) and turns every question about that folder into a

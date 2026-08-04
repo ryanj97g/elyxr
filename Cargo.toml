@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["lymnal", "elyxr-trove"]
+members = ["lymnal", "trove"]
 
 [workspace.package]
 version = "1.0.0"

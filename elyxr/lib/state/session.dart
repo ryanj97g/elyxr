@@ -172,7 +172,7 @@ class SessionController extends ChangeNotifier {
   }
 
   /// Forget this server: delete the token, drop the pairing, and return to
-  /// first run. Changes nothing on the server (§10). The cache and elyxr-trove
+  /// first run. Changes nothing on the server (§10). The cache and trove
   /// are handled by the caller, which owns those subsystems.
   Future<void> forget() async {
     await _tokens.delete();

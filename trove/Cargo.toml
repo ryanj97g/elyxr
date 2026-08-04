@@ -1,15 +1,15 @@
 [package]
-name = "elyxr-trove"
+name = "trove"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "elyxr-trove"
+name = "trove"
 path = "src/main.rs"
 
 [lib]
-name = "elyxr_trove"
+name = "trove"
 path = "src/lib.rs"
 
 [dependencies]

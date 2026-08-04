@@ -1,6 +1,6 @@
 //! Answering the operating system (§03).
 //!
-//! elyxr-trove tells the OS it will answer for one folder. Every question about
+//! trove tells the OS it will answer for one folder. Every question about
 //! that folder arrives here instead of at a drive: what's in it (list, cached),
 //! open a file (download to the cache, then read from there), write (to the
 //! cached copy), close (upload if changed), and rename/delete/mkdir (passed

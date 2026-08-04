@@ -1,15 +1,15 @@
-//! elyxr-trove — mount the trove as a folder (default `~/Elyxr`).
+//! trove — mount the trove as a folder (default `~/Elyxr`).
 //!
 //! Installed with Elyxr; the folder is a switch in Elyxr's settings. Reads the
 //! server address and bearer token from the environment (Elyxr passes them):
 //!   ELYXR_SERVER   host:port on the tailnet (default 100.127.82.110:7749)
 //!   ELYXR_TOKEN    the bearer token (from the system keyring, via Elyxr)
 //!   ELYXR_MOUNT    where to mount (default ~/Elyxr)
-//!   ELYXR_CACHE    cache directory (default ~/.cache/elyxr-trove)
+//!   ELYXR_CACHE    cache directory (default ~/.cache/trove)
 
 use std::path::PathBuf;
 
-use elyxr_trove::{Cache, Lymnal, TroveFs};
+use trove::{Cache, Lymnal, TroveFs};
 use fuser::MountOption;
 
 fn main() -> anyhow::Result<()> {
@@ -17,7 +17,7 @@ fn main() -> anyhow::Result<()> {
     let token = match std::env::var("ELYXR_TOKEN") {
         Ok(t) if !t.is_empty() => t,
         _ => {
-            eprintln!("elyxr-trove: no token. Elyxr provides it via ELYXR_TOKEN once paired.");
+            eprintln!("trove: no token. Elyxr provides it via ELYXR_TOKEN once paired.");
             std::process::exit(1);
         }
     };
@@ -26,7 +26,7 @@ fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|_| home().join("Elyxr"));
     let cache_dir = std::env::var("ELYXR_CACHE")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| home().join(".cache/elyxr-trove"));
+        .unwrap_or_else(|_| home().join(".cache/trove"));
 
     std::fs::create_dir_all(&mount)?;
     let budget = cache_budget(&cache_dir);
