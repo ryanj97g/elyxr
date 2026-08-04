@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../design/text.dart';
 import '../design/tokens.dart';
@@ -62,7 +63,8 @@ class _TopRailState extends State<TopRail> {
       padding: const EdgeInsets.fromLTRB(3, 1, 3, 0),
       child: Row(
         children: [
-          _screw(p),
+          // Left screw quietly minimizes the window.
+          _screw(p, onTap: () => windowManager.minimize(), tip: 'Minimize'),
           const SizedBox(width: 9),
           GestureDetector(
             onTapDown: (_) => _press(),
@@ -135,23 +137,37 @@ class _TopRailState extends State<TopRail> {
           const SizedBox(width: 9),
           Text('v1.0.0', style: mono(9, p.mt, spacing: 0.1)),
           const SizedBox(width: 9),
-          _screw(p),
+          // Right screw quietly closes the window.
+          _screw(p, onTap: () => windowManager.close(), tip: 'Close'),
         ],
       ),
     );
   }
 
-  Widget _screw(Palette p) => Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            center: const Alignment(-0.3, -0.3),
-            colors: [p.mt, const Color(0xFF212823)],
-          ),
+  /// A chassis screw. Identical in look everywhere; when given [onTap] it also
+  /// acts as a window control (a click cursor and tooltip, same size and colour).
+  Widget _screw(Palette p, {VoidCallback? onTap, String? tip}) {
+    final dot = Container(
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          center: const Alignment(-0.3, -0.3),
+          colors: [p.mt, const Color(0xFF212823)],
         ),
-      );
+      ),
+    );
+    if (onTap == null) return dot;
+    Widget w = GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: dot,
+    );
+    w = MouseRegion(cursor: SystemMouseCursors.click, child: w);
+    if (tip != null) w = Tooltip(message: tip, child: w);
+    return w;
+  }
 }
 
 /// The bottom rail: TEXT/GRID rocker · TROVE switch · status LED.
