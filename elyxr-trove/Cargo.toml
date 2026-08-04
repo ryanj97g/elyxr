@@ -1,0 +1,25 @@
+[package]
+name = "elyxr-trove"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "elyxr-trove"
+path = "src/main.rs"
+
+[lib]
+name = "elyxr_trove"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+libc = "0.2"
+fuser = "0.14"
+ureq = { version = "2", features = ["json"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
