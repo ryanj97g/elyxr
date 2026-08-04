@@ -6,13 +6,13 @@
 
 use std::time::Duration;
 
-use lymnald::config::{expand_tilde, Config};
-use lymnald::devices::DeviceStore;
-use lymnald::events::watch_trove;
-use lymnald::limits::Usage;
-use lymnald::state::AppState;
-use lymnald::trove::Trove;
-use lymnald::upload::UploadManager;
+use lymnal::config::{expand_tilde, Config};
+use lymnal::devices::DeviceStore;
+use lymnal::events::watch_trove;
+use lymnal::limits::Usage;
+use lymnal::state::AppState;
+use lymnal::trove::Trove;
+use lymnal::upload::UploadManager;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
 
     spawn_maintenance(state.clone());
 
-    let app = lymnald::handlers::router(state.clone());
+    let app = lymnal::handlers::router(state.clone());
 
     let listener = match tokio::net::TcpListener::bind(&bind).await {
         Ok(l) => {
@@ -98,7 +98,7 @@ fn init_tracing(level: &str) {
 /// Background upkeep: sweep abandoned uploads hourly, and recount the trove at
 /// startup drift and daily (the spec's 4am recount; a 24 h tick is close
 /// enough without wall-clock scheduling in v1).
-fn spawn_maintenance(state: lymnald::Shared) {
+fn spawn_maintenance(state: lymnal::Shared) {
     let s = state.clone();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(Duration::from_secs(3600));

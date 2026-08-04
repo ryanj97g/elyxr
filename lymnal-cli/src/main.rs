@@ -1,5 +1,5 @@
 //! lymnal-cli — the same operations as commands, for troubleshooting only.
-//! Setup never requires a terminal; these call the same lymnald code paths so
+//! Setup never requires a terminal; these call the same lymnal code paths so
 //! the CLI and Elyxr's server mode cannot disagree.
 //!
 //!   lymnal status
@@ -11,10 +11,10 @@
 //!
 //! A different config file: LYMNAL_CONFIG=... or --config <path>.
 
-use lymnald::auth::hash_token;
-use lymnald::config::{expand_tilde, Config, Role};
-use lymnald::devices::{DeviceRecord, DeviceStore};
-use lymnald::limits::Usage;
+use lymnal::auth::hash_token;
+use lymnal::config::{expand_tilde, Config, Role};
+use lymnal::devices::{DeviceRecord, DeviceStore};
+use lymnal::limits::Usage;
 
 fn main() {
     if let Err(e) = run() {

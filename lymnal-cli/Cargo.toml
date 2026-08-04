@@ -9,5 +9,5 @@ name = "lymnal"
 path = "src/main.rs"
 
 [dependencies]
-lymnald = { path = "../lymnald" }
+lymnal = { path = "../lymnal" }
 anyhow.workspace = true
