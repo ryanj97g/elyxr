@@ -1,30 +1,17 @@
-//! lymnal-cli — the same operations as commands, for troubleshooting only.
-//! Setup never requires a terminal; these call the same lymnal code paths so
-//! the CLI and Elyxr's server mode cannot disagree.
-//!
-//!   lymnal status
-//!   lymnal token list
-//!   lymnal token new <label> [--role owner|guest] [--max-bytes N]
-//!   lymnal token revoke <label>
-//!   lymnal trove set <path>
-//!   lymnal recount
-//!
-//! A different config file: LYMNAL_CONFIG=... or --config <path>.
+//! The same operations as commands, for troubleshooting (§08). Reached as
+//! `lymnal <command>`; the service itself is `lymnal` with no command. These
+//! call the same code paths as the service and Elyxr's server mode, so the
+//! three cannot disagree.
 
 use lymnal::auth::hash_token;
 use lymnal::config::{expand_tilde, Config, Role};
 use lymnal::devices::{DeviceRecord, DeviceStore};
 use lymnal::limits::Usage;
 
-fn main() {
-    if let Err(e) = run() {
-        eprintln!("lymnal: {e}");
-        std::process::exit(1);
-    }
-}
-
-fn run() -> anyhow::Result<()> {
-    let mut args: Vec<String> = std::env::args().skip(1).collect();
+/// Dispatch a troubleshooting command. `args` is the full argument list, with
+/// the subcommand first.
+pub fn run(args: &[String]) -> anyhow::Result<()> {
+    let mut args = args.to_vec();
 
     // Optional --config <path> anywhere.
     let mut config_path = std::env::var("LYMNAL_CONFIG")
@@ -32,23 +19,22 @@ fn run() -> anyhow::Result<()> {
         .map(expand_tilde)
         .unwrap_or_else(|| expand_tilde("~/.config/lymnal/config.toml"));
     if let Some(i) = args.iter().position(|a| a == "--config") {
-        config_path = expand_tilde(args.remove(i + 1));
+        if i + 1 < args.len() {
+            config_path = expand_tilde(args.remove(i + 1));
+        }
         args.remove(i);
     }
 
-    let cmd = args.first().map(String::as_str).unwrap_or("");
-    match cmd {
+    match args.first().map(String::as_str).unwrap_or("") {
         "status" => status(&config_path),
         "recount" => recount(&config_path),
         "token" => token(&config_path, &args[1..]),
         "trove" => trove(&config_path, &args[1..]),
-        "" | "help" | "-h" | "--help" => {
+        "help" | "-h" | "--help" | "" => {
             print_usage();
             Ok(())
         }
-        other => {
-            anyhow::bail!("unknown command '{other}'. Try: lymnal help");
-        }
+        other => anyhow::bail!("unknown command '{other}'. Try: lymnal help"),
     }
 }
 
@@ -102,7 +88,11 @@ fn token(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
         Some("new") => {
             let label = args
                 .get(1)
-                .ok_or_else(|| anyhow::anyhow!("usage: lymnal token new <label> [--role owner|guest] [--max-bytes N]"))?
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "usage: lymnal token new <label> [--role owner|guest] [--max-bytes N]"
+                    )
+                })?
                 .clone();
             let role = flag(args, "--role")
                 .map(|r| if r == "guest" { Role::Guest } else { Role::Owner })
@@ -162,7 +152,9 @@ fn trove(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
 }
 
 fn flag(args: &[String], name: &str) -> Option<String> {
-    args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
+    args.iter()
+        .position(|a| a == name)
+        .and_then(|i| args.get(i + 1).cloned())
 }
 
 fn role_str(role: Role) -> &'static str {
@@ -179,7 +171,7 @@ fn now() -> i64 {
         .unwrap_or(0)
 }
 
-/// A time-ordered random-ish id without pulling ulid into this crate.
+/// A time-ordered random-ish id without pulling ulid into this path.
 fn ulid_like() -> String {
     let ns = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -190,7 +182,10 @@ fn ulid_like() -> String {
 
 fn print_usage() {
     println!(
-        "lymnal — troubleshooting commands (Elyxr does all of this without a terminal)\n\n\
+        "lymnal — the service, and its troubleshooting commands\n\
+         (Elyxr does all of this without a terminal)\n\n\
+         lymnal                    run the service\n\
+         lymnal serve <config>     run the service with a specific config\n\
          lymnal status\n\
          lymnal token list\n\
          lymnal token new <label> [--role owner|guest] [--max-bytes N]\n\

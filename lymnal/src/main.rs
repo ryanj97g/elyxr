@@ -1,9 +1,20 @@
-//! lymnald — bind, signals, shutdown (§10).
+//! lymnal — one command for the whole service (§10).
 //!
-//! lymnal has no interface of its own. It is normally installed and started by
-//! Elyxr in server mode; run directly it takes a config path (argument or
-//! `LYMNAL_CONFIG`, default `~/.config/lymnal/config.toml`).
+//! With no arguments (or `serve`) lymnal runs as the background service. With a
+//! subcommand it does the same operations as commands, for troubleshooting —
+//! setup never requires a terminal, and Elyxr calls the same code paths so the
+//! two cannot disagree.
+//!
+//!   lymnal                    run the service (config: ~/.config/lymnal/config.toml)
+//!   lymnal serve [config]     run the service with a specific config
+//!   lymnal status
+//!   lymnal token list | new <label> [--role owner|guest] [--max-bytes N] | revoke <label>
+//!   lymnal trove set <path>
+//!   lymnal recount
 
+mod cli;
+
+use std::path::PathBuf;
 use std::time::Duration;
 
 use lymnal::config::{expand_tilde, Config};
@@ -14,14 +25,36 @@ use lymnal::state::AppState;
 use lymnal::trove::Trove;
 use lymnal::upload::UploadManager;
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config_path = std::env::args()
-        .nth(1)
+fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match args.first().map(String::as_str) {
+        // Troubleshooting commands.
+        Some("status") | Some("token") | Some("trove") | Some("recount") | Some("help")
+        | Some("-h") | Some("--help") => cli::run(&args),
+        // Explicitly run the service.
+        Some("serve") => run_service(daemon_config(&args[1..])),
+        // No command (or a bare config path) runs the service.
+        _ => run_service(daemon_config(&args)),
+    }
+}
+
+/// The config path for the service: first argument, then `LYMNAL_CONFIG`, then
+/// the default.
+fn daemon_config(args: &[String]) -> PathBuf {
+    args.first()
+        .cloned()
         .or_else(|| std::env::var("LYMNAL_CONFIG").ok())
         .map(expand_tilde)
-        .unwrap_or_else(|| expand_tilde("~/.config/lymnal/config.toml"));
+        .unwrap_or_else(|| expand_tilde("~/.config/lymnal/config.toml"))
+}
 
+/// Build a runtime and run the service to shutdown.
+fn run_service(config_path: PathBuf) -> anyhow::Result<()> {
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(serve(config_path))
+}
+
+async fn serve(config_path: PathBuf) -> anyhow::Result<()> {
     let cfg = match Config::load(&config_path) {
         Ok(c) => c,
         Err(e) => {
@@ -88,11 +121,8 @@ async fn main() -> anyhow::Result<()> {
 
 fn init_tracing(level: &str) {
     use tracing_subscriber::EnvFilter;
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(level));
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .try_init();
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
+    let _ = tracing_subscriber::fmt().with_env_filter(filter).try_init();
 }
 
 /// Background upkeep: sweep abandoned uploads hourly, and recount the trove at
