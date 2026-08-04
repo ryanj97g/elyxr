@@ -3,6 +3,7 @@
 // terminal. Everything on the metal is a physical control." (DESIGN.md)
 
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'tokens.dart';
 
@@ -40,19 +41,13 @@ class Chassis extends StatelessWidget {
         ),
         border: Border.all(color: p.mb, width: 1),
         borderRadius: BorderRadius.circular(9),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.58),
-            blurRadius: 42,
-            offset: const Offset(0, 18),
-          ),
-        ],
       ),
       child: Column(
         children: [
           // Inner highlight (inset 0 1px 0 mh): a hairline at the very top.
           Container(height: 1, color: p.mh),
-          topRail,
+          // The top rail is the drag handle — grab the metal to move the window.
+          DragToMoveArea(child: topRail),
           const SizedBox(height: 8),
           Expanded(child: tube),
           const SizedBox(height: 8),

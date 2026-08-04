@@ -43,7 +43,12 @@ class ElyxrApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Elyxr',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(useMaterial3: true, fontFamily: 'VT323'),
+        color: Colors.transparent,
+        theme: ThemeData(
+          useMaterial3: true,
+          fontFamily: 'VT323',
+          scaffoldBackgroundColor: Colors.transparent,
+        ),
         home: const _Root(),
       ),
     );
@@ -98,9 +103,11 @@ class _RootState extends State<_Root> {
 
     final child = session.isFirstRun ? const FirstRunScreen() : const HomeScreen();
 
+    // The window is exactly chassis-sized and transparent, so the metal fills
+    // it and its rounded corners become the window's shape — no void, no chrome.
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0B0D),
-      body: Center(child: child),
+      backgroundColor: Colors.transparent,
+      body: child,
     );
   }
 }
