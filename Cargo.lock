@@ -933,15 +933,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
-name = "lymnal-cli"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "lymnald",
-]
-
-[[package]]
-name = "lymnald"
+name = "lymnal"
 version = "1.0.0"
 dependencies = [
  "anyhow",
@@ -970,6 +962,14 @@ dependencies = [
  "tracing-subscriber",
  "ulid",
  "unicode-normalization",
+]
+
+[[package]]
+name = "lymnal-cli"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "lymnal",
 ]
 
 [[package]]

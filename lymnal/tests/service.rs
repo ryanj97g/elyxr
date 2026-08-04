@@ -9,19 +9,19 @@ use http_body_util::BodyExt;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
-use lymnald::config::{Config, Download, Limits, ListCfg, Role, TokenCfg, TroveCfg, Upload};
-use lymnald::devices::DeviceStore;
-use lymnald::limits::Usage;
-use lymnald::state::AppState;
-use lymnald::trove::Trove;
-use lymnald::upload::UploadManager;
+use lymnal::config::{Config, Download, Limits, ListCfg, Role, TokenCfg, TroveCfg, Upload};
+use lymnal::devices::DeviceStore;
+use lymnal::limits::Usage;
+use lymnal::state::AppState;
+use lymnal::trove::Trove;
+use lymnal::upload::UploadManager;
 
 const TOKEN: &str = "lym_testtoken";
 
 struct Harness {
     _dir: tempfile::TempDir,
     trove_root: std::path::PathBuf,
-    state: lymnald::Shared,
+    state: lymnal::Shared,
 }
 
 fn harness() -> Harness {
@@ -46,7 +46,7 @@ fn harness_with_limits(limits: Limits) -> Harness {
         },
         tokens: vec![TokenCfg {
             label: "probookrjg".into(),
-            hash: lymnald::auth::hash_token(TOKEN),
+            hash: lymnal::auth::hash_token(TOKEN),
             role: Role::Owner,
             max_bytes: 150_000_000_000,
         }],
@@ -70,7 +70,7 @@ fn harness_with_limits(limits: Limits) -> Harness {
 
 impl Harness {
     fn router(&self) -> axum::Router {
-        lymnald::handlers::router(self.state.clone())
+        lymnal::handlers::router(self.state.clone())
     }
 
     async fn send(
@@ -546,7 +546,7 @@ async fn move_defaults_to_fail_on_conflict() {
 #[tokio::test]
 async fn watcher_announces_a_file_added_on_the_server() {
     let h = harness();
-    let watcher = lymnald::events::watch_trove(
+    let watcher = lymnal::events::watch_trove(
         h.state.trove.root().to_path_buf(),
         h.state.events.clone(),
     );

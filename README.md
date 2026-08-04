@@ -3,7 +3,7 @@
 Reach a folder on your server from anywhere on your tailnet, and have it feel
 like a flash drive you plugged in.
 
-- `lymnald/` — lymnal, the server service (Rust)
+- `lymnal/` — lymnal, the server service (Rust)
 - `elyxr/` — the desktop app (Flutter, Linux)
 - `elyxr-trove/` — mounts the trove as `~/Elyxr` (Rust, FUSE)
 - `lymnal-cli/` — the same operations as commands

@@ -1,15 +1,17 @@
 [package]
-name = "lymnald"
+name = "lymnal"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+# The daemon executable keeps the conventional trailing "d" (like sshd/dockerd)
+# so the always-running service doesn't collide with the `lymnal` command.
 [[bin]]
 name = "lymnald"
 path = "src/main.rs"
 
 [lib]
-name = "lymnald"
+name = "lymnal"
 path = "src/lib.rs"
 
 [dependencies]
