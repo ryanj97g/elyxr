@@ -402,7 +402,7 @@ fn bind_help() -> anyhow::Result<()> {
     println!("On the machine with the files (the server), run one of these:");
     println!("  lymnal bind open              Accept a device, then approve it when it appears.");
     println!("  lymnal bind seal              Approve the one device that is waiting.");
-    println!("  lymnal bind list              Show the devices waiting, with their four words.");
+    println!("  lymnal bind list              Show the devices waiting to be approved.");
     println!("  lymnal bind approve <name> [--guest]");
     println!("  lymnal bind deny <name>");
     println!("  lymnal bind close             Stop accepting devices.\n");
