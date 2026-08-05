@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <radialGradient id="sh"><stop offset="0" stop-color="#000000" stop-opacity="0.30"></stop><stop offset="0.7" stop-color="#000000" stop-opacity="0.11"></stop><stop offset="1" stop-color="#000000" stop-opacity="0"></stop></radialGradient>
+    <radialGradient id="gl"><stop offset="0" stop-color="#ffe08a" stop-opacity="0.95"></stop><stop offset="0.55" stop-color="#ffd76b" stop-opacity="0.5"></stop><stop offset="1" stop-color="#ffd76b" stop-opacity="0"></stop></radialGradient>
+  </defs>
+  <ellipse cx="64" cy="112" rx="37" ry="8" fill="url(#sh)"></ellipse>
+  <ellipse cx="64" cy="56" rx="42" ry="19" fill="url(#gl)"></ellipse>
+  <path d="M24 70 Q24 66 28 66 L100 66 Q104 66 104 70 L104 100 Q104 108 96 108 L32 108 Q24 108 24 100 Z" fill="#ef871b"></path>
+  <path d="M24 70 Q24 66 28 66 L100 66 Q104 66 104 70 L104 78 L24 78 Z" fill="#ffab4d"></path>
+  <rect x="24" y="82" width="80" height="12" fill="#c9670f"></rect>
+  <rect x="24" y="66" width="8" height="42" fill="#d87310"></rect>
+  <rect x="96" y="66" width="8" height="42" fill="#d87310"></rect>
+  <rect x="56" y="80" width="16" height="16" rx="3" fill="#ffcf6a"></rect>
+  <circle cx="64" cy="86" r="2.4" fill="#8a4a0c"></circle>
+  <path d="M34 62 Q64 52 94 62 L94 66 Q64 58 34 66 Z" fill="#fff2c4"></path>
+  <line x1="44" y1="52" x2="40" y2="43" stroke="#ffe9a8" stroke-width="2.4" stroke-linecap="round" opacity="0.75"></line>
+  <line x1="84" y1="52" x2="88" y2="43" stroke="#ffe9a8" stroke-width="2.4" stroke-linecap="round" opacity="0.75"></line>
+  <polygon points="55,54 64,42 73,54 64,60" fill="#cfeeff"></polygon>
+  <polygon points="55,54 64,42 64,60" fill="#a8ddf5"></polygon>
+  <polygon points="59,47 66,47 63,54 61,54" fill="#ffffff" opacity="0.6"></polygon>
+  <g transform="rotate(-10 30 44)">
+    <path d="M24 46 L24 36 Q24 26 36 24 L88 24 Q100 26 100 36 L100 46 Z" fill="#ff9a3d"></path>
+    <path d="M24 36 Q24 26 36 24 L88 24 Q100 26 100 36 L100 39 L24 39 Z" fill="#ffbe6f"></path>
+    <rect x="24" y="43" width="76" height="3.5" fill="#bb5c12"></rect>
+  </g>
+</svg>
