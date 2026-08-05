@@ -30,9 +30,9 @@ static void my_application_activate(GApplication* application) {
   gtk_window_set_title(window, "Elyxr");
   gtk_window_set_decorated(window, FALSE);
   gtk_window_set_resizable(window, TRUE);
-  // Taskbar / alt-tab icon, from the "elyxr" icon the installer puts in the
-  // user's icon theme.
-  gtk_window_set_icon_name(window, "elyxr");
+  // Taskbar / alt-tab icon, from the icon the installer puts in the user's icon
+  // theme under the app id (which the desktop matches the window against).
+  gtk_window_set_icon_name(window, APPLICATION_ID);
 
   // Transparent window, so the chassis's rounded corners show the desktop
   // behind them instead of a black box. Needs a compositing desktop (Zorin,
