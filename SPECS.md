@@ -11,9 +11,9 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
   command-line operations, so they can never disagree. It runs as a systemd
   *user* service and shows a system-tray icon while it's running.
 - **trove** (Rust, FUSE) — mounts a served folder so it appears as a normal
-  folder on your machine. Entries list instantly; a file's contents download
+  folder on your device. Entries list instantly; a file's contents download
   when you open it.
-- **elyxr** (Flutter) — the app. A Server/Client toggle sets the machine's role,
+- **elyxr** (Flutter) — the app. A Server/Client toggle sets the device's role,
   and the app starts lymnal in server mode and stops it in client mode so the
   two roles never collide.
 
@@ -21,7 +21,7 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
 
 - **Tailscale only.** Everything runs over your private tailnet — never the open
   internet, no ports opened, no port forwarding.
-- **Nothing is hardcoded to a machine.** Each device resolves its own tailnet
+- **Nothing is hardcoded to a device.** Each device resolves its own tailnet
   address at startup, and lymnal binds to that address on port `7749`. A first
   run just means entering the server's address by hand once.
 

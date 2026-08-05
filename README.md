@@ -33,16 +33,17 @@ cd elyxr
 That's the whole install. It sets everything up, puts **elyxr** in your
 applications menu, and starts the background service.
 
-- **Tailscale, set up as far as an installer can take it.** elyxr uses it to
-  connect your devices. If it isn't already on this one, the installer installs
-  it and walks you to the single step it can't do for you — signing in, once, in
-  your browser. Use the **same account on every device**; that's what lets them
-  find each other.
+- **Your devices find each other over Tailscale.** It's a free app that puts
+  just your own devices together on a private network of their own, so they can
+  reach each other directly, with nothing open to the rest of the internet. The
+  installer sets it up for you; the one part it can't handle is the sign-in, so
+  it sends you to your browser to do that once. Use the **same account on every
+  device** — that's what pairs them together.
 - **You're asked for your password once**, for first-time setup. After that,
   updates never ask again.
 - Headless server with no screen? Add `--no-app` to skip the app.
 
-## Connect two machines
+## Connect two devices
 
 Say you want your laptop to reach your desktop's files.
 
@@ -56,6 +57,10 @@ Say you want your laptop to reach your desktop's files.
 
 1. Open elyxr — it starts as a **Client**.
 2. Enter the desktop's Tailscale address (like `100.x.y.z:7749`) and wait.
+
+That `100.x.y.z` is nothing to go hunting for: the installer prints it to the
+terminal while it sets the desktop up, so it's right there in what you already
+ran. The `:7749` after it is always elyxr's port.
 
 **Back on the desktop:** the laptop appears by name. Tap **APPROVE** and it
 connects — approving also closes pairing, so nothing else can slip in.
@@ -99,7 +104,7 @@ The only thing that waits is a file mid-upload.
 ## Terminal
 
 Everything above lives in the app. These are for when you'd rather type, or the
-machine has no screen.
+device has no screen.
 
 ```sh
 lymnal status                 # what's set up, and how full the trove is
