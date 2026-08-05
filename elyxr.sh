@@ -14,6 +14,8 @@
 # It checks before it touches anything, so re-running is safe and cheap, and
 # stays quiet — the only time it prints detail is IF and WHERE something fails.
 #
+#   --app         client machine: build the Elyxr UI and add a menu launcher
+#                 (instead of installing the lymnal server)
 #   --verbose     watch every command
 #   --no-service  build the binaries but don't register/touch the boot service
 #   --no-update   skip the self-update git pull (build exactly what's checked out)
@@ -23,12 +25,14 @@ set -Eeuo pipefail
 VERBOSE=0
 SERVICE=1
 UPDATE=1
+APP=0
 for a in "$@"; do
   case "$a" in
+    --app)         APP=1 ;;
     --verbose|-v)  VERBOSE=1 ;;
     --no-service)  SERVICE=0 ;;
     --no-update)   UPDATE=0 ;;
-    *) echo "unknown flag: $a (use --verbose, --no-service, --no-update)"; exit 2 ;;
+    *) echo "unknown flag: $a (use --app, --verbose, --no-service, --no-update)"; exit 2 ;;
   esac
 done
 
@@ -106,6 +110,56 @@ else
   # Refresh the sudo timestamp every 60s until this script exits.
   ( while true; do sudo -n true 2>/dev/null; sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
   SUDO_KEEPALIVE=$!
+fi
+
+# --- app mode (client machine) ----------------------------------------------
+# Build the Flutter UI and install a .desktop launcher so Elyxr shows up in the
+# applications menu, double-clickable, pointing straight at the built binary —
+# no shell launcher in between. Skips all the lymnal server machinery.
+if [ "$APP" = 1 ]; then
+  phase "app build tools"
+  APP_PKGS=(clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev)
+  NEEDA=()
+  for p in "${APP_PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || NEEDA+=("$p"); done
+  if [ "${#NEEDA[@]}" -gt 0 ]; then
+    sh_ $SUDO apt-get update
+    sh_ $SUDO apt-get install -y "${NEEDA[@]}"
+  fi
+  if ! command -v flutter >/dev/null 2>&1; then
+    printf '%s\n\n' "${RED}x${RST}"
+    echo "${RED}Flutter isn't installed.${RST} Get it from"
+    echo "  https://docs.flutter.dev/get-started/install/linux"
+    echo "then re-run:  ./elyxr.sh --app"
+    exit 1
+  fi
+  done_
+
+  phase "building the app"
+  ( cd elyxr && sh_ flutter pub get && sh_ flutter build linux --release )
+  done_
+
+  phase "menu launcher"
+  APP_BIN="$HERE/elyxr/build/linux/x64/release/bundle/elyxr"
+  APPS_DIR="$HOME/.local/share/applications"
+  mkdir -p "$APPS_DIR"
+  cat > "$APPS_DIR/elyxr.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Elyxr
+Comment=Reach your trove from anywhere
+Exec=$APP_BIN
+Terminal=false
+Categories=Utility;Network;
+StartupWMClass=elyxr
+DESKTOP
+  update-desktop-database "$APPS_DIR" 2>/dev/null || true
+  done_
+
+  echo
+  echo "${GRN}Elyxr is installed.${RST}"
+  echo "  Open it from your applications menu — search \"Elyxr\"."
+  echo "  (Or run the binary directly: $APP_BIN)"
+  exit 0
 fi
 
 # --- system libraries -------------------------------------------------------
