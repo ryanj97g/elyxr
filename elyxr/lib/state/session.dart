@@ -76,6 +76,8 @@ class SessionController extends ChangeNotifier {
   Health? get health => _health;
   LymnalClient? get client => _client;
   bool get isFirstRun => _token == null;
+  /// The bearer token, for handing to the trove mount (never shown on screen).
+  String? get bearerToken => _token;
 
   String _baseUrl(String address) => 'http://$address';
 

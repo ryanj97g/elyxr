@@ -12,6 +12,7 @@ import 'state/server.dart';
 import 'state/session.dart';
 import 'state/settings.dart';
 import 'state/transfers.dart';
+import 'state/trove_mount.dart';
 import 'util/paths.dart';
 import 'screens/first_run.dart';
 import 'screens/home.dart';
@@ -38,6 +39,7 @@ class ElyxrApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: transfers),
         ChangeNotifierProvider.value(value: browse),
         ChangeNotifierProvider(create: (_) => ServerController()),
+        ChangeNotifierProvider(create: (_) => TroveMountController()),
         Provider.value(value: FileActions(browse, transfers, settings)),
       ],
       child: MaterialApp(
@@ -89,6 +91,31 @@ class _RootState extends State<_Root> {
     if (settings.appMode == AppMode.client && _serverTried) {
       _serverTried = false;
       server.connect(null);
+    }
+
+    // The trove mount (client only): the folder is live while the TROVE switch
+    // is on and the link is up. trove is what actually mounts it; this starts
+    // and stops that.
+    final mount = context.read<TroveMountController>();
+    final wantMount = settings.appMode == AppMode.client &&
+        settings.trove &&
+        session.status == LinkStatus.ok;
+    if (wantMount && !mount.mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final token = session.bearerToken;
+        final addr = session.serverAddress;
+        if (token != null && addr != null) {
+          await mount.mount(
+            serverAddress: addr,
+            token: token,
+            mountPath: expandTilde(settings.mountPath),
+          );
+        }
+      });
+    } else if (!wantMount && mount.mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        mount.unmount(mountPath: expandTilde(settings.mountPath));
+      });
     }
 
     // When a token is present and the link is up, open the trove once and start
