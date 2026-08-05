@@ -1,4 +1,4 @@
-// First run (§08): Elyxr opens with no token, finds the server on the tailnet
+// First run (§08): elyxr opens with no token, finds the server on the tailnet
 // by itself, you press Request Access, it shows a four-word phrase and waits,
 // and once someone approves it opens on the trove. Denied, timed out, and
 // pairing-not-open are three different messages. Manual address entry is the

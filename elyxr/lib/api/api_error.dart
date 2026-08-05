@@ -5,7 +5,7 @@
 // `requestId` sit behind a details toggle.
 //
 // A [ConnectionError] is one lymnal could not report, because the request never
-// arrived — the three states that belong to Elyxr.
+// arrived — the three states that belong to elyxr.
 
 /// An error lymnal returned, in the one shape every endpoint uses.
 class LymnalError implements Exception {
@@ -48,7 +48,7 @@ class LymnalError implements Exception {
 }
 
 /// Why a request never reached the server. Each has its own message and its own
-/// next step (§11 of the Elyxr spec).
+/// next step (§11 of the elyxr spec).
 enum ConnectionFault {
   /// "Can't reach ryang5mini. It may be asleep or off." Retry every few seconds.
   unreachable,

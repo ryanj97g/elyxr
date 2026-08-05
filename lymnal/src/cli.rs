@@ -1,6 +1,6 @@
 //! The same operations as commands, for troubleshooting (§08). Reached as
 //! `lymnal <command>`; the service itself is `lymnal` with no command. These
-//! call the same code paths as the service and Elyxr's server mode, so the
+//! call the same code paths as the service and elyxr's server mode, so the
 //! three cannot disagree.
 
 use lymnal::auth::hash_token;
@@ -167,7 +167,7 @@ fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
     match args.first().map(String::as_str) {
         Some("open") => {
             admin_post(&base, &token, "/v1/admin/pairing", serde_json::json!({ "open": true }))?;
-            println!("Ready to bind. Open Elyxr on the other device and request access.");
+            println!("Ready to bind. Open elyxr on the other device and request access.");
             println!("Waiting for a device...  (Ctrl+C to stop)");
             // Poll until a device shows up, then show its phrase and ask.
             let mut waited = 0;
@@ -310,8 +310,8 @@ fn update(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> 
     Ok(())
 }
 
-/// Find the Elyxr repo: first the path the installer recorded next to the
-/// config, then the conventional `~/Elyxr`.
+/// Find the elyxr repo: first the path the installer recorded next to the
+/// config, then the conventional `~/elyxr`.
 fn find_repo(config_path: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
     if let Some(dir) = config_path.parent() {
         if let Ok(s) = std::fs::read_to_string(dir.join("repo.path")) {
@@ -322,7 +322,7 @@ fn find_repo(config_path: &std::path::Path) -> anyhow::Result<std::path::PathBuf
         }
     }
     if let Ok(home) = std::env::var("HOME") {
-        for name in ["elyxr", "Elyxr"] {
+        for name in ["elyxr", "elyxr"] {
             let p = std::path::Path::new(&home).join(name);
             if p.join("elyxr.sh").exists() {
                 return Ok(p);
@@ -330,7 +330,7 @@ fn find_repo(config_path: &std::path::Path) -> anyhow::Result<std::path::PathBuf
         }
     }
     anyhow::bail!(
-        "couldn't find the Elyxr repo. Clone it and run ./elyxr.sh once so it's recorded."
+        "couldn't find the elyxr repo. Clone it and run ./elyxr.sh once so it's recorded."
     )
 }
 
@@ -420,7 +420,7 @@ fn ulid_like() -> String {
 fn print_usage() {
     println!(
         "lymnal — the service, and its troubleshooting commands\n\
-         (Elyxr does all of this without a terminal)\n\n\
+         (elyxr does all of this without a terminal)\n\n\
          lymnal                    run the service\n\
          lymnal serve <config>     run the service with a specific config\n\
          lymnal status\n\

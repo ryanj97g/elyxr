@@ -43,7 +43,7 @@ class ElyxrApp extends StatelessWidget {
         Provider.value(value: FileActions(browse, transfers, settings)),
       ],
       child: MaterialApp(
-        title: 'Elyxr',
+        title: 'elyxr',
         debugShowCheckedModeBanner: false,
         color: Colors.transparent,
         theme: ThemeData(

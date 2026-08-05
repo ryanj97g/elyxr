@@ -43,11 +43,11 @@ void main() {
 
   test('a coded error surfaces its message word for word', () async {
     const msg =
-        "This file won't fit. Your Elyxr folder holds up to 150 GB and it's at 149.1 GB, so this 2.3 GB file is 1.4 GB too big.";
+        "This file won't fit. Your elyxr folder holds up to 150 GB and it's at 149.1 GB, so this 2.3 GB file is 1.4 GB too big.";
     final c = clientReturning(507, {
       'code': 'TROVE_FULL',
       'message': msg,
-      'hint': 'Delete something from Elyxr, or raise the limit in Elyxr\'s server settings.',
+      'hint': 'Delete something from elyxr, or raise the limit in elyxr\'s server settings.',
       'request_id': '01J8Z3K7QW',
     });
     try {

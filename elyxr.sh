@@ -2,12 +2,12 @@
 #
 # elyxr.sh — install it, and run it again to update it.
 #
-#   git clone https://github.com/ryanj97g/Elyxr.git
-#   cd Elyxr
+#   git clone https://github.com/ryanj97g/elyxr.git
+#   cd elyxr
 #   ./elyxr.sh
 #
 # Installs the whole stack on this device: lymnal (the service that can serve a
-# folder over your tailnet), trove (the client-side mount), and the Elyxr app
+# folder over your tailnet), trove (the client-side mount), and the elyxr app
 # (the UI). Every device gets all three — the app's Server/Client toggle decides
 # what this device actually does. Running it again is an update: pull, rebuild
 # only what changed, re-install a binary only if it differs, and restart the
@@ -203,7 +203,7 @@ if [ "$APP" = 1 ]; then
   cat > "$APPS_DIR/elyxr.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
-Name=Elyxr
+Name=elyxr
 Comment=Reach your trove from anywhere
 Exec=$APP_BIN
 Terminal=false
@@ -234,7 +234,7 @@ if [ "$SERVICE" = 1 ] && command -v systemctl >/dev/null 2>&1; then
   $SUDO tee /etc/systemd/system/lymnal.service >/dev/null <<UNITEOF
 [Unit]
 Description=lymnal — serves the trove over your tailnet
-Documentation=https://github.com/ryanj97g/Elyxr
+Documentation=https://github.com/ryanj97g/elyxr
 After=network-online.target tailscaled.service
 Wants=network-online.target
 StartLimitIntervalSec=1800
@@ -264,9 +264,9 @@ UNITEOF
 fi
 
 echo
-echo "${GRN}Elyxr is installed.${RST}"
+echo "${GRN}elyxr is installed.${RST}"
 if [ "$APP" = 1 ]; then
-  echo "  Open Elyxr from your applications menu — search \"Elyxr\"."
+  echo "  Open elyxr from your applications menu — search \"elyxr\"."
   echo "  In the app: hold the wordmark for settings, then flip THIS DEVICE"
   echo "  to SERVER (share a folder) or CLIENT (browse another device)."
 fi

@@ -146,21 +146,21 @@ impl ApiError {
     pub fn bad_path(path: &str) -> Self {
         ApiError::new(
             ErrCode::BadPath,
-            format!("\"{path}\" is not a path Elyxr can use."),
+            format!("\"{path}\" is not a path elyxr can use."),
         )
     }
 
     pub fn path_escapes(path: &str) -> Self {
         ApiError::new(
             ErrCode::PathEscapesTrove,
-            format!("\"{path}\" points outside your Elyxr folder, so it can't be reached."),
+            format!("\"{path}\" points outside your elyxr folder, so it can't be reached."),
         )
     }
 
     pub fn not_found(path: &str) -> Self {
         ApiError::new(
             ErrCode::NotFound,
-            format!("There's nothing at \"{path}\" in your Elyxr folder."),
+            format!("There's nothing at \"{path}\" in your elyxr folder."),
         )
     }
 
@@ -189,7 +189,7 @@ impl ApiError {
             NotFound => ApiError::not_found(path),
             PermissionDenied => ApiError::new(
                 ErrCode::PermissionDenied,
-                format!("Elyxr isn't allowed to touch \"{path}\"."),
+                format!("elyxr isn't allowed to touch \"{path}\"."),
             ),
             AlreadyExists => ApiError::target_exists(path),
             _ => ApiError::io(format!("Something went wrong reaching \"{path}\": {err}")),

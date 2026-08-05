@@ -1,5 +1,5 @@
 // Server mode's control plane (§09). lymnal has no interface of its own; on the
-// server machine, Elyxr reaches lymnal's admin surface with the machine-local
+// server machine, elyxr reaches lymnal's admin surface with the machine-local
 // admin token (written by lymnal to data_dir/admin.token). These calls never
 // leave the machine.
 
@@ -22,7 +22,7 @@ class ServerStatus {
         version = j['version'] as String? ?? '?',
         uptimeS = (j['uptime_s'] as num?)?.toInt() ?? 0,
         bind = j['bind'] as String? ?? '',
-        trove = j['trove'] as String? ?? 'Elyxr',
+        trove = j['trove'] as String? ?? 'elyxr',
         pairingOpen = j['pairing_open'] as bool? ?? false;
 }
 

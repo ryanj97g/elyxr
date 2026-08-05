@@ -1,6 +1,6 @@
 // The prompts a person sees when changing things or starting a transfer. Plain
 // words, real numbers (README ground rules). lymnal's messages are shown word
-// for word; these are Elyxr's own confirmations.
+// for word; these are elyxr's own confirmations.
 
 import 'package:flutter/material.dart';
 

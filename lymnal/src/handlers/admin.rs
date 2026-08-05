@@ -1,5 +1,5 @@
 //! The server-mode admin surface (§08, §09). lymnal has no interface of its
-//! own; server-mode Elyxr, on the same machine, reaches these with the local
+//! own; server-mode elyxr, on the same machine, reaches these with the local
 //! admin token. They are never exposed to ordinary clients on the tailnet —
 //! every one requires the `X-Admin-Token` header to match.
 

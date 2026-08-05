@@ -90,7 +90,7 @@ class FileActions {
   /// Name a zip after the single selected folder, or the current folder.
   String _zipName(List<String> paths) {
     if (paths.length == 1) return '${_basename(paths.first)}.zip';
-    final here = browse.path.isEmpty ? 'Elyxr' : _basename(browse.path);
+    final here = browse.path.isEmpty ? 'elyxr' : _basename(browse.path);
     return '$here.zip';
   }
 }

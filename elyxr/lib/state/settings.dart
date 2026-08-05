@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../design/tokens.dart';
 
-/// Which mode Elyxr runs in on this device (§01 of the Elyxr spec).
+/// Which mode elyxr runs in on this device (§01 of the elyxr spec).
 enum AppMode { client, server }
 
 /// The list view: the dense phosphor list, or 3-across tiles.
@@ -30,7 +30,7 @@ class SettingsController extends ChangeNotifier {
   int _cache = 10; // 1..20 → 0.5–15 GB
   AppMode _appMode = AppMode.client;
   String _downloadDir = '~/Downloads';
-  String _mountPath = '~/Trove'; // where the trove mounts (its own folder, not the repo)
+  String _mountPath = '~/trove'; // where the trove mounts (its own folder, not the repo)
   int _atOnce = 3;
 
   Accent get accent => _accent;
@@ -60,7 +60,7 @@ class SettingsController extends ChangeNotifier {
     _appMode =
         _enumByName(AppMode.values, _prefs.getString('appMode'), AppMode.client);
     _downloadDir = _prefs.getString('downloadDir') ?? '~/Downloads';
-    _mountPath = _prefs.getString('mountPath') ?? '~/Trove';
+    _mountPath = _prefs.getString('mountPath') ?? '~/trove';
     _atOnce = _prefs.getInt('atOnce') ?? 3;
   }
 

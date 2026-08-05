@@ -171,7 +171,7 @@ async fn pair(State(s): State<Shared>, Json(req): Json<PairReq>) -> Result<Json<
     if !s.pairing.is_open() {
         return Err(ApiError::new(
             ErrCode::PairingClosed,
-            "This server isn't accepting new devices right now. Open pairing in Elyxr's server settings.",
+            "This server isn't accepting new devices right now. Open pairing in elyxr's server settings.",
         ));
     }
     let phrase = phrase_for(&req.device, &req.client);

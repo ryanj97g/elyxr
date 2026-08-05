@@ -83,7 +83,7 @@ class _Console extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Ticker(palette: p, used: used, max: max, name: h?.trove ?? 'Elyxr'),
+          _Ticker(palette: p, used: used, max: max, name: h?.trove ?? 'elyxr'),
           const SizedBox(height: 9),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

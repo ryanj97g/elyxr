@@ -1,10 +1,10 @@
-//! trove — mount the trove as a folder (default `~/Elyxr`).
+//! trove — mount the trove as a folder (default `~/elyxr`).
 //!
-//! Installed with Elyxr; the folder is a switch in Elyxr's settings. Reads the
-//! server address and bearer token from the environment (Elyxr passes them):
-//!   ELYXR_SERVER   host:port on the tailnet (set by Elyxr once paired)
-//!   ELYXR_TOKEN    the bearer token (from the system keyring, via Elyxr)
-//!   ELYXR_MOUNT    where to mount (default ~/Elyxr)
+//! Installed with elyxr; the folder is a switch in elyxr's settings. Reads the
+//! server address and bearer token from the environment (elyxr passes them):
+//!   ELYXR_SERVER   host:port on the tailnet (set by elyxr once paired)
+//!   ELYXR_TOKEN    the bearer token (from the system keyring, via elyxr)
+//!   ELYXR_MOUNT    where to mount (default ~/elyxr)
 //!   ELYXR_CACHE    cache directory (default ~/.cache/trove)
 
 use std::path::PathBuf;
@@ -16,20 +16,20 @@ fn main() -> anyhow::Result<()> {
     let server = match std::env::var("ELYXR_SERVER") {
         Ok(s) if !s.is_empty() => s,
         _ => {
-            eprintln!("trove: no server address. Elyxr provides it via ELYXR_SERVER once paired.");
+            eprintln!("trove: no server address. elyxr provides it via ELYXR_SERVER once paired.");
             std::process::exit(1);
         }
     };
     let token = match std::env::var("ELYXR_TOKEN") {
         Ok(t) if !t.is_empty() => t,
         _ => {
-            eprintln!("trove: no token. Elyxr provides it via ELYXR_TOKEN once paired.");
+            eprintln!("trove: no token. elyxr provides it via ELYXR_TOKEN once paired.");
             std::process::exit(1);
         }
     };
     let mount = std::env::var("ELYXR_MOUNT")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| home().join("Elyxr"));
+        .unwrap_or_else(|_| home().join("elyxr"));
     let cache_dir = std::env::var("ELYXR_CACHE")
         .map(PathBuf::from)
         .unwrap_or_else(|_| home().join(".cache/trove"));
