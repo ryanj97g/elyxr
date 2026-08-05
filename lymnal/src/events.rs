@@ -21,7 +21,7 @@ pub struct StreamEvent {
     #[serde(skip)]
     pub id: u64,
     #[serde(skip)]
-    pub event: &'static str, // "change" | "usage"
+    pub event: &'static str, // "change" | "usage" | "update"
     #[serde(skip)]
     pub data: serde_json::Value,
 }
@@ -60,6 +60,17 @@ impl EventBus {
             id: self.next_id(),
             event: "change",
             data,
+        });
+    }
+
+    /// Tell connected clients an update is starting here, so they update
+    /// themselves in step rather than waiting to notice a version gap. Carries
+    /// the build this server is on for reference.
+    pub fn announce_update(&self, build: u64) {
+        let _ = self.tx.send(StreamEvent {
+            id: self.next_id(),
+            event: "update",
+            data: json!({ "build": build }),
         });
     }
 

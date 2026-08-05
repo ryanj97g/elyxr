@@ -63,6 +63,7 @@ pub fn router(state: Shared) -> Router {
         .route("/v1/admin/limits", post(admin::set_limits))
         .route("/v1/admin/recount", post(admin::recount))
         .route("/v1/admin/problems", get(admin::problems))
+        .route("/v1/admin/announce-update", post(admin::announce_update))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             record_problems,

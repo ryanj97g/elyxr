@@ -32,6 +32,18 @@ fn admin(s: &Shared, headers: &HeaderMap) -> Result<(), ApiError> {
     }
 }
 
+/// Broadcast to connected clients that an update is starting here, so they
+/// update in step. Called by `lymnal update` (and thus the app's "update now")
+/// right before it runs the installer.
+pub(super) async fn announce_update(
+    State(s): State<Shared>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    admin(&s, &headers)?;
+    s.events.announce_update(s.build);
+    Ok(Json(json!({ "announced": true })))
+}
+
 pub(super) async fn status(
     State(s): State<Shared>,
     headers: HeaderMap,

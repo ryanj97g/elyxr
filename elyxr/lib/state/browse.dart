@@ -412,8 +412,11 @@ class BrowseController extends ChangeNotifier {
 
   void _reconnectEvents() {
     _events = null;
-    // Retry after a moment; the app is likely mid-reconnect anyway.
-    Future.delayed(const Duration(seconds: 2), () {
+    // The stream dropping often means the server restarted — which is what an
+    // update does. Re-check its build on the way back, so a client that missed
+    // the live announcement (or was launched after it) still catches up.
+    Future.delayed(const Duration(seconds: 2), () async {
+      await session.refresh();
       if (session.status == LinkStatus.ok) connectEvents();
     });
   }
@@ -424,6 +427,11 @@ class BrowseController extends ChangeNotifier {
   }
 
   void _onEvent(ServerEvent ev) {
+    if (ev.isUpdate) {
+      // The server is updating — signal the app so this device updates in step.
+      session.signalPeerUpdate();
+      return;
+    }
     if (ev.isUsage) {
       _usedBytes = (ev.data['used_bytes'] as num?)?.toInt() ?? _usedBytes;
       final w = ev.data['warnings'] as List? ?? [];

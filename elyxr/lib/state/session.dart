@@ -98,6 +98,16 @@ class SessionController extends ChangeNotifier {
     _startPolling();
   }
 
+  /// Bumped when the server announces (over the live stream) that an update is
+  /// starting there, so a client can update in step. A counter rather than a
+  /// flag so each announcement is a distinct event the UI can react to.
+  int _peerUpdate = 0;
+  int get peerUpdateSignal => _peerUpdate;
+  void signalPeerUpdate() {
+    _peerUpdate++;
+    notifyListeners();
+  }
+
   /// Re-check the server every so often while paired, so a change on the server
   /// — including it moving to a newer build — is noticed live rather than only
   /// at app start. Cheap: one small health call.
