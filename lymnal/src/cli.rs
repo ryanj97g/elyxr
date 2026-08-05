@@ -167,9 +167,66 @@ fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
     match args.first().map(String::as_str) {
         Some("open") => {
             admin_post(&base, &token, "/v1/admin/pairing", serde_json::json!({ "open": true }))?;
-            println!("Ready to bind. Open Elyxr on the other device and request access,");
-            println!("then run:  lymnal bind list");
+            println!("Ready to bind. Open Elyxr on the other device and request access.");
+            println!("Waiting for a device...  (Ctrl+C to stop)");
+            // Poll until a device shows up, then show its phrase and ask.
+            let mut waited = 0;
+            let (device, phrase) = loop {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                waited += 1;
+                let v = admin_get(&base, &token, "/v1/admin/pending")?;
+                let list = v.get("pending").and_then(|p| p.as_array()).cloned().unwrap_or_default();
+                if let Some(p) = list.first() {
+                    let s = |k: &str| p.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
+                    break (s("device"), s("phrase"));
+                }
+                if waited >= 300 {
+                    println!("No device asked to connect in time. Run 'lymnal bind open' again when ready.");
+                    return Ok(());
+                }
+            };
+            println!("\n  device:  {device}\n  phrase:  {phrase}\n");
+            print!("Do these four words match the other screen? Approve {device}? [y/N]: ");
+            use std::io::Write;
+            std::io::stdout().flush().ok();
+            let mut ans = String::new();
+            std::io::stdin().read_line(&mut ans).ok();
+            if matches!(ans.trim().to_lowercase().as_str(), "y" | "yes") {
+                admin_post(&base, &token, "/v1/admin/approve",
+                    serde_json::json!({ "device": device, "role": "owner" }))?;
+                println!("Sealed. {device} is connected now.");
+            } else {
+                admin_post(&base, &token, "/v1/admin/deny", serde_json::json!({ "device": device }))?;
+                println!("Turned away {device}.");
+            }
+            // Stop accepting once we've handled one.
+            admin_post(&base, &token, "/v1/admin/pairing", serde_json::json!({ "open": false }))?;
             Ok(())
+        }
+        Some("seal") => {
+            // Approve the one device that's waiting — no name to type.
+            let v = admin_get(&base, &token, "/v1/admin/pending")?;
+            let list = v.get("pending").and_then(|p| p.as_array()).cloned().unwrap_or_default();
+            match list.len() {
+                0 => anyhow::bail!(
+                    "no device is waiting. Run 'lymnal bind open' and request access on the other device first."
+                ),
+                1 => {
+                    let device = list[0].get("device").and_then(|d| d.as_str()).unwrap_or("").to_string();
+                    admin_post(&base, &token, "/v1/admin/approve",
+                        serde_json::json!({ "device": device, "role": "owner" }))?;
+                    println!("Sealed. {device} is connected now.");
+                    Ok(())
+                }
+                _ => {
+                    println!("More than one device is waiting — approve the one you mean by name:");
+                    for p in &list {
+                        let s = |k: &str| p.get(k).and_then(|x| x.as_str()).unwrap_or("");
+                        println!("  {}  ({})", s("device"), s("phrase"));
+                    }
+                    anyhow::bail!("run: lymnal bind approve <device>")
+                }
+            }
         }
         Some("close") => {
             admin_post(&base, &token, "/v1/admin/pairing", serde_json::json!({ "open": false }))?;
@@ -189,7 +246,7 @@ fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
                 let s = |k: &str| p.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
                 println!("{:<18} {:<14} {}", s("device"), s("client"), s("phrase"));
             }
-            println!("\nBind it with:  lymnal bind approve <device>");
+            println!("\nBind it with:  lymnal bind seal   (or: lymnal bind approve <device>)");
             Ok(())
         }
         Some("approve") => {
@@ -224,7 +281,7 @@ fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
             Ok(())
         }
         _ => anyhow::bail!(
-            "usage: lymnal bind open | list | approve <device> [--guest] | deny <device> | close"
+            "usage: lymnal bind open | list | seal | approve <device> [--guest] | deny <device> | close"
         ),
     }
 }
@@ -370,7 +427,8 @@ fn print_usage() {
          lymnal token list\n\
          lymnal token new <label> [--role owner|guest] [--max-bytes N]\n\
          lymnal token revoke <label>\n\
-         lymnal bind open\n\
+         lymnal bind open           wait for a device, show its words, ask to approve\n\
+         lymnal bind seal           approve the one device that's waiting\n\
          lymnal bind list\n\
          lymnal bind approve <device> [--guest] [--max-bytes N]\n\
          lymnal bind deny <device>\n\
