@@ -15,7 +15,14 @@
 set -Eeuo pipefail
 
 VERBOSE=0
-case "${1:-}" in --verbose|-v) VERBOSE=1 ;; esac
+SERVICE=1
+for a in "$@"; do
+  case "$a" in
+    --verbose|-v)  VERBOSE=1 ;;
+    --no-service)  SERVICE=0 ;;
+    *) echo "unknown flag: $a (use --verbose and/or --no-service)"; exit 2 ;;
+  esac
+done
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
@@ -103,8 +110,50 @@ if [ ! -f "$HOME/.config/lymnal/config.toml" ]; then
 fi
 done_
 
+# --- boot service -----------------------------------------------------------
+# lymnal starts at boot and restarts if it dies. If it keeps dying, it retries
+# 5 minutes apart, up to 3 times (~15 minutes), then stops so it isn't burning
+# resources on a service that's plainly offline. A service that had been
+# running fine and hits one crash gets a fresh 3 attempts (the limit is a
+# 30-minute sliding window), so it only gives up on a sustained outage.
+INSTALLED_SERVICE=0
+if [ "$SERVICE" = 1 ] && command -v systemctl >/dev/null 2>&1; then
+  phase "boot service"
+  RUNUSER="$(id -un)"
+  $SUDO tee /etc/systemd/system/lymnal.service >/dev/null <<UNITEOF
+[Unit]
+Description=lymnal — serves the trove over your tailnet
+Documentation=https://github.com/ryanj97g/Elyxr
+After=network-online.target tailscaled.service
+Wants=network-online.target
+StartLimitIntervalSec=1800
+StartLimitBurst=4
+
+[Service]
+Type=simple
+User=$RUNUSER
+ExecStart=/usr/local/bin/lymnal
+Restart=on-failure
+RestartSec=300
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+  sh_ $SUDO systemctl daemon-reload
+  sh_ $SUDO systemctl enable --now lymnal.service
+  INSTALLED_SERVICE=1
+  done_
+fi
+
 echo
 echo "${GRN}Elyxr is installed.${RST}"
-echo "  start the server:  lymnal"
-echo "  check it:          lymnal status"
+if [ "$INSTALLED_SERVICE" = 1 ]; then
+  echo "  lymnal is running now and will start on boot."
+  echo "  is it up?    systemctl status lymnal"
+  echo "  its logs:    journalctl -u lymnal -f"
+  echo "  restart it:  sudo systemctl restart lymnal"
+else
+  echo "  start the server:  lymnal"
+  echo "  check it:          lymnal status"
+fi
 echo "  edit the config:   ~/.config/lymnal/config.toml"
