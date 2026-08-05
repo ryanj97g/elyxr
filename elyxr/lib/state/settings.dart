@@ -30,7 +30,7 @@ class SettingsController extends ChangeNotifier {
   int _cache = 10; // 1..20 → 0.5–15 GB
   AppMode _appMode = AppMode.client;
   String _downloadDir = '~/Downloads';
-  String _mountPath = '~/trove'; // where the trove mounts (its own folder, not the repo)
+  String _mountPath = '~/Desktop/trove'; // where the trove mounts — on the Desktop, like a plugged-in drive
   bool _confirmDelete = true; // show the "removes it for everyone" delete guard
   int _atOnce = 3;
 
@@ -62,7 +62,7 @@ class SettingsController extends ChangeNotifier {
     _appMode =
         _enumByName(AppMode.values, _prefs.getString('appMode'), AppMode.client);
     _downloadDir = _prefs.getString('downloadDir') ?? '~/Downloads';
-    _mountPath = _prefs.getString('mountPath') ?? '~/trove';
+    _mountPath = _prefs.getString('mountPath') ?? '~/Desktop/trove';
     _confirmDelete = _prefs.getBool('confirmDelete') ?? true;
     _atOnce = _prefs.getInt('atOnce') ?? 3;
   }
