@@ -159,10 +159,18 @@ class _TopRailState extends State<TopRail> {
       ),
     );
     if (onTap == null) return dot;
+    // The visible screw stays 8px, but the tap target around it is much larger
+    // so it's easy to hit without aiming at the tiny circle.
     Widget w = GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: dot,
+      child: Container(
+        width: 26,
+        height: 20,
+        alignment: Alignment.center,
+        color: Colors.transparent,
+        child: dot,
+      ),
     );
     w = MouseRegion(cursor: SystemMouseCursors.click, child: w);
     if (tip != null) w = Tooltip(message: tip, child: w);
