@@ -60,7 +60,23 @@ sh_() {
   else "$@" >>"$LOG" 2>&1; fi
 }
 
-if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
+# Ask for sudo once, up front, and hold the grant for the whole run — so a
+# long build never gets interrupted by a password prompt (and a fat-fingered
+# password fails here, before anything is installed, instead of half-way in).
+SUDO_KEEPALIVE=""
+cleanup() { [ -n "$SUDO_KEEPALIVE" ] && kill "$SUDO_KEEPALIVE" 2>/dev/null || true; }
+trap cleanup EXIT
+
+if [ "$(id -u)" -eq 0 ]; then
+  SUDO=""
+else
+  SUDO="sudo"
+  echo "elyxr needs sudo to install system libraries and register the boot service."
+  sudo -v || { echo "${RED}sudo is required — nothing was installed.${RST}"; exit 1; }
+  # Refresh the sudo timestamp every 60s until this script exits.
+  ( while true; do sudo -n true 2>/dev/null; sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
+  SUDO_KEEPALIVE=$!
+fi
 
 # --- system libraries -------------------------------------------------------
 # build-essential + pkg-config: C toolchain for rusqlite (bundled) and blake3.
