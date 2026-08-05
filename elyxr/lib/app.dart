@@ -109,11 +109,14 @@ class _RootState extends State<_Root> {
         ? const HomeScreen()
         : (session.isFirstRun ? const FirstRunScreen() : const HomeScreen());
 
-    // The window is chassis-sized and transparent, so the metal fills it and
-    // its rounded corners become the window's shape — no void, no chrome.
+    // The window is transparent, so the metal fills it and its rounded corners
+    // become the window's shape — no void, no chrome. FittedBox scales the fixed
+    // 440×884 chassis to whatever size the window is, so it fits short screens.
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Center(child: child),
+      body: Center(
+        child: FittedBox(fit: BoxFit.contain, child: child),
+      ),
     );
   }
 }

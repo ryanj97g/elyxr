@@ -25,11 +25,11 @@ static void my_application_activate(GApplication* application) {
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
-  // The metal chassis IS the window: no title bar, fixed to the device size,
-  // not resizable.
+  // The metal chassis IS the window: no title bar. Resizable so it can be
+  // fitted to short screens (the Flutter side scales the chassis to the window).
   gtk_window_set_title(window, "Elyxr");
   gtk_window_set_decorated(window, FALSE);
-  gtk_window_set_resizable(window, FALSE);
+  gtk_window_set_resizable(window, TRUE);
 
   // Transparent window, so the chassis's rounded corners show the desktop
   // behind them instead of a black box. Needs a compositing desktop (Zorin,
@@ -41,7 +41,25 @@ static void my_application_activate(GApplication* application) {
     gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);
   }
 
-  gtk_window_set_default_size(window, 440, 884);
+  // The chassis is designed at 440x884. If the screen is too short for that,
+  // open smaller (keeping the shape) so the whole window is visible; the Flutter
+  // side scales the chassis to whatever size the window ends up.
+  gint win_w = 440, win_h = 884;
+  GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
+  GdkMonitor* monitor = gdk_display_get_primary_monitor(display);
+  if (monitor == nullptr && gdk_display_get_n_monitors(display) > 0) {
+    monitor = gdk_display_get_monitor(display, 0);
+  }
+  if (monitor != nullptr) {
+    GdkRectangle area;
+    gdk_monitor_get_workarea(monitor, &area);
+    gint max_h = area.height - 60;  // leave room for the panel/taskbar
+    if (max_h > 0 && win_h > max_h) {
+      win_h = max_h;
+      win_w = (gint)(win_h * (440.0 / 884.0) + 0.5);
+    }
+  }
+  gtk_window_set_default_size(window, win_w, win_h);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
