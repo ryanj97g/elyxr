@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../design/chassis.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../state/updater.dart';
 import '../util/build_info.dart';
 import '../widgets/rails.dart';
 import '../widgets/update_sheet.dart';
@@ -31,21 +32,25 @@ class _HomeScreenState extends State<HomeScreen> {
     final session = context.watch<SessionController>();
     final p = settings.palette;
 
-    // On a client, offer an update when the server is on a newer build than
-    // this app was built at. appBuild is 0 on an un-stamped build, so this never
-    // fires falsely.
+    // On a client, when the server is on a newer build than this app, quietly
+    // start a background update; the strip then tracks its progress and offers
+    // the refresh when it's ready. appBuild is 0 on an un-stamped build, so this
+    // never fires falsely.
+    final updater = context.watch<UpdateController>();
     final serverBuild = session.health?.build ?? 0;
-    final updateReady = settings.appMode == AppMode.client &&
+    if (settings.appMode == AppMode.client && appBuild > 0 && serverBuild > appBuild) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => updater.noticeBehind(serverBuild));
+    }
+    final showBanner = settings.appMode == AppMode.client &&
         !_inSettings &&
-        appBuild > 0 &&
-        serverBuild > appBuild;
+        updater.stage != UpdateStage.idle;
 
     Widget tubeChild;
     if (_inSettings) {
       tubeChild = const SettingsView();
     } else if (settings.appMode == AppMode.server) {
       tubeChild = ServerControls(palette: p);
-    } else if (updateReady) {
+    } else if (showBanner) {
       tubeChild = Column(children: [
         UpdateBanner(p: p),
         const Expanded(child: FilesView()),

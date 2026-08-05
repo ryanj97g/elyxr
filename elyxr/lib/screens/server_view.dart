@@ -11,6 +11,7 @@ import '../api/admin_client.dart';
 import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/server.dart';
+import '../state/updater.dart';
 import '../util/format.dart';
 import '../widgets/update_sheet.dart';
 
@@ -52,6 +53,7 @@ class _ServerControlsState extends State<ServerControls> {
             ],
           ),
         ),
+        UpdateBanner(p: p),
         if (!server.available)
           Padding(
             padding: const EdgeInsets.all(14),
@@ -107,7 +109,7 @@ class _ServerControlsState extends State<ServerControls> {
           Text('SERVICE', style: chassis(12, p.bright, spacing: 0.16)),
         ]),
         GestureDetector(
-          onTap: () => showUpdateDialog(context, p),
+          onTap: () => context.read<UpdateController>().updateNow(),
           child: Text('UPDATE NOW', style: chassis(11, p.a, spacing: 0.1)),
         ),
       ]),
