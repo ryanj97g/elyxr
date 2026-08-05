@@ -196,6 +196,20 @@ class TransferController extends ChangeNotifier {
     required String name,
     bool replacement = false,
   }) {
+    // Guard against a duplicated drop: desktop_drop on Linux can deliver the
+    // same file more than once (or fire onDragDone repeatedly). If an upload of
+    // this file to this path is already in flight, reuse it instead of sending
+    // it again.
+    if (!replacement) {
+      for (final t in _queue) {
+        if (t.direction == Direction.upload &&
+            t.state != TransferState.done &&
+            t.remotePath == remotePath &&
+            t.localPath == localPath) {
+          return t;
+        }
+      }
+    }
     final t = Transfer(
       id: _id(),
       direction: Direction.upload,

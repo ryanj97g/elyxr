@@ -33,7 +33,8 @@ class FilesView extends StatelessWidget {
     return DropTarget(
       onDragDone: (detail) {
         final actions = context.read<FileActions>();
-        final paths = detail.files.map((f) => f.path).toList();
+        // De-dupe: a single drop can arrive with the same path more than once.
+        final paths = detail.files.map((f) => f.path).toSet().toList();
         if (paths.isNotEmpty) actions.uploadPaths(paths);
       },
       child: DefaultTextStyle(
