@@ -41,36 +41,26 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$HERE/$(basename "${BASH_SOURCE[0]}")"
 cd "$HERE"
 
-# Desktop notifications, so an update the background agent runs is visible even
-# with no terminal open and the elyxr window closed — a popup at the start, a
-# couple as it works, and one when it's done, wearing the lymnal mark like the
-# tray icon. notify-send hands these to the desktop's notification daemon; with
-# no daemon (a headless server) every call is a silent no-op. A cosmetic popup
-# must never break an update, so each call swallows failure. The progress popups
-# share one "synchronous" bubble, which KDE draws as a filling bar and other
-# desktops show as brief toasts. Only shown for an *update*, never a first
-# install (there's a terminal for that) — HAD_LYMNAL is how we tell them apart.
+# Two desktop notifications, so an update the background agent runs is visible
+# even with no terminal open and the elyxr window closed: one when it starts, one
+# when it's done, wearing the lymnal mark. notify-send hands them to the desktop's
+# notification daemon; with no daemon (a headless server) each is a silent no-op,
+# and a cosmetic popup must never break an update, so failure is swallowed. Only
+# shown for an *update*, never a first install (there's a terminal for that) —
+# HAD_LYMNAL is how we tell them apart.
 NOTIFY_ICON="com.elyxr.lymnal"
 HAD_LYMNAL=0; [ -x "$HOME/.local/bin/lymnal" ] && HAD_LYMNAL=1
-notify() {  # $1 body  [$2 percent 0-100]
+notify() {  # $1 body
   [ "$HAD_LYMNAL" = 1 ] || return 0
   command -v notify-send >/dev/null 2>&1 || return 0
-  local a=(-a lymnal -i "$NOTIFY_ICON"
-           -h string:x-canonical-private-synchronous:elyxr-update
-           -h "string:desktop-entry:$NOTIFY_ICON")
-  [ -n "${2:-}" ] && a+=(-h "int:value:$2")
-  notify-send "${a[@]}" "lymnal" "$1" >/dev/null 2>&1 || true
-}
-notify_done() {  # $1 body — the final, persistent popup (not the progress bubble)
-  [ "$HAD_LYMNAL" = 1 ] || return 0
-  command -v notify-send >/dev/null 2>&1 || return 0
-  notify-send -a lymnal -i "$NOTIFY_ICON" "lymnal" "$1" >/dev/null 2>&1 || true
+  notify-send -a lymnal -i "$NOTIFY_ICON" -h "string:desktop-entry:$NOTIFY_ICON" \
+    "lymnal" "$1" >/dev/null 2>&1 || true
 }
 
-# The first popup fires the instant an update starts — before the pull — so it
-# shows without waiting on the build. Guarded to the pre-re-exec instance so a
-# self-update that restarts this script doesn't show it twice.
-[ -z "${ELYXR_REEXEC:-}" ] && notify "Updating in the background — getting the latest version…" 5
+# The start popup fires the instant an update begins — before the pull. Guarded
+# to the pre-re-exec instance so a self-update that restarts this script doesn't
+# show it twice.
+[ -z "${ELYXR_REEXEC:-}" ] && notify "Updating in the background…"
 
 # Self-update: if this is a git checkout, fast-forward to the latest published
 # version before doing anything. If the pull changed anything — including this
@@ -292,7 +282,6 @@ if [ "$APP" = 1 ]; then
 fi
 
 # --- build ------------------------------------------------------------------
-notify "Building the latest version…" 45
 phase "building lymnal"
 sh_ cargo build --release -p lymnal
 done_
@@ -449,8 +438,6 @@ UNITEOF
   done_
 fi
 
-notify "Almost done — restarting…" 85
-
 # If the elyxr window was open when this ran (for example the client agent
 # triggered the update in the background), restart it onto the fresh build so an
 # open window doesn't linger on the old version. Skipped when nothing's running.
@@ -460,7 +447,7 @@ if [ "$APP" = 1 ] && [ -n "${APP_BIN:-}" ] && pgrep -f "$APP_BIN" >/dev/null 2>&
   ( setsid "$APP_BIN" >/dev/null 2>&1 & ) 2>/dev/null || true
 fi
 
-notify_done "elyxr is up to date ✨"
+notify "Done — elyxr is up to date."
 splash
 echo
 echo "${GRN}elyxr is ready.${RST}"
