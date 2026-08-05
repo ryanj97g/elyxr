@@ -60,7 +60,7 @@ void main() {
 
   test('the controller loads state and surfaces it', () async {
     final c = clientFor({
-      '/v1/admin/status': {'running': true, 'version': '1.0.0', 'uptime_s': 10, 'bind': 'x:7749', 'trove': 'Elyxr', 'pairing_open': true},
+      '/v1/admin/status': {'running': true, 'version': '1.0.0', 'uptime_s': 10, 'bind': 'x:7749', 'trove': 'elyxr', 'pairing_open': true},
       '/v1/admin/pending': {'pending': []},
       '/v1/admin/devices': {'devices': []},
       '/v1/admin/space': {'used_bytes': 1, 'drive_free_bytes': 2, 'max_bytes': 3, 'warn_at_bytes': 4, 'warn_every': 5, 'min_free_bytes': 6},

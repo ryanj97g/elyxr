@@ -1,7 +1,7 @@
 // The transfer queue (§05). Three run at once; the rest wait in order. Each
 // knows its file, folder, direction, bytes done against total, speed, ETA, and
 // state. Each can be paused, resumed, cancelled, or (on failure) retried. The
-// queue is written to disk as it changes, so closing Elyxr mid-transfer and
+// queue is written to disk as it changes, so closing elyxr mid-transfer and
 // reopening resumes rather than restarts.
 
 import 'dart:async';
@@ -22,7 +22,7 @@ class Transfer {
   final Direction direction;
   final String name;
 
-  /// Trove-relative path — the source for a download, the target for an upload.
+  /// trove-relative path — the source for a download, the target for an upload.
   final String remotePath;
 
   /// Local file — the destination for a download, the source for an upload.

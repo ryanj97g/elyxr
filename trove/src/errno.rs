@@ -2,9 +2,9 @@
 //!
 //! Other programs asking the operating system about the folder only understand
 //! a short list of numbered failures and cannot be given a sentence. lymnal's
-//! coded errors are mapped here; the human sentence goes to Elyxr as a
+//! coded errors are mapped here; the human sentence goes to elyxr as a
 //! notification instead. Your text editor says "no space left on device";
-//! Elyxr says it was the 150 GB limit.
+//! elyxr says it was the 150 GB limit.
 
 /// Linux errno for a lymnal error `code`. Unknown codes fall back to EIO.
 pub fn code_to_errno(code: &str) -> i32 {

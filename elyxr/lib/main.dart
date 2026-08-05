@@ -1,4 +1,4 @@
-// Elyxr — the only part of the system a person touches.
+// elyxr — the only part of the system a person touches.
 
 import 'dart:io';
 

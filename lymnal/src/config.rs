@@ -174,7 +174,7 @@ fn default_log_level() -> String {
     "info".into()
 }
 fn default_trove_name() -> String {
-    "Elyxr".into()
+    "elyxr".into()
 }
 
 /// Expand a leading `~` to the user's home directory. Paths without a leading
@@ -206,9 +206,9 @@ pub enum ConfigError {
         path: PathBuf,
         source: toml::de::Error,
     },
-    #[error("the trove path {path} is a file, not a folder. Choose a folder in Elyxr's server settings.")]
+    #[error("the trove path {path} is a file, not a folder. Choose a folder in elyxr's server settings.")]
     TrovePathIsFile { path: PathBuf },
-    #[error("the trove path {path} can't be created or written to ({reason}). Choose another location in Elyxr's server settings.")]
+    #[error("the trove path {path} can't be created or written to ({reason}). Choose another location in elyxr's server settings.")]
     TroveNotWritable { path: PathBuf, reason: String },
     #[error("could not create the data directory {path}: {source}")]
     DataDir {

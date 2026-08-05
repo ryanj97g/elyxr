@@ -21,7 +21,7 @@ http.Client fakeServer() {
         jsonEncode({
           'version': '1.0.0',
           'uptime_s': 1,
-          'trove': 'Elyxr',
+          'trove': 'elyxr',
           'used_bytes': 68400000000,
           'max_bytes': 150000000000,
           'drive_free_bytes': 62400000000,

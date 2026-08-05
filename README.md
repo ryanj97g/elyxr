@@ -1,4 +1,4 @@
-# Elyxr
+# elyxr
 
 Reach a folder on one of your machines from any of your others — over your
 [Tailscale](https://tailscale.com) network — and have it feel like a flash
@@ -11,9 +11,9 @@ machine runs the same thing; a toggle in the app decides which role it plays.
 
 You don't install these separately — the installer sets up all three:
 
-- **Elyxr** — the app. The only thing you actually click.
+- **elyxr** — the app. The only thing you actually click.
 - **lymnal** — the background service that serves a folder over your tailnet.
-- **trove** — mounts a served folder as `~/Elyxr`, like a drive.
+- **trove** — mounts a served folder as `~/elyxr`, like a drive.
 
 ## Before you start
 
@@ -31,7 +31,7 @@ cd elyxr
 ./elyxr.sh
 ```
 
-That's the whole install. One command sets up everything, puts **Elyxr** in
+That's the whole install. One command sets up everything, puts **elyxr** in
 your applications menu, and starts the background service.
 
 - It asks for your password **once** at the start, then never interrupts again.
@@ -45,7 +45,7 @@ Say you want to reach your desktop's files from your laptop.
 
 **On the desktop (the one with the files):**
 
-1. Open Elyxr → **hold the wordmark** (the "ELYXR" text) to open settings.
+1. Open elyxr → **hold the wordmark** (the "ELYXR" text) to open settings.
 2. Set **THIS DEVICE** to **Server**.
 3. Get ready to let your laptop in:
    ```sh
@@ -54,7 +54,7 @@ Say you want to reach your desktop's files from your laptop.
 
 **On the laptop:**
 
-1. Open Elyxr — it starts as a **Client**.
+1. Open elyxr — it starts as a **Client**.
 2. Enter the desktop's Tailscale address (like `100.x.y.z:7749`).
 3. It shows **four words** and waits.
 
@@ -66,7 +66,7 @@ lymnal bind approve <device>     # let it in
 ```
 
 The laptop connects. Flip the **TROVE** switch in the app and the shared folder
-appears as `~/Elyxr`.
+appears as `~/elyxr`.
 
 ## Keep it up to date
 
@@ -79,7 +79,7 @@ needs it. Run it whenever.
 
 ## Terminal commands
 
-Elyxr does all of this from the app — these exist for when you want the
+elyxr does all of this from the app — these exist for when you want the
 terminal, or the machine has no screen.
 
 ```sh

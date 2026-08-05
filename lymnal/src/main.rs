@@ -2,7 +2,7 @@
 //!
 //! With no arguments (or `serve`) lymnal runs as the background service. With a
 //! subcommand it does the same operations as commands, for troubleshooting —
-//! setup never requires a terminal, and Elyxr calls the same code paths so the
+//! setup never requires a terminal, and elyxr calls the same code paths so the
 //! two cannot disagree.
 //!
 //!   lymnal                    run the service (config: ~/.config/lymnal/config.toml)
@@ -88,10 +88,10 @@ async fn serve(config_path: PathBuf) -> anyhow::Result<()> {
     let mut state = AppState::new(cfg, trove, usage, uploads, devices);
     state.with_config_path(config_path.clone());
 
-    // The local admin token lets server-mode Elyxr on this machine reach the
+    // The local admin token lets server-mode elyxr on this machine reach the
     // admin surface. Written user-only; never sent over the tailnet.
     write_admin_token(&data_dir, &state.admin_token);
-    // The resolved bind address, so server-mode Elyxr on this machine knows
+    // The resolved bind address, so server-mode elyxr on this machine knows
     // where to reach the local lymnal without any address being hardcoded.
     let _ = std::fs::write(data_dir.join("address"), &bind);
 
@@ -115,7 +115,7 @@ async fn serve(config_path: PathBuf) -> anyhow::Result<()> {
         }
         Err(e) => {
             // lymnal binds to the Tailscale address only; if it is not up yet,
-            // report and exit — Elyxr restarts the service once Tailscale is up.
+            // report and exit — elyxr restarts the service once Tailscale is up.
             eprintln!("lymnal can't bind to {bind}: {e}");
             eprintln!("If this is the Tailscale address, it will exist once Tailscale is connected.");
             std::process::exit(1);
@@ -159,7 +159,7 @@ fn spawn_maintenance(state: lymnal::Shared) {
     });
 }
 
-/// Write the admin token where server-mode Elyxr on this machine can read it,
+/// Write the admin token where server-mode elyxr on this machine can read it,
 /// user-only (0600). Never sent over the network.
 fn write_admin_token(data_dir: &std::path::Path, token: &str) {
     use std::os::unix::fs::PermissionsExt;

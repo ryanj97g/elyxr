@@ -111,7 +111,7 @@ impl Usage {
             return Err(ApiError::new(
                 ErrCode::TroveFull,
                 format!(
-                    "This file won't fit. Your Elyxr folder holds up to {} and it's at {}, so this {} file is {} too big.",
+                    "This file won't fit. Your elyxr folder holds up to {} and it's at {}, so this {} file is {} too big.",
                     gb1(effective_max),
                     gb1(used),
                     gb1(incoming),
@@ -123,14 +123,14 @@ impl Usage {
                 "incoming_bytes": incoming,
                 "max_bytes": effective_max,
             }))
-            .with_hint("Delete something from Elyxr, or raise the limit in Elyxr's server settings."));
+            .with_hint("Delete something from elyxr, or raise the limit in elyxr's server settings."));
         }
         let free = self.drive_free();
         if free < incoming || free - incoming < limits.min_free_bytes {
             return Err(ApiError::new(
                 ErrCode::DriveFull,
                 format!(
-                    "The drive is nearly full. It has {} free and Elyxr keeps at least {} clear, so this {} file can't be added.",
+                    "The drive is nearly full. It has {} free and elyxr keeps at least {} clear, so this {} file can't be added.",
                     gb1(free),
                     gb1(limits.min_free_bytes),
                     gb1(incoming),
@@ -159,7 +159,7 @@ impl Usage {
             vec![Warning {
                 code: "APPROACHING_MAX".into(),
                 message: format!(
-                    "Elyxr is at {} of {}.",
+                    "elyxr is at {} of {}.",
                     gb_round(used),
                     gb_round(max_bytes)
                 ),

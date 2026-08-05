@@ -11,8 +11,8 @@ data_dir  = "~/.local/share/lymnal"
 log_level = "info"                  # error|warn|info|debug|trace
 
 [trove]
-name = "Elyxr"
-path = "~/Desktop/Elyxr"            # created on first run
+name = "elyxr"
+path = "~/Desktop/elyxr"            # created on first run
 follow_symlinks = false
 
 # [[token]] entries are added by pairing, not by hand. Shape, for reference:

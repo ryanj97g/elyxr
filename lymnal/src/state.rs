@@ -43,7 +43,7 @@ pub struct AppState {
     pub pairing: PairingState,
     pub started: Instant,
     pub version: String,
-    /// A local secret that server-mode Elyxr (on the same machine) presents to
+    /// A local secret that server-mode elyxr (on the same machine) presents to
     /// reach the admin surface. Never leaves the machine.
     pub admin_token: String,
     /// The last failures, newest last, capped at twenty.

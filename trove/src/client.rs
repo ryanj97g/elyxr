@@ -5,7 +5,7 @@
 use serde_json::Value;
 
 /// A lymnal failure, reduced to what the folder layer needs: the code (for the
-/// errno mapping) and the message (for the notification that goes to Elyxr).
+/// errno mapping) and the message (for the notification that goes to elyxr).
 #[derive(Debug, Clone)]
 pub struct LymError {
     pub code: String,

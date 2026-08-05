@@ -40,7 +40,7 @@ fn harness_with_limits(limits: Limits) -> Harness {
         data_dir: data_dir.clone(),
         log_level: "error".into(),
         trove: TroveCfg {
-            name: "Elyxr".into(),
+            name: "elyxr".into(),
             path: trove_root.clone(),
             follow_symlinks: false,
         },
@@ -258,7 +258,7 @@ async fn health_needs_no_auth() {
     let h = harness();
     let (status, body) = h.send(Method::GET, "/v1/health", false, None).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["trove"], "Elyxr");
+    assert_eq!(body["trove"], "elyxr");
     assert_eq!(body["max_bytes"], 150_000_000_000u64);
 }
 

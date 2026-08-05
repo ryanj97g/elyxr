@@ -1,4 +1,4 @@
-// The visual language of Elyxr, from DESIGN.md: a tinted metal chassis with a
+// The visual language of elyxr, from DESIGN.md: a tinted metal chassis with a
 // phosphor CRT tube. Five accents, each casting the metal a different way; the
 // phosphor colours are computed from the accent so a new colour needs no new
 // constants. This file is the single source of those tokens.

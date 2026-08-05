@@ -92,7 +92,7 @@ class Health {
   factory Health.fromJson(Map<String, dynamic> j) => Health(
         version: j['version'] as String? ?? '?',
         uptimeS: (j['uptime_s'] as num?)?.toInt() ?? 0,
-        trove: j['trove'] as String? ?? 'Elyxr',
+        trove: j['trove'] as String? ?? 'elyxr',
         usedBytes: (j['used_bytes'] as num?)?.toInt() ?? 0,
         maxBytes: (j['max_bytes'] as num?)?.toInt() ?? 0,
         driveFreeBytes: (j['drive_free_bytes'] as num?)?.toInt() ?? 0,
