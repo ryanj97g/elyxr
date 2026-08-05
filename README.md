@@ -1,21 +1,29 @@
 # elyxr
 
-Reach a folder on one of your machines from any of your others, over your
-[Tailscale](https://tailscale.com) network.
+Your stuff lives on one machine. elyxr lets you reach all of it from any of your
+others — over your own private [Tailscale](https://tailscale.com) network —
+without copying it there first.
 
-One machine **serves** a folder. Your others **browse** it live: you see
-everything, but a file only downloads when you open it. Nothing is copied or
-mirrored, so you don't need room for it all — the files stay on the machine
-that has them.
+That's the whole idea. Dropbox and Syncthing keep you "in sync" by putting a
+copy of everything on every device: to reach 150 GB of files, you need 150 GB
+free on each machine. elyxr doesn't work that way. You **see everything**, and a
+file only comes down **when you actually open it**. Your files stay on the
+machine that has them, and your laptop stays empty.
+
+Open a file and it's just there. Nothing to sync by hand, nothing to reconcile —
+using your files *is* the sync.
 
 ## The pieces
 
-One command sets up all three — you never install them separately:
+Three small programs, one idea. You install all three with one command and only
+ever touch the first:
 
-- **elyxr** — the app. The only thing you click.
-- **lymnal** — the background service that shares the folder and keeps this
-  machine up to date. It sits in your system tray while it runs.
-- **trove** — makes a shared folder show up as a normal folder on your machine.
+- **elyxr** — the elixir: the app you actually use.
+- **lymnal** — the liminal service: the quiet in-between that carries your files
+  across and keeps every machine up to date. It sits in your system tray while
+  it's running.
+- **trove** — where everything's kept. On a client it shows up as an ordinary
+  folder; open it and the server's files are right there.
 
 ## Install
 
