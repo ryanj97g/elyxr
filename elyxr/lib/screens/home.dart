@@ -25,6 +25,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _inSettings = false;
+  int _peerSignal = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +41,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final serverBuild = session.health?.build ?? 0;
     if (settings.appMode == AppMode.client && appBuild > 0 && serverBuild > appBuild) {
       WidgetsBinding.instance.addPostFrameCallback((_) => updater.noticeBehind(serverBuild));
+    }
+    // The server announced it's updating (live, the instant it starts) — update
+    // this device in step, right away, not on the next poll.
+    if (settings.appMode == AppMode.client && session.peerUpdateSignal != _peerSignal) {
+      _peerSignal = session.peerUpdateSignal;
+      WidgetsBinding.instance.addPostFrameCallback((_) => updater.updateNow());
     }
     final showBanner = settings.appMode == AppMode.client &&
         !_inSettings &&

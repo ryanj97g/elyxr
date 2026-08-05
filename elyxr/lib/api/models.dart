@@ -269,6 +269,7 @@ class ServerEvent {
 
   bool get isChange => event == 'change';
   bool get isUsage => event == 'usage';
+  bool get isUpdate => event == 'update';
 
   /// For a change event: "created" | "removed" | "modified".
   String? get changeKind => data['kind'] as String?;

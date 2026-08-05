@@ -298,6 +298,11 @@ fn update(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> 
             repo.display()
         );
     }
+    // Tell any connected clients an update is starting, so they update in step
+    // with this one instead of waiting to notice a version gap. Best-effort: if
+    // the local service isn't reachable, the update still runs.
+    let _ = announce_update_to_clients(config_path);
+
     let status = std::process::Command::new("bash")
         .arg(&script)
         .args(args)
@@ -307,6 +312,17 @@ fn update(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> 
     if !status.success() {
         anyhow::bail!("the installer reported a problem (see its output above).");
     }
+    Ok(())
+}
+
+/// Ask the local running service to broadcast an "update starting" event to
+/// connected clients. Best-effort — errors are ignored by the caller.
+fn announce_update_to_clients(config_path: &std::path::Path) -> anyhow::Result<()> {
+    let cfg = load(config_path)?;
+    let addr = resolve_bind(&cfg.bind).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let base = format!("http://{addr}");
+    let token = read_admin_token(&cfg.data_dir)?;
+    admin_post(&base, &token, "/v1/admin/announce-update", serde_json::json!({}))?;
     Ok(())
 }
 
