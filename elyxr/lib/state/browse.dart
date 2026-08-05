@@ -165,11 +165,11 @@ class BrowseController extends ChangeNotifier {
   Future<void> _load() async {
     _sel.clear();
     _anchorIndex = null;
-    _entries.clear();
-    _cursor = null;
 
     final client = session.client;
     if (client == null) {
+      _entries.clear();
+      _cursor = null;
       _state = FolderState.offline;
       _fault = ConnectionFault.unreachable;
       notifyListeners();
@@ -179,7 +179,9 @@ class BrowseController extends ChangeNotifier {
     // Fresh cache within 5s → no request.
     final cached = _cache[_cacheKey];
     if (cached != null && DateTime.now().difference(cached.at) < _cacheTtl) {
-      _entries.addAll(cached.entries);
+      _entries
+        ..clear()
+        ..addAll(cached.entries);
       _cursor = cached.cursor;
       _state = _entries.isEmpty ? FolderState.empty : FolderState.ready;
       notifyListeners();
@@ -189,12 +191,20 @@ class BrowseController extends ChangeNotifier {
     _state = FolderState.loading;
     notifyListeners();
     try {
+      final reqPath = _path;
       final page = await client.list(
-        path: _path,
+        path: reqPath,
         sort: _sort.wire,
         order: _desc ? 'desc' : 'asc',
       );
-      _entries.addAll(page.entries);
+      // If we navigated elsewhere while this was in flight, a newer load owns
+      // the list — drop this result.
+      if (reqPath != _path) return;
+      // Replace in one synchronous step (clear + fill, no await between) so two
+      // refreshes racing can't leave duplicate rows.
+      _entries
+        ..clear()
+        ..addAll(page.entries);
       _cursor = page.nextCursor;
       _usedBytes = page.usedBytes;
       _warnings = page.warnings;
