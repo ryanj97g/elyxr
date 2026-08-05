@@ -131,6 +131,12 @@ async fn serve(
     // The resolved bind address, so server-mode elyxr on this machine knows
     // where to reach the local lymnal without any address being hardcoded.
     let _ = std::fs::write(data_dir.join("address"), &bind);
+    // The resolved trove folder, so server-mode elyxr reads the files straight
+    // off local disk — no token, no round-trip — instead of over the network.
+    let _ = std::fs::write(
+        data_dir.join("trove.path"),
+        state.trove.root().to_string_lossy().as_bytes(),
+    );
 
     // Watch the trove so changes made directly on the server are announced.
     let _watcher = match watch_trove(state.trove.root().to_path_buf(), state.events.clone()) {

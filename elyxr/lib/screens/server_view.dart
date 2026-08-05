@@ -37,7 +37,10 @@ class _ServerControlsState extends State<ServerControls> {
   Widget build(BuildContext context) {
     final p = widget.palette;
     final server = context.watch<ServerController>();
+    // Shrink-wraps so it can sit inside the settings scroll view (which owns the
+    // scrolling); no Expanded/ListView of its own.
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
           color: p.a,
@@ -66,9 +69,10 @@ class _ServerControlsState extends State<ServerControls> {
             padding: const EdgeInsets.all(8),
             child: Text(server.error!, style: glass(14, const Color(0xFFf5b942))),
           ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(15, 12, 15, 20),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _service(p, server),
               const SizedBox(height: 16),

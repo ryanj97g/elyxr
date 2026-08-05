@@ -10,7 +10,6 @@ import '../state/session.dart';
 import '../state/settings.dart';
 import '../widgets/rails.dart';
 import 'files_view.dart';
-import 'server_view.dart';
 import 'settings_view.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -29,14 +28,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final session = context.watch<SessionController>();
     final p = settings.palette;
 
-    // Updates are driven by the lymnal background service now, so a client keeps
-    // itself up to date with the app closed. The server's own "update now"
-    // control and its progress live in the server view.
+    // The trove is the main view on every device now — a client browses it over
+    // the network, a server reads it straight off local disk. The server's own
+    // controls (pairing, limits) live in Settings.
     Widget tubeChild;
     if (_inSettings) {
       tubeChild = const SettingsView();
-    } else if (settings.appMode == AppMode.server) {
-      tubeChild = ServerControls(palette: p);
     } else {
       tubeChild = const FilesView();
     }
