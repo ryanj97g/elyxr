@@ -46,12 +46,13 @@ class Chassis extends StatelessWidget {
         children: [
           // Inner highlight (inset 0 1px 0 mh): a hairline at the very top.
           Container(height: 1, color: p.mh),
-          // The top rail is the drag handle — grab the metal to move the window.
+          // Both rails are drag handles — grab the metal to move the window.
+          // (The tube can't be one, or you couldn't scroll or click files.)
           DragToMoveArea(child: topRail),
           const SizedBox(height: 8),
           Expanded(child: tube),
           const SizedBox(height: 8),
-          bottomRail,
+          DragToMoveArea(child: bottomRail),
         ],
       ),
     );
