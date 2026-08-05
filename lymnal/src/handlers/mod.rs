@@ -23,7 +23,7 @@ use serde_json::{json, Value};
 use crate::auth::Identity;
 use crate::config::Role;
 use crate::error::{ApiError, ErrCode};
-use crate::pairing::{phrase_for, Decision};
+use crate::pairing::Decision;
 use crate::state::Shared;
 
 /// Assemble the full v1 router. Chunk uploads carry raw 8 MiB bodies, so the
@@ -167,9 +167,9 @@ struct PairReq {
     client: String,
 }
 
-/// Pair a new device. Registers the request (both devices show the same
-/// derived phrase) and blocks until a person at the server approves or denies,
-/// or 120s pass. Refused with PAIRING_CLOSED when pairing is off.
+/// Pair a new device. Registers the request and blocks until a person at the
+/// server approves or denies it by name, or 120s pass. Refused with
+/// PAIRING_CLOSED when pairing is off.
 async fn pair(State(s): State<Shared>, Json(req): Json<PairReq>) -> Result<Json<Value>, ApiError> {
     if !s.pairing.is_open() {
         return Err(ApiError::new(
@@ -177,8 +177,7 @@ async fn pair(State(s): State<Shared>, Json(req): Json<PairReq>) -> Result<Json<
             "This server isn't accepting new devices right now. Open pairing in elyxr's server settings.",
         ));
     }
-    let phrase = phrase_for(&req.device, &req.client);
-    let rx = s.pairing.register(req.device.clone(), req.client.clone(), phrase);
+    let rx = s.pairing.register(req.device.clone(), req.client.clone());
     match tokio::time::timeout(Duration::from_secs(120), rx).await {
         Ok(Ok(Decision::Approve {
             token,

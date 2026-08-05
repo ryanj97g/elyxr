@@ -179,40 +179,38 @@ fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
     match args.first().map(String::as_str) {
         Some("open") => {
             admin_post(&base, &token, "/v1/admin/pairing", serde_json::json!({ "open": true }))?;
-            println!("Ready to bind. Open elyxr on the other device and request access.");
+            println!("Ready to bind. On the other device, run `lymnal bind <this machine's address>`.");
             println!("Waiting for a device...  (Ctrl+C to stop)");
-            // Poll until a device shows up, then show its phrase and ask.
+            // Poll until a device shows up, then name it and ask.
             let mut waited = 0;
-            let (device, phrase) = loop {
+            let device = loop {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 waited += 1;
                 let v = admin_get(&base, &token, "/v1/admin/pending")?;
                 let list = v.get("pending").and_then(|p| p.as_array()).cloned().unwrap_or_default();
                 if let Some(p) = list.first() {
-                    let s = |k: &str| p.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
-                    break (s("device"), s("phrase"));
+                    break p.get("device").and_then(|x| x.as_str()).unwrap_or("").to_string();
                 }
                 if waited >= 300 {
-                    println!("No device asked to connect in time. Run 'lymnal bind open' again when ready.");
+                    println!("No device asked to connect in time. Run `lymnal bind open` again when ready.");
                     return Ok(());
                 }
             };
-            println!("\n  device:  {device}\n  phrase:  {phrase}\n");
-            print!("Do these four words match the other screen? Approve {device}? [y/N]: ");
+            print!("\nApprove \"{device}\"? [y/N]: ");
             use std::io::Write;
             std::io::stdout().flush().ok();
             let mut ans = String::new();
             std::io::stdin().read_line(&mut ans).ok();
             if matches!(ans.trim().to_lowercase().as_str(), "y" | "yes") {
+                // Approving closes pairing on the server, so nothing else to do.
                 admin_post(&base, &token, "/v1/admin/approve",
                     serde_json::json!({ "device": device, "role": "owner" }))?;
-                println!("Sealed. {device} is connected now.");
+                println!("Done. {device} is connected, and pairing is closed.");
             } else {
                 admin_post(&base, &token, "/v1/admin/deny", serde_json::json!({ "device": device }))?;
-                println!("Turned away {device}.");
+                admin_post(&base, &token, "/v1/admin/pairing", serde_json::json!({ "open": false }))?;
+                println!("Turned away {device}. Pairing is closed.");
             }
-            // Stop accepting once we've handled one.
-            admin_post(&base, &token, "/v1/admin/pairing", serde_json::json!({ "open": false }))?;
             Ok(())
         }
         Some("seal") => {
@@ -227,14 +225,14 @@ fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
                     let device = list[0].get("device").and_then(|d| d.as_str()).unwrap_or("").to_string();
                     admin_post(&base, &token, "/v1/admin/approve",
                         serde_json::json!({ "device": device, "role": "owner" }))?;
-                    println!("Sealed. {device} is connected now.");
+                    println!("Done. {device} is connected, and pairing is closed.");
                     Ok(())
                 }
                 _ => {
-                    println!("More than one device is waiting — approve the one you mean by name:");
+                    println!("More than one device is waiting. Approve the one you mean by name:");
                     for p in &list {
                         let s = |k: &str| p.get(k).and_then(|x| x.as_str()).unwrap_or("");
-                        println!("  {}  ({})", s("device"), s("phrase"));
+                        println!("  {}  ({})", s("device"), s("client"));
                     }
                     anyhow::bail!("run: lymnal bind approve <device>")
                 }
@@ -253,10 +251,10 @@ fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
                 println!("If you haven't yet: lymnal bind open");
                 return Ok(());
             }
-            println!("{:<18} {:<14} {}", "device", "client", "phrase");
+            println!("{:<18} {}", "device", "client");
             for p in list {
                 let s = |k: &str| p.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
-                println!("{:<18} {:<14} {}", s("device"), s("client"), s("phrase"));
+                println!("{:<18} {}", s("device"), s("client"));
             }
             println!("\nBind it with:  lymnal bind seal   (or: lymnal bind approve <device>)");
             Ok(())
@@ -414,9 +412,9 @@ fn bind_help() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Bind this device to a server: request access, show the four-word phrase so
-/// you can confirm it matches the server, wait for approval, then save the
-/// connection to a small file that the app imports the next time it opens.
+/// Bind this device to a server: request access, wait for someone at the server
+/// to approve it by name, then save the connection to a small file that the app
+/// imports the next time it opens.
 fn bind_to(config_path: &std::path::Path, address: &str) -> anyhow::Result<()> {
     let stored = address
         .trim_start_matches("https://")
@@ -426,12 +424,10 @@ fn bind_to(config_path: &std::path::Path, address: &str) -> anyhow::Result<()> {
     let base = format!("http://{stored}");
     let device = hostname();
     let client = format!("lymnal/{}", env!("CARGO_PKG_VERSION"));
-    let phrase = lymnal::pairing::phrase_for(&device, &client);
 
-    println!("Requesting access to {stored} as \"{device}\".\n");
-    println!("  Your four words are:  {phrase}\n");
-    println!("Confirm they match the four words shown on the server, then approve this device");
-    println!("there (tap APPROVE in elyxr, or run `lymnal bind seal`). Waiting up to two minutes...");
+    println!("Requesting access to {stored} as \"{device}\".");
+    println!("Approve this device on the server (tap APPROVE in elyxr, or run `lymnal bind seal`).");
+    println!("Waiting up to two minutes...");
 
     let resp = ureq::post(&format!("{base}/v1/pair"))
         .timeout(std::time::Duration::from_secs(130))
