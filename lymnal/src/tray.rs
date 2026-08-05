@@ -14,9 +14,11 @@ use ksni::blocking::TrayMethods;
 /// theme being installed or the repo staying where it was. Two sizes so the tray
 /// can pick a crisp one for its panel.
 static ICONS: LazyLock<Vec<ksni::Icon>> = LazyLock::new(|| {
+    // The tray renders tiny (~22px), so it wears the silhouette, not the full-
+    // colour mark — the small sizes are exactly the silhouette art.
     [
-        include_bytes!("../../branding/png/lymnal/lymnal-48.png").as_slice(),
-        include_bytes!("../../branding/png/lymnal/lymnal-256.png").as_slice(),
+        include_bytes!("../../branding/png/lymnal/lymnal-16.png").as_slice(),
+        include_bytes!("../../branding/png/lymnal/lymnal-32.png").as_slice(),
     ]
     .into_iter()
     .filter_map(decode)
