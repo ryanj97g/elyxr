@@ -4,6 +4,7 @@
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
+#include <string.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -13,6 +14,129 @@ struct _MyApplication {
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
+
+// ---- drag a file out of the window (channel "elyxr/dragout") --------------
+//
+// Flutter doesn't offer drag-out on Linux, so this is the native side: Dart
+// says "the user grabbed file X" (beginDrag); we start an operating-system drag
+// using XDS (X Direct Save), the standard protocol where the drop target hands
+// the source the exact path to save to. On drop we read that path and ask Dart
+// to download the server file straight there (writeTo) — no copy on the client.
+static FlMethodChannel* g_dragout_channel = nullptr;
+static GtkWidget* g_dragout_widget = nullptr;  // the FlView
+static gchar* g_drag_server_path = nullptr;    // trove-relative path being dragged
+static gchar* g_drag_filename = nullptr;       // basename shown to the desktop
+
+static GdkAtom xds_atom() {
+  return gdk_atom_intern_static_string("XdndDirectSave0");
+}
+static GdkAtom text_plain_atom() {
+  return gdk_atom_intern_static_string("text/plain");
+}
+
+// The drop target writes the chosen save path (a file:// URI) into the
+// XdndDirectSave0 property on our window; read it back.
+static gchar* read_xds_target(GdkWindow* window) {
+  GdkAtom actual_type;
+  gint actual_format = 0;
+  gint length = 0;
+  guchar* data = nullptr;
+  if (!gdk_property_get(window, xds_atom(), text_plain_atom(), 0, 2048, FALSE,
+                        &actual_type, &actual_format, &length, &data)) {
+    return nullptr;
+  }
+  gchar* out = g_strndup(reinterpret_cast<const gchar*>(data), length);
+  g_free(data);
+  return out;
+}
+
+// Fired when the drop target asks the source for the file. For XDS this is where
+// we learn the destination and kick off the download to it.
+static void on_drag_data_get(GtkWidget* widget, GdkDragContext* context,
+                             GtkSelectionData* selection, guint info,
+                             guint time_, gpointer user_data) {
+  (void)context;
+  (void)info;
+  (void)time_;
+  (void)user_data;
+  GdkWindow* win = gtk_widget_get_window(widget);
+  gchar* uri = win ? read_xds_target(win) : nullptr;
+  const char* status = "E";
+  if (uri != nullptr && g_drag_server_path != nullptr) {
+    gchar* dest = g_filename_from_uri(uri, nullptr, nullptr);
+    if (dest == nullptr) dest = g_strdup(uri);  // may already be a plain path
+    g_autoptr(FlValue) args = fl_value_new_map();
+    fl_value_set_string_take(args, "path",
+                             fl_value_new_string(g_drag_server_path));
+    fl_value_set_string_take(args, "dest", fl_value_new_string(dest));
+    if (g_dragout_channel != nullptr) {
+      fl_method_channel_invoke_method(g_dragout_channel, "writeTo", args, nullptr,
+                                      nullptr, nullptr);
+    }
+    g_free(dest);
+    status = "S";
+  }
+  g_free(uri);
+  gtk_selection_data_set(selection, gtk_selection_data_get_target(selection), 8,
+                         reinterpret_cast<const guchar*>(status), 1);
+}
+
+static void begin_native_drag() {
+  if (g_dragout_widget == nullptr || g_drag_filename == nullptr) return;
+  GdkWindow* win = gtk_widget_get_window(g_dragout_widget);
+  if (win == nullptr) return;
+  // Advertise the filename we want saved (XDS step one).
+  gdk_property_change(win, xds_atom(), text_plain_atom(), 8, GDK_PROP_MODE_REPLACE,
+                      reinterpret_cast<const guchar*>(g_drag_filename),
+                      static_cast<gint>(strlen(g_drag_filename)));
+  GtkTargetList* targets = gtk_target_list_new(nullptr, 0);
+  gtk_target_list_add(targets, xds_atom(), 0, 0);
+  GdkEvent* event = gtk_get_current_event();
+  gtk_drag_begin_with_coordinates(g_dragout_widget, targets, GDK_ACTION_COPY, 1,
+                                  event, -1, -1);
+  gtk_target_list_unref(targets);
+  if (event != nullptr) gdk_event_free(event);
+}
+
+static void dragout_method_handler(FlMethodChannel* channel,
+                                   FlMethodCall* method_call, gpointer user_data) {
+  (void)channel;
+  (void)user_data;
+  const gchar* method = fl_method_call_get_name(method_call);
+  if (strcmp(method, "beginDrag") == 0) {
+    FlValue* args = fl_method_call_get_args(method_call);
+    FlValue* path = fl_value_lookup_string(args, "path");
+    FlValue* name = fl_value_lookup_string(args, "name");
+    g_clear_pointer(&g_drag_server_path, g_free);
+    g_clear_pointer(&g_drag_filename, g_free);
+    if (path != nullptr && fl_value_get_type(path) == FL_VALUE_TYPE_STRING) {
+      g_drag_server_path = g_strdup(fl_value_get_string(path));
+    }
+    if (name != nullptr && fl_value_get_type(name) == FL_VALUE_TYPE_STRING) {
+      g_drag_filename = g_strdup(fl_value_get_string(name));
+    }
+    begin_native_drag();
+    fl_method_call_respond_success(method_call, nullptr, nullptr);
+  } else {
+    fl_method_call_respond_not_implemented(method_call, nullptr);
+  }
+}
+
+// Wire the channel and the drag handler to the Flutter view.
+static void register_dragout(FlView* view) {
+  g_dragout_widget = GTK_WIDGET(view);
+  gtk_drag_source_set(GTK_WIDGET(view), GDK_BUTTON1_MASK, nullptr, 0,
+                      GDK_ACTION_COPY);
+  g_signal_connect(view, "drag-data-get", G_CALLBACK(on_drag_data_get), nullptr);
+  FlEngine* engine = fl_view_get_engine(view);
+  FlBinaryMessenger* messenger = fl_engine_get_binary_messenger(engine);
+  g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
+  g_dragout_channel = fl_method_channel_new(messenger, "elyxr/dragout",
+                                            FL_METHOD_CODEC(codec));
+  fl_method_channel_set_method_call_handler(g_dragout_channel,
+                                            dragout_method_handler, nullptr,
+                                            nullptr);
+}
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
@@ -83,6 +207,8 @@ static void my_application_activate(GApplication* application) {
   gtk_widget_realize(GTK_WIDGET(view));
 
   fl_register_plugins(FL_PLUGIN_REGISTRY(view));
+
+  register_dragout(view);
 
   gtk_widget_grab_focus(GTK_WIDGET(view));
 }
