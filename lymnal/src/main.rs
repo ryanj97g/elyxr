@@ -14,6 +14,7 @@
 
 mod agent;
 mod cli;
+mod tray;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -60,15 +61,36 @@ fn run_service(config_path: PathBuf) -> anyhow::Result<()> {
         .parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
+    let (repo, app_bin) = tray_targets(&config_path);
     if let Some(link) = agent::load_link(&config_dir) {
         init_tracing("info");
+        // A client device: the tray shows it's linked to its server and stays up
+        // while the agent keeps the device updated in the background.
+        let host = link.server.split(':').next().unwrap_or(&link.server).to_string();
+        let _tray = tray::spawn(format!("connected to {host}"), app_bin, repo);
         agent::run(link, config_path); // never returns
     }
     let rt = tokio::runtime::Runtime::new()?;
-    rt.block_on(serve(config_path))
+    rt.block_on(serve(config_path, repo, app_bin))
 }
 
-async fn serve(config_path: PathBuf) -> anyhow::Result<()> {
+/// Where the tray's menu points: the elyxr repo (for "Update now") and the
+/// installed app binary (for "Open elyxr"). Either may be absent — a headless
+/// install has no app; a hand-placed config might not sit beside the repo.
+fn tray_targets(config_path: &Path) -> (Option<PathBuf>, Option<PathBuf>) {
+    let repo = cli::find_repo(config_path).ok();
+    let app_bin = repo.as_ref().and_then(|r| {
+        let b = r.join("elyxr/build/linux/x64/release/bundle/elyxr");
+        b.exists().then_some(b)
+    });
+    (repo, app_bin)
+}
+
+async fn serve(
+    config_path: PathBuf,
+    repo: Option<PathBuf>,
+    app_bin: Option<PathBuf>,
+) -> anyhow::Result<()> {
     let cfg = match Config::load(&config_path) {
         Ok(c) => c,
         Err(e) => {
@@ -99,6 +121,7 @@ async fn serve(config_path: PathBuf) -> anyhow::Result<()> {
         }
     };
     let data_dir = cfg.data_dir.clone();
+    let trove_name = cfg.trove.name.clone();
     let mut state = AppState::new(cfg, trove, usage, uploads, devices);
     state.with_config_path(config_path.clone());
 
@@ -135,6 +158,15 @@ async fn serve(config_path: PathBuf) -> anyhow::Result<()> {
             std::process::exit(1);
         }
     };
+
+    // A server device: the tray names the trove it's sharing. Register it from a
+    // plain thread — the tray's setup does a blocking wait that must not run on a
+    // tokio worker — and park there so its handle (and the icon) stay alive.
+    std::thread::spawn(move || {
+        if let Some(_handle) = tray::spawn(format!("serving {trove_name}"), app_bin, repo) {
+            std::thread::park();
+        }
+    });
 
     tracing::info!(%bind, "lymnal listening");
     axum::serve(listener, app)
