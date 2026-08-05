@@ -16,8 +16,16 @@ class TroveMountController extends ChangeNotifier {
   String? get error => _error;
 
   String _troveBin() {
-    const full = '/usr/local/bin/trove';
-    return File(full).existsSync() ? full : 'trove';
+    // The installer now puts binaries in ~/.local/bin (no root, password-free
+    // updates); fall back to the old system-wide spot, then to PATH.
+    final home = Platform.environment['HOME'];
+    for (final path in [
+      if (home != null) '$home/.local/bin/trove',
+      '/usr/local/bin/trove',
+    ]) {
+      if (File(path).existsSync()) return path;
+    }
+    return 'trove';
   }
 
   /// Start the mount. No-op if it's already running or starting.
