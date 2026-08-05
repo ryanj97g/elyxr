@@ -948,6 +948,7 @@ dependencies = [
  "tracing-subscriber",
  "ulid",
  "unicode-normalization",
+ "ureq",
 ]
 
 [[package]]
