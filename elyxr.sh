@@ -125,17 +125,22 @@ if [ "$APP" = 1 ]; then
     sh_ $SUDO apt-get update
     sh_ $SUDO apt-get install -y "${NEEDA[@]}"
   fi
+  done_
+
+  phase "flutter sdk"
+  # Flutter isn't an apt package, so if it's missing we clone the stable SDK
+  # ourselves (into ~/.local/share/flutter) and put it on PATH for the build.
+  # It's only needed to build — the finished app binary is self-contained.
   if ! command -v flutter >/dev/null 2>&1; then
-    printf '%s\n\n' "${RED}x${RST}"
-    echo "${RED}Flutter isn't installed.${RST} Get it from"
-    echo "  https://docs.flutter.dev/get-started/install/linux"
-    echo "then re-run:  ./elyxr.sh --app"
-    exit 1
+    FLUTTER_DIR="$HOME/.local/share/flutter"
+    [ -x "$FLUTTER_DIR/bin/flutter" ] || sh_ git clone --depth 1 -b stable https://github.com/flutter/flutter.git "$FLUTTER_DIR"
+    export PATH="$FLUTTER_DIR/bin:$PATH"
   fi
+  sh_ flutter --version
   done_
 
   phase "building the app"
-  ( cd elyxr && sh_ flutter pub get && sh_ flutter build linux --release )
+  ( cd elyxr && sh_ flutter config --enable-linux-desktop && sh_ flutter pub get && sh_ flutter build linux --release )
   done_
 
   phase "menu launcher"
