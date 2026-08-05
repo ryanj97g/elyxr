@@ -10,6 +10,39 @@ use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_PORT: u16 = 7749;
 
+/// Resolve a bind spec ("host:port") into a concrete socket address. A host of
+/// `auto` or `tailscale` means this machine's own Tailscale IP, found by asking
+/// `tailscale ip -4` — so no address is ever hardcoded, and lymnal follows the
+/// machine if its tailnet IP ever changes.
+pub fn resolve_bind(spec: &str) -> Result<String, String> {
+    let (host, port) = spec.rsplit_once(':').unwrap_or((spec, "7749"));
+    if host.eq_ignore_ascii_case("auto") || host.eq_ignore_ascii_case("tailscale") {
+        Ok(format!("{}:{}", tailscale_ip()?, port))
+    } else {
+        Ok(spec.to_string())
+    }
+}
+
+fn tailscale_ip() -> Result<String, String> {
+    let out = std::process::Command::new("tailscale")
+        .args(["ip", "-4"])
+        .output()
+        .map_err(|e| format!("couldn't run tailscale to find this machine's tailnet IP: {e}"))?;
+    if !out.status.success() {
+        return Err("tailscale couldn't report this machine's IP (is Tailscale connected?)".into());
+    }
+    let ip = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if ip.is_empty() {
+        return Err("Tailscale returned no IPv4 address (is it connected?)".into());
+    }
+    Ok(ip)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub bind: String,

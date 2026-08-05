@@ -53,10 +53,6 @@ typedef ClientFactory = LymnalClient Function(String baseUrl, {String? token});
 LymnalClient _defaultFactory(String baseUrl, {String? token}) =>
     LymnalClient(baseUrl: baseUrl, token: token);
 
-/// The known machine on the tailnet (README · Machines). Discovery seeds from
-/// here plus any server this device was last paired with.
-const String kKnownServer = '100.127.82.110:7749';
-
 enum LinkStatus { connecting, ok, unreachable, noTailnet, notApproved, firstRun }
 
 class SessionController extends ChangeNotifier {
@@ -123,11 +119,12 @@ class SessionController extends ChangeNotifier {
       };
 
   /// Try `health` on each candidate address, returning the servers that
-  /// answer. Seeds from the last-paired server and the known machine.
+  /// answer. Seeds from the last-paired server (if any) and whatever address
+  /// the person typed — nothing is hardcoded, so a first run means entering a
+  /// server address by hand.
   Future<List<DiscoveredServer>> discover({List<String> extra = const []}) async {
     final candidates = <String>{
       if (_serverAddress != null) _serverAddress!,
-      kKnownServer,
       ...extra,
     };
     final found = <DiscoveredServer>[];

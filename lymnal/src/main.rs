@@ -76,7 +76,14 @@ async fn serve(config_path: PathBuf) -> anyhow::Result<()> {
     let usage = Usage::open(&cfg.data_dir, cfg.limits.clone(), trove.root().to_path_buf())?;
     let uploads = UploadManager::new(&cfg.data_dir, cfg.upload.chunk_bytes, cfg.upload.stale_after_hrs);
     let devices = DeviceStore::open(&cfg.data_dir)?;
-    let bind = cfg.bind.clone();
+    let bind = match lymnal::config::resolve_bind(&cfg.bind) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("lymnal can't start: {e}");
+            eprintln!("Set `bind` in the config to this machine's Tailscale address, or connect Tailscale.");
+            std::process::exit(1);
+        }
+    };
     let data_dir = cfg.data_dir.clone();
     let mut state = AppState::new(cfg, trove, usage, uploads, devices);
     state.with_config_path(config_path.clone());
@@ -84,6 +91,9 @@ async fn serve(config_path: PathBuf) -> anyhow::Result<()> {
     // The local admin token lets server-mode Elyxr on this machine reach the
     // admin surface. Written user-only; never sent over the tailnet.
     write_admin_token(&data_dir, &state.admin_token);
+    // The resolved bind address, so server-mode Elyxr on this machine knows
+    // where to reach the local lymnal without any address being hardcoded.
+    let _ = std::fs::write(data_dir.join("address"), &bind);
 
     // Watch the trove so changes made directly on the server are announced.
     let _watcher = match watch_trove(state.trove.root().to_path_buf(), state.events.clone()) {

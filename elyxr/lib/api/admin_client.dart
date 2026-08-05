@@ -99,6 +99,16 @@ class AdminClient {
     return null;
   }
 
+  /// Read the address the local lymnal bound to (data_dir/address), so server
+  /// mode reaches it without a hardcoded address.
+  static Future<String?> readAddress(String dataDir) async {
+    try {
+      final f = File('$dataDir/address');
+      if (await f.exists()) return (await f.readAsString()).trim();
+    } catch (_) {}
+    return null;
+  }
+
   Map<String, String> get _headers => {
         'X-Admin-Token': adminToken,
         'Content-Type': 'application/json',

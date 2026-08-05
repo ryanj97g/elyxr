@@ -4,7 +4,7 @@
 //! three cannot disagree.
 
 use lymnal::auth::hash_token;
-use lymnal::config::{expand_tilde, Config, Role};
+use lymnal::config::{expand_tilde, resolve_bind, Config, Role};
 use lymnal::devices::{DeviceRecord, DeviceStore};
 use lymnal::limits::Usage;
 
@@ -49,7 +49,8 @@ fn status(config_path: &std::path::Path) -> anyhow::Result<()> {
     let devices = DeviceStore::open(&cfg.data_dir)?;
     let usage = Usage::open(&cfg.data_dir, cfg.limits.clone(), cfg.trove.path.clone())?;
     println!("trove     {} at {}", cfg.trove.name, cfg.trove.path.display());
-    println!("bind      {}", cfg.bind);
+    let shown = resolve_bind(&cfg.bind).unwrap_or_else(|_| cfg.bind.clone());
+    println!("bind      {}", shown);
     println!("data_dir  {}", cfg.data_dir.display());
     println!(
         "used      {:.1} GB of {:.1} GB",
@@ -159,7 +160,8 @@ fn trove(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
 /// admin surface over HTTP with the machine-local admin token.
 fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
     let cfg = load(config_path)?;
-    let base = format!("http://{}", cfg.bind);
+    let addr = resolve_bind(&cfg.bind).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let base = format!("http://{addr}");
     let token = read_admin_token(&cfg.data_dir)?;
 
     match args.first().map(String::as_str) {

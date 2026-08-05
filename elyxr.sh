@@ -6,33 +6,31 @@
 #   cd Elyxr
 #   ./elyxr.sh
 #
-# First run: installs every toolchain and system library lymnal needs, builds
-# the services, puts `lymnal` and `trove` on your PATH, writes a starter config,
-# and registers the boot service. Every run after that is an update: it pulls
-# the latest, rebuilds only what changed, re-installs a binary only if it
-# actually differs, and restarts the service only when its binary changed.
-# It checks before it touches anything, so re-running is safe and cheap, and
-# stays quiet — the only time it prints detail is IF and WHERE something fails.
+# Installs the whole stack on this device: lymnal (the service that can serve a
+# folder over your tailnet), trove (the client-side mount), and the Elyxr app
+# (the UI). Every device gets all three — the app's Server/Client toggle decides
+# what this device actually does. Running it again is an update: pull, rebuild
+# only what changed, re-install a binary only if it differs, and restart the
+# service only when its binary changed. Quiet unless something fails.
 #
-#   --app         client machine: build the Elyxr UI and add a menu launcher
-#                 (instead of installing the lymnal server)
-#   --verbose     watch every command
-#   --no-service  build the binaries but don't register/touch the boot service
+#   --no-app      skip the GUI app (for a headless server with no display)
+#   --no-service  don't register/touch the lymnal boot service
 #   --no-update   skip the self-update git pull (build exactly what's checked out)
+#   --verbose     watch every command
 #
 set -Eeuo pipefail
 
 VERBOSE=0
 SERVICE=1
 UPDATE=1
-APP=0
+APP=1
 for a in "$@"; do
   case "$a" in
-    --app)         APP=1 ;;
-    --verbose|-v)  VERBOSE=1 ;;
+    --no-app)      APP=0 ;;
     --no-service)  SERVICE=0 ;;
     --no-update)   UPDATE=0 ;;
-    *) echo "unknown flag: $a (use --app, --verbose, --no-service, --no-update)"; exit 2 ;;
+    --verbose|-v)  VERBOSE=1 ;;
+    *) echo "unknown flag: $a (use --no-app, --no-service, --no-update, --verbose)"; exit 2 ;;
   esac
 done
 
@@ -105,9 +103,8 @@ if [ "$(id -u)" -eq 0 ]; then
   SUDO=""
 else
   SUDO="sudo"
-  echo "elyxr needs sudo to install system libraries and register the boot service."
+  echo "elyxr needs sudo to install libraries, the app, and the boot service."
   sudo -v || { echo "${RED}sudo is required — nothing was installed.${RST}"; exit 1; }
-  # Refresh the sudo timestamp every 60s until this script exits.
   ( while true; do sudo -n true 2>/dev/null; sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
   SUDO_KEEPALIVE=$!
 fi
@@ -117,67 +114,15 @@ fi
 mkdir -p "$HOME/.config/lymnal"
 printf '%s\n' "$HERE" > "$HOME/.config/lymnal/repo.path"
 
-# --- app mode (client machine) ----------------------------------------------
-# Build the Flutter UI and install a .desktop launcher so Elyxr shows up in the
-# applications menu, double-clickable, pointing straight at the built binary —
-# no shell launcher in between. Skips all the lymnal server machinery.
-if [ "$APP" = 1 ]; then
-  phase "app build tools"
-  APP_PKGS=(clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev)
-  NEEDA=()
-  for p in "${APP_PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || NEEDA+=("$p"); done
-  if [ "${#NEEDA[@]}" -gt 0 ]; then
-    sh_ $SUDO apt-get update
-    sh_ $SUDO apt-get install -y "${NEEDA[@]}"
-  fi
-  done_
-
-  phase "flutter sdk"
-  # Flutter isn't an apt package, so if it's missing we clone the stable SDK
-  # ourselves (into ~/.local/share/flutter) and put it on PATH for the build.
-  # It's only needed to build — the finished app binary is self-contained.
-  if ! command -v flutter >/dev/null 2>&1; then
-    FLUTTER_DIR="$HOME/.local/share/flutter"
-    [ -x "$FLUTTER_DIR/bin/flutter" ] || sh_ git clone --depth 1 -b stable https://github.com/flutter/flutter.git "$FLUTTER_DIR"
-    export PATH="$FLUTTER_DIR/bin:$PATH"
-  fi
-  sh_ flutter --version
-  done_
-
-  phase "building the app"
-  ( cd elyxr && sh_ flutter config --enable-linux-desktop && sh_ flutter pub get && sh_ flutter build linux --release )
-  done_
-
-  phase "menu launcher"
-  APP_BIN="$HERE/elyxr/build/linux/x64/release/bundle/elyxr"
-  APPS_DIR="$HOME/.local/share/applications"
-  mkdir -p "$APPS_DIR"
-  cat > "$APPS_DIR/elyxr.desktop" <<DESKTOP
-[Desktop Entry]
-Type=Application
-Name=Elyxr
-Comment=Reach your trove from anywhere
-Exec=$APP_BIN
-Terminal=false
-Categories=Utility;Network;
-StartupWMClass=elyxr
-DESKTOP
-  update-desktop-database "$APPS_DIR" 2>/dev/null || true
-  done_
-
-  echo
-  echo "${GRN}Elyxr is installed.${RST}"
-  echo "  Open it from your applications menu — search \"Elyxr\"."
-  echo "  (Or run the binary directly: $APP_BIN)"
-  exit 0
-fi
-
 # --- system libraries -------------------------------------------------------
-# build-essential + pkg-config: C toolchain for rusqlite (bundled) and blake3.
-# fuse3 + libfuse3-dev: what trove links against to mount the trove.
+# lymnal/trove need a C toolchain (rusqlite/blake3) and FUSE. The app adds the
+# GTK/clang/etc. build deps unless --no-app.
 phase "system libraries"
 command -v apt-get >/dev/null 2>&1 || { echo "needs an apt-based Linux (Ubuntu/Zorin/Debian)"; exit 1; }
 SYS_PKGS=(build-essential pkg-config curl git ca-certificates fuse3 libfuse3-dev)
+if [ "$APP" = 1 ]; then
+  SYS_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev)
+fi
 NEED=()
 for p in "${SYS_PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || NEED+=("$p"); done
 if [ "${#NEED[@]}" -gt 0 ]; then
@@ -188,12 +133,8 @@ command -v cc >/dev/null 2>&1 && pkg-config --exists fuse3
 done_
 
 # --- rust toolchain ---------------------------------------------------------
-# We test that cargo actually *runs*, not merely that it's on PATH: a rustup
-# install with no default toolchain leaves a `cargo` shim that exists but
-# errors ("could not choose a version of cargo to run"). So:
-#   - cargo runs already            -> nothing to do
-#   - rustup present, no default    -> pick the stable toolchain
-#   - no rust at all                -> install rustup (which sets stable)
+# Test that cargo actually *runs* (a rustup shim with no default toolchain
+# exists but errors); install or set the stable toolchain as needed.
 phase "rust toolchain"
 if ! cargo --version >/dev/null 2>&1; then
   if command -v rustup >/dev/null 2>&1; then
@@ -207,6 +148,21 @@ fi
 cargo --version >/dev/null 2>&1
 done_
 
+# --- flutter sdk (app only) -------------------------------------------------
+if [ "$APP" = 1 ]; then
+  phase "flutter sdk"
+  # Flutter isn't an apt package, so if it's missing we clone the stable SDK
+  # ourselves (into ~/.local/share/flutter) and put it on PATH for the build.
+  # It's only needed to build — the finished app binary is self-contained.
+  if ! command -v flutter >/dev/null 2>&1; then
+    FLUTTER_DIR="$HOME/.local/share/flutter"
+    [ -x "$FLUTTER_DIR/bin/flutter" ] || sh_ git clone --depth 1 -b stable https://github.com/flutter/flutter.git "$FLUTTER_DIR"
+    export PATH="$FLUTTER_DIR/bin:$PATH"
+  fi
+  sh_ flutter --version
+  done_
+fi
+
 # --- build ------------------------------------------------------------------
 phase "building lymnal"
 sh_ cargo build --release -p lymnal
@@ -215,6 +171,12 @@ done_
 phase "building trove"
 sh_ cargo build --release -p trove
 done_
+
+if [ "$APP" = 1 ]; then
+  phase "building the app"
+  ( cd elyxr && sh_ flutter config --enable-linux-desktop && sh_ flutter pub get && sh_ flutter build linux --release )
+  done_
+fi
 
 # --- put the commands on PATH ----------------------------------------------
 # Only copy a binary if it actually differs from what's installed, and note
@@ -232,10 +194,29 @@ if install_if_changed target/release/lymnal /usr/local/bin/lymnal; then LYMNAL_C
 if install_if_changed target/release/trove  /usr/local/bin/trove;  then :; fi
 done_
 
+# --- app menu launcher (app only) ------------------------------------------
+if [ "$APP" = 1 ]; then
+  phase "menu launcher"
+  APP_BIN="$HERE/elyxr/build/linux/x64/release/bundle/elyxr"
+  APPS_DIR="$HOME/.local/share/applications"
+  mkdir -p "$APPS_DIR"
+  cat > "$APPS_DIR/elyxr.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Elyxr
+Comment=Reach your trove from anywhere
+Exec=$APP_BIN
+Terminal=false
+Categories=Utility;Network;
+StartupWMClass=elyxr
+DESKTOP
+  update-desktop-database "$APPS_DIR" 2>/dev/null || true
+  done_
+fi
+
 # --- starter config ---------------------------------------------------------
 phase "configuration"
 if [ ! -f "$HOME/.config/lymnal/config.toml" ]; then
-  mkdir -p "$HOME/.config/lymnal"
   cp config.example.toml "$HOME/.config/lymnal/config.toml"
 fi
 done_
@@ -243,9 +224,9 @@ done_
 # --- boot service -----------------------------------------------------------
 # lymnal starts at boot and restarts if it dies. If it keeps dying, it retries
 # 5 minutes apart, up to 3 times (~15 minutes), then stops so it isn't burning
-# resources on a service that's plainly offline. A service that had been
-# running fine and hits one crash gets a fresh 3 attempts (the limit is a
-# 30-minute sliding window), so it only gives up on a sustained outage.
+# resources on a service that's plainly offline. A service that had been running
+# fine and hits one crash gets a fresh 3 attempts (a 30-minute sliding window),
+# so it only gives up on a sustained outage.
 INSTALLED_SERVICE=0
 if [ "$SERVICE" = 1 ] && command -v systemctl >/dev/null 2>&1; then
   phase "boot service"
@@ -271,8 +252,7 @@ WantedBy=multi-user.target
 UNITEOF
   sh_ $SUDO systemctl daemon-reload
   # enable makes it start on boot; restart picks up a new binary (and starts it
-  # if it was stopped). When nothing changed, enable --now just ensures it's up
-  # without a needless restart.
+  # if it was stopped). When nothing changed, enable --now just ensures it's up.
   if [ "$LYMNAL_CHANGED" = 1 ]; then
     sh_ $SUDO systemctl enable lymnal.service
     sh_ $SUDO systemctl restart lymnal.service
@@ -285,13 +265,12 @@ fi
 
 echo
 echo "${GRN}Elyxr is installed.${RST}"
-if [ "$INSTALLED_SERVICE" = 1 ]; then
-  echo "  lymnal is running now and will start on boot."
-  echo "  is it up?    systemctl status lymnal"
-  echo "  its logs:    journalctl -u lymnal -f"
-  echo "  restart it:  sudo systemctl restart lymnal"
-else
-  echo "  start the server:  lymnal"
-  echo "  check it:          lymnal status"
+if [ "$APP" = 1 ]; then
+  echo "  Open Elyxr from your applications menu — search \"Elyxr\"."
+  echo "  In the app: hold the wordmark for settings, then flip THIS DEVICE"
+  echo "  to SERVER (share a folder) or CLIENT (browse another device)."
 fi
-echo "  edit the config:   ~/.config/lymnal/config.toml"
+if [ "$INSTALLED_SERVICE" = 1 ]; then
+  echo "  lymnal runs in the background and starts on boot (systemctl status lymnal)."
+fi
+echo "  update later with:  lymnal update"
