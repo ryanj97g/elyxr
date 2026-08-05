@@ -1,29 +1,24 @@
 # elyxr
 
-Your stuff lives on one machine. elyxr lets you reach all of it from any of your
-others — over your own private [Tailscale](https://tailscale.com) network —
-without copying it there first.
+Your stuff lives on one device; elyxr lets you reach all of it from any of your
+other devices.
 
-That's the whole idea. Dropbox and Syncthing keep you "in sync" by putting a
-copy of everything on every device: to reach 150 GB of files, you need 150 GB
-free on each machine. elyxr doesn't work that way. You **see everything**, and a
-file only comes down **when you actually open it**. Your files stay on the
-machine that has them, and your laptop stays empty.
+"Oh, so a dropbox dupe?" NOPE. Dropbox and Syncthing keep you "in sync" by
+putting a copy of everything on every device: 150 GB of files in your storage
+device? You'd need 150 GB free on each device you want to retrieve from! Do you
+have that much space to spare?? elyxr doesn't work that way. You see everything,
+and a file only gets downloaded when you NEED it. Your files stay on the trove
+device that ACTUALLY stores them, and your other devices download ONLY what you
+need from your trove device, WHEN you need it on another device.
 
-Open a file and it's just there. Nothing to sync by hand, nothing to reconcile —
-using your files *is* the sync.
+Open a file and it's just there now, wherever you put it. No danger of 2 out of
+sync files! Ever!
 
 ## The pieces
 
-Three small programs, one idea. You install all three with one command and only
-ever touch the first:
-
-- **elyxr** — the elixir: the app you actually use.
-- **lymnal** — the liminal service: the quiet in-between that carries your files
-  across and keeps every machine up to date. It sits in your system tray while
-  it's running.
-- **trove** — where everything's kept. On a client it shows up as an ordinary
-  folder; open it and the server's files are right there.
+- **elyxr** (the part that feels like magic)
+- **lymnal** (the liminal service connecting your devices)
+- **trove** (where your treasure is kept)
 
 ## Install
 
