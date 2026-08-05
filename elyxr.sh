@@ -263,6 +263,12 @@ if [ "$APP" = 1 ]; then
   # The launcher's filename must match the app id so the window and the entry
   # are recognised as the same app. Remove the old mismatched entry.
   rm -f "$APPS_DIR/elyxr.desktop"
+  # On X11, GTK capitalises the window's class (WM_CLASS = "com.elyxr.elyxr",
+  # "Com.elyxr.elyxr"), and the taskbar matches on that capitalised class — so
+  # StartupWMClass has to be the capitalised form or the window falls back to a
+  # generic tile. On Wayland the match is by the .desktop's name, so this is
+  # harmless there.
+  WMCLASS="${APP_ID^}"
   cat > "$APPS_DIR/$APP_ID.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
@@ -272,7 +278,7 @@ Exec=$APP_BIN
 Icon=$APP_ID
 Terminal=false
 Categories=Utility;Network;
-StartupWMClass=$APP_ID
+StartupWMClass=$WMCLASS
 DESKTOP
   update-desktop-database "$APPS_DIR" 2>/dev/null || true
   done_
