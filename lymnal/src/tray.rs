@@ -14,11 +14,13 @@ use ksni::blocking::TrayMethods;
 /// theme being installed or the repo staying where it was. Two sizes so the tray
 /// can pick a crisp one for its panel.
 static ICONS: LazyLock<Vec<ksni::Icon>> = LazyLock::new(|| {
-    // The tray renders tiny (~22px), so it wears the silhouette, not the full-
-    // colour mark — the small sizes are exactly the silhouette art.
+    // The tray is the one place that wears the silhouette, not the full-colour
+    // mark — everything else (taskbar, menu, window, popups) reads the colour
+    // icon from the theme. These are dedicated silhouette files so the all-colour
+    // theme never overwrites them.
     [
-        include_bytes!("../../branding/png/lymnal/lymnal-16.png").as_slice(),
-        include_bytes!("../../branding/png/lymnal/lymnal-32.png").as_slice(),
+        include_bytes!("../../branding/png/lymnal/lymnal-sil-32.png").as_slice(),
+        include_bytes!("../../branding/png/lymnal/lymnal-sil-64.png").as_slice(),
     ]
     .into_iter()
     .filter_map(decode)
@@ -55,13 +57,9 @@ impl ksni::Tray for LymnalTray {
     fn title(&self) -> String {
         "lymnal".into()
     }
-    // Name first, pixmap second. GNOME's tray extension resolves the icon from
-    // the theme by name (the installer puts the lymnal mark there); hosts that
-    // don't, or a theme that hasn't picked it up yet, fall back to the embedded
-    // pixmap. Between the two the mark shows on every desktop.
-    fn icon_name(&self) -> String {
-        "com.elyxr.lymnal".into()
-    }
+    // Pixmap only — no icon_name. The theme's com.elyxr.lymnal is the full-colour
+    // mark now (for the popups), so naming it would pull colour into the tray.
+    // The embedded silhouette pixmap is what the tray draws.
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
         ICONS.clone()
     }
