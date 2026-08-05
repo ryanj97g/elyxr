@@ -38,6 +38,7 @@ unicode-normalization = "0.1"
 rand = "0.8"
 libc = "0.2"
 base64 = "0.22"
+ureq = { version = "2", features = ["json"] }
 
 [dev-dependencies]
 tempfile = "3"
