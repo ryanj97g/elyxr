@@ -47,9 +47,9 @@ extension DensityLabel on Density {
       };
 
   double get pad => switch (this) {
-        Density.tight => 4,
-        Density.mid => 7,
-        Density.roomy => 11,
+        Density.tight => 6,
+        Density.mid => 10,
+        Density.roomy => 15,
       };
 
   double get font => switch (this) {
