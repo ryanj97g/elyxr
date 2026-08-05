@@ -11,12 +11,13 @@ data_dir  = "~/.local/share/lymnal"
 log_level = "info"                  # error|warn|info|debug|trace
 
 [trove]
-name = "elyxr"
-# The folder this machine shares WHEN it acts as a server. It defaults out of
-# sight so a client (which only mounts a remote trove, and shares nothing) never
-# grows a stray empty folder. A server picks a real folder to share with
-# `lymnal trove set <path>`.
-path = "~/.local/share/lymnal/served"
+name = "trove"
+# The trove lives at the same place on every device: on the Desktop, like a
+# plugged-in drive. A server serves this real folder; a client mounts the remote
+# trove here instead. Only one of the two ever owns it on a given device — the
+# app runs the lymnal service in server mode and stops it in client mode — so
+# they never collide. Change it with `lymnal trove set <path>`.
+path = "~/Desktop/trove"
 follow_symlinks = false
 
 # [[token]] entries are added by pairing, not by hand. Shape, for reference:

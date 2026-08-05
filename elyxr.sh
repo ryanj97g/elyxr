@@ -303,6 +303,7 @@ if [ "$SERVICE" = 1 ] && command -v systemctl >/dev/null 2>&1; then
   [ "$OLD_BINS" = 1 ] && sh_ $SUDO rm -f /usr/local/bin/lymnal /usr/local/bin/trove
 
   USER_UNIT="$HOME/.config/systemd/user"
+  had_unit=0; [ -f "$USER_UNIT/lymnal.service" ] && had_unit=1
   mkdir -p "$USER_UNIT"
   cat > "$USER_UNIT/lymnal.service" <<UNITEOF
 [Unit]
@@ -321,14 +322,18 @@ RestartSec=300
 WantedBy=default.target
 UNITEOF
   sh_ systemctl --user daemon-reload
-  if [ "$LYMNAL_CHANGED" = 1 ]; then
-    sh_ systemctl --user enable lymnal.service
-    sh_ systemctl --user restart lymnal.service
-  else
+  # The app decides whether this device serves (server mode → on) or only mounts
+  # (client mode → off), so we don't force the service on behind it. First
+  # install starts it on (a fresh device is server-capable); later runs only
+  # restart it if it's still enabled and its binary changed — a client that
+  # turned it off stays off.
+  if [ "$had_unit" = 0 ]; then
     sh_ systemctl --user enable --now lymnal.service
+    # Start at boot without being logged in (one-time; the only sudo left).
+    if [ "$LINGER_ON" = 0 ]; then sh_ $SUDO loginctl enable-linger "$(id -un)" || true; fi
+  elif systemctl --user is-enabled --quiet lymnal.service 2>/dev/null; then
+    [ "$LYMNAL_CHANGED" = 1 ] && sh_ systemctl --user restart lymnal.service
   fi
-  # Start at boot without being logged in (one-time; the only sudo left).
-  if [ "$LINGER_ON" = 0 ]; then sh_ $SUDO loginctl enable-linger "$(id -un)" || true; fi
   INSTALLED_SERVICE=1
   done_
 fi
