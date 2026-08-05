@@ -1,31 +1,55 @@
 #!/usr/bin/env bash
 #
-# elyxr.sh — clone the repo, run this, done.
+# elyxr.sh — install it, and run it again to update it.
 #
 #   git clone https://github.com/ryanj97g/Elyxr.git
 #   cd Elyxr
 #   ./elyxr.sh
 #
-# It installs every toolchain and system library lymnal needs, builds the
-# services, puts `lymnal` and `trove` on your PATH, and drops a starter config
-# in place. It checks before it touches anything, so re-running is safe and
-# cheap. It stays quiet: the only time it prints detail is IF and WHERE
-# something fails. Pass --verbose to watch every command.
+# First run: installs every toolchain and system library lymnal needs, builds
+# the services, puts `lymnal` and `trove` on your PATH, writes a starter config,
+# and registers the boot service. Every run after that is an update: it pulls
+# the latest, rebuilds only what changed, re-installs a binary only if it
+# actually differs, and restarts the service only when its binary changed.
+# It checks before it touches anything, so re-running is safe and cheap, and
+# stays quiet — the only time it prints detail is IF and WHERE something fails.
+#
+#   --verbose     watch every command
+#   --no-service  build the binaries but don't register/touch the boot service
+#   --no-update   skip the self-update git pull (build exactly what's checked out)
 #
 set -Eeuo pipefail
 
 VERBOSE=0
 SERVICE=1
+UPDATE=1
 for a in "$@"; do
   case "$a" in
     --verbose|-v)  VERBOSE=1 ;;
     --no-service)  SERVICE=0 ;;
-    *) echo "unknown flag: $a (use --verbose and/or --no-service)"; exit 2 ;;
+    --no-update)   UPDATE=0 ;;
+    *) echo "unknown flag: $a (use --verbose, --no-service, --no-update)"; exit 2 ;;
   esac
 done
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SELF="$HERE/$(basename "${BASH_SOURCE[0]}")"
 cd "$HERE"
+
+# Self-update: if this is a git checkout, fast-forward to the latest published
+# version before doing anything. If the pull changed anything — including this
+# script itself — re-exec the fresh copy once (guarded so it can't loop) so an
+# update always runs the newest installer against the newest code.
+if [ "$UPDATE" = 1 ] && [ -z "${ELYXR_REEXEC:-}" ] \
+   && command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  before="$(git rev-parse HEAD 2>/dev/null || true)"
+  git pull --ff-only >/dev/null 2>&1 || true
+  after="$(git rev-parse HEAD 2>/dev/null || true)"
+  if [ "$before" != "$after" ]; then
+    echo "updated to the latest version — restarting installer..."
+    ELYXR_REEXEC=1 exec bash "$SELF" "$@"
+  fi
+fi
 
 LOG="$(mktemp -t elyxr-install.XXXXXX.log)"
 CUR="starting"
@@ -123,9 +147,19 @@ sh_ cargo build --release -p trove
 done_
 
 # --- put the commands on PATH ----------------------------------------------
+# Only copy a binary if it actually differs from what's installed, and note
+# when lymnal changed so we know whether the running service needs a restart.
 phase "installing commands"
-sh_ $SUDO install -m 0755 target/release/lymnal /usr/local/bin/lymnal
-sh_ $SUDO install -m 0755 target/release/trove  /usr/local/bin/trove
+install_if_changed() {  # $1 built, $2 dest — returns 0 if it (re)installed
+  if [ ! -f "$2" ] || ! cmp -s "$1" "$2"; then
+    sh_ $SUDO install -m 0755 "$1" "$2"
+    return 0
+  fi
+  return 1
+}
+LYMNAL_CHANGED=0
+if install_if_changed target/release/lymnal /usr/local/bin/lymnal; then LYMNAL_CHANGED=1; fi
+if install_if_changed target/release/trove  /usr/local/bin/trove;  then :; fi
 done_
 
 # --- starter config ---------------------------------------------------------
@@ -166,7 +200,15 @@ RestartSec=300
 WantedBy=multi-user.target
 UNITEOF
   sh_ $SUDO systemctl daemon-reload
-  sh_ $SUDO systemctl enable --now lymnal.service
+  # enable makes it start on boot; restart picks up a new binary (and starts it
+  # if it was stopped). When nothing changed, enable --now just ensures it's up
+  # without a needless restart.
+  if [ "$LYMNAL_CHANGED" = 1 ]; then
+    sh_ $SUDO systemctl enable lymnal.service
+    sh_ $SUDO systemctl restart lymnal.service
+  else
+    sh_ $SUDO systemctl enable --now lymnal.service
+  fi
   INSTALLED_SERVICE=1
   done_
 fi
