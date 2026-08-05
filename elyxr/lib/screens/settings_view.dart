@@ -375,6 +375,17 @@ class _DeviceRows extends StatelessWidget {
                 style: glass(14, p.foot)),
           ),
         row('DOWNLOADS', Text(settings.downloadDir, style: glass(20, p.bright))),
+        row(
+          'MOUNT AT',
+          GestureDetector(
+            onTap: () async {
+              final v = await _editMountPath(context, p, settings.mountPath);
+              if (v != null && v.trim().isNotEmpty) settings.mountPath = v.trim();
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Text('${settings.mountPath}  ✎', style: glass(20, p.a)),
+          ),
+        ),
         row('AT ONCE', Text('${settings.atOnce} transfers', style: glass(20, p.bright))),
         row('NOTIFY ON FINISH', check(settings.notify, () => settings.notify = !settings.notify)),
         row('TROVE FOLDER', check(settings.trove, () => settings.trove = !settings.trove)),
@@ -392,6 +403,28 @@ class _DeviceRows extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+
+  Future<String?> _editMountPath(BuildContext context, Palette p, String current) {
+    final ctrl = TextEditingController(text: current);
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: p.tubeBg,
+        title: Text('Mount the trove at', style: glass(18, p.bright)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: glass(18, p.bright),
+          cursorColor: p.a,
+          decoration: InputDecoration(hintText: '~/trove', hintStyle: glass(16, p.foot)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('CANCEL', style: chassis(11, p.mid))),
+          TextButton(onPressed: () => Navigator.pop(context, ctrl.text), child: Text('SET', style: chassis(11, p.a))),
+        ],
+      ),
     );
   }
 
