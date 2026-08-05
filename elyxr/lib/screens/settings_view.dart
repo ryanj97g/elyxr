@@ -61,6 +61,8 @@ class SettingsView extends StatelessWidget {
                 _section(p, '04', 'CACHE', _CacheMeter(palette: p)),
                 const SizedBox(height: 13),
                 _section(p, '05', 'THIS DEVICE', _DeviceRows(palette: p)),
+                const SizedBox(height: 13),
+                _section(p, '06', 'PARTS', _Parts(palette: p)),
                 const SizedBox(height: 16),
               ],
             ),
@@ -326,6 +328,37 @@ class _CacheMeter extends StatelessWidget {
             Text('15 GB', style: chassis(10, p.mid, spacing: 0.1)),
           ],
         ),
+      ],
+    );
+  }
+}
+
+/// The three programs the system is made of, each with its mark. It quietly
+/// says what elyxr *is* — an app, a service, and a mount — rather than leaving
+/// it abstract.
+class _Parts extends StatelessWidget {
+  final Palette palette;
+  const _Parts({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = palette;
+    Widget part(String icon, String name, String role) => Expanded(
+          child: Column(
+            children: [
+              Image.asset('assets/branding/$icon.png', width: 40, height: 40),
+              const SizedBox(height: 6),
+              Text(name, style: chassis(12, p.bright, spacing: 0.12)),
+              Text(role, style: glass(13, p.foot)),
+            ],
+          ),
+        );
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        part('elyxr', 'elyxr', 'this app'),
+        part('lymnal', 'lymnal', 'the service'),
+        part('trove', 'trove', 'the mount'),
       ],
     );
   }

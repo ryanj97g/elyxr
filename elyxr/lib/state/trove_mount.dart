@@ -6,6 +6,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 class TroveMountController extends ChangeNotifier {
   Process? _proc;
@@ -60,6 +61,9 @@ class TroveMountController extends ChangeNotifier {
         },
       );
       _proc = proc;
+      // Give the mounted folder the trove's own icon, so it reads as the trove
+      // in the file manager and sidebar rather than a generic folder.
+      _stampFolderIcon(mountPath);
       // If trove exits on its own (bad mount, lost server), reflect it.
       proc.exitCode.then((code) {
         if (identical(_proc, proc)) {
@@ -74,6 +78,28 @@ class TroveMountController extends ChangeNotifier {
     }
     _starting = false;
     notifyListeners();
+  }
+
+  /// Point the file manager at the trove icon for this folder. Best-effort:
+  /// GNOME/Nautilus and other GVFS file managers read metadata::custom-icon;
+  /// where `gio` isn't present it simply stays a normal folder.
+  Future<void> _stampFolderIcon(String mountPath) async {
+    try {
+      final home = Platform.environment['HOME'];
+      if (home == null) return;
+      final iconPath = '$home/.cache/elyxr/trove.png';
+      final iconFile = File(iconPath);
+      if (!await iconFile.exists()) {
+        await iconFile.parent.create(recursive: true);
+        final bytes = await rootBundle.load('assets/branding/trove.png');
+        await iconFile.writeAsBytes(
+            bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
+            flush: true);
+      }
+      await Process.run('gio', ['set', mountPath, 'metadata::custom-icon', 'file://$iconPath']);
+    } catch (_) {
+      // Cosmetic only — never let it affect the mount.
+    }
   }
 
   /// Stop the mount. Safe to call when nothing is running.

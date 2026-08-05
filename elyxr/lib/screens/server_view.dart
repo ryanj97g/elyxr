@@ -101,7 +101,11 @@ class _ServerControlsState extends State<ServerControls> {
     final st = s.status;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('SERVICE', style: chassis(12, p.bright, spacing: 0.16)),
+        Row(children: [
+          Image.asset('assets/branding/lymnal.png', width: 22, height: 22),
+          const SizedBox(width: 7),
+          Text('SERVICE', style: chassis(12, p.bright, spacing: 0.16)),
+        ]),
         GestureDetector(
           onTap: () => showUpdateDialog(context, p),
           child: Text('UPDATE NOW', style: chassis(11, p.a, spacing: 0.1)),
