@@ -5,6 +5,8 @@
 // yet" (§08); forgetting a server returns here (§10).
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -85,6 +87,7 @@ class SessionController extends ChangeNotifier {
 
   /// Load the saved pairing and confirm the server answers. Call once at start.
   Future<void> boot() async {
+    await _importPendingBind();
     _token = await _tokens.read();
     _serverAddress = _prefs.getString('serverAddress');
     _serverName = _prefs.getString('serverName');
@@ -106,6 +109,29 @@ class SessionController extends ChangeNotifier {
   void signalPeerUpdate() {
     _peerUpdate++;
     notifyListeners();
+  }
+
+  /// Pairing done from the terminal (`lymnal bind <address>`) leaves the new
+  /// connection in a small file for the app to adopt. Import it once: move the
+  /// token into the keyring, remember the server, and delete the file.
+  Future<void> _importPendingBind() async {
+    final home = Platform.environment['HOME'];
+    if (home == null) return;
+    final f = File('$home/.config/lymnal/pending-bind.json');
+    try {
+      if (!await f.exists()) return;
+      final j = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+      final token = j['token'] as String?;
+      final address = j['address'] as String?;
+      if (token != null && token.isNotEmpty && address != null && address.isNotEmpty) {
+        await _tokens.write(token);
+        await _prefs.setString('serverAddress', address);
+        await _prefs.setString('serverName', (j['name'] as String?) ?? address);
+      }
+      await f.delete();
+    } catch (_) {
+      // A malformed hand-off file must never block startup.
+    }
   }
 
   /// Re-check the server every so often while paired, so a change on the server
