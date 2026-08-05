@@ -102,7 +102,12 @@ class _RootState extends State<_Root> {
     }
     if (session.isFirstRun) _openedOnce = false;
 
-    final child = session.isFirstRun ? const FirstRunScreen() : const HomeScreen();
+    // In server mode this device manages its own lymnal (no client pairing
+    // needed), so it goes straight to the connected home. Otherwise, no token
+    // yet means first run.
+    final child = settings.appMode == AppMode.server
+        ? const HomeScreen()
+        : (session.isFirstRun ? const FirstRunScreen() : const HomeScreen());
 
     // The window is chassis-sized and transparent, so the metal fills it and
     // its rounded corners become the window's shape — no void, no chrome.

@@ -10,6 +10,7 @@ import '../state/session.dart';
 import '../state/settings.dart';
 import '../widgets/rails.dart';
 import 'files_view.dart';
+import 'server_view.dart';
 import 'settings_view.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -39,7 +40,9 @@ class _HomeScreenState extends State<HomeScreen> {
         palette: p,
         child: _inSettings
             ? const SettingsView()
-            : const FilesView(),
+            : (settings.appMode == AppMode.server
+                ? ServerControls(palette: p)
+                : const FilesView()),
       ),
       bottomRail: BottomRail(
         palette: p,

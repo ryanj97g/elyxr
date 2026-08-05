@@ -10,7 +10,6 @@ import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
 import '../util/device.dart';
-import 'server_view.dart';
 
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key});
@@ -372,14 +371,8 @@ class _DeviceRows extends StatelessWidget {
         if (settings.appMode == AppMode.server)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 3),
-            child: GestureDetector(
-              onTap: () => openServerControls(context),
-              behavior: HitTestBehavior.opaque,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('▸ SERVER CONTROLS', style: glass(19, p.a)),
-              ),
-            ),
+            child: Text('Server controls are on the main screen (exit settings).',
+                style: glass(14, p.foot)),
           ),
         row('DOWNLOADS', Text(settings.downloadDir, style: glass(20, p.bright))),
         row('AT ONCE', Text('${settings.atOnce} transfers', style: glass(20, p.bright))),
