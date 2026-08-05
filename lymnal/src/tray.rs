@@ -53,6 +53,13 @@ impl ksni::Tray for LymnalTray {
     fn title(&self) -> String {
         "lymnal".into()
     }
+    // Name first, pixmap second. GNOME's tray extension resolves the icon from
+    // the theme by name (the installer puts the lymnal mark there); hosts that
+    // don't, or a theme that hasn't picked it up yet, fall back to the embedded
+    // pixmap. Between the two the mark shows on every desktop.
+    fn icon_name(&self) -> String {
+        "com.elyxr.lymnal".into()
+    }
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
         ICONS.clone()
     }
