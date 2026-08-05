@@ -135,7 +135,13 @@ class _Console extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: glass(15, p.mid)),
-          Text(value, style: glass(15, p.bright)),
+          Flexible(
+            child: Text(value,
+                style: glass(15, p.bright),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right),
+          ),
         ],
       ),
     );
@@ -648,11 +654,12 @@ class _FileGrid extends StatelessWidget {
     return _stateOr(context, browse, p, () {
       final rows = browse.entries;
       return GridView.builder(
-        padding: const EdgeInsets.all(9),
+        padding: const EdgeInsets.all(10),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: 7,
-          crossAxisSpacing: 7,
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 0.82,
         ),
         itemCount: rows.length,
         itemBuilder: (context, i) {
@@ -679,13 +686,14 @@ class _FileGrid extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(e.isDir ? '█' : '▫',
-                      style: glass(e.isDir ? 30 : 26, e.isDir ? p.a : p.glow)),
-                  const SizedBox(height: 5),
+                      style: glass(e.isDir ? 42 : 36, e.isDir ? p.a : p.glow)),
+                  const SizedBox(height: 8),
                   Text(e.name,
                       maxLines: 2,
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
-                      style: glass(14, selected ? (p.dark ? Colors.white : Colors.black) : (e.isDir ? p.bright : p.soft))),
+                      style: glass(15, selected ? (p.dark ? Colors.white : Colors.black) : (e.isDir ? p.bright : p.soft))),
+                  const SizedBox(height: 2),
                   Text(e.isDir ? '${e.childCount ?? 0} items' : fmtSize(e.sizeBytes),
                       style: glass(12, p.mid)),
                 ],
