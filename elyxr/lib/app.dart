@@ -43,7 +43,7 @@ class ElyxrApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: browse),
         ChangeNotifierProvider(create: (_) => ServerController()),
         ChangeNotifierProvider(create: (_) => TroveMountController()),
-        ChangeNotifierProvider(create: (_) => UpdateController()),
+        ChangeNotifierProvider(create: (_) => UpdateController(transfers)),
         Provider.value(value: FileActions(browse, transfers, settings)),
       ],
       child: MaterialApp(

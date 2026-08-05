@@ -32,6 +32,7 @@ pub fn run(args: &[String]) -> anyhow::Result<()> {
         "trove" => trove(&config_path, &args[1..]),
         "bind" => bind(&config_path, &args[1..]),
         "update" => update(&config_path, &args[1..]),
+        "drain" => drain(&config_path),
         "help" | "-h" | "--help" | "" => {
             print_usage();
             Ok(())
@@ -311,6 +312,30 @@ fn update(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> 
         .map_err(|e| anyhow::anyhow!("couldn't launch the installer at {}: {e}", script.display()))?;
     if !status.success() {
         anyhow::bail!("the installer reported a problem (see its output above).");
+    }
+    Ok(())
+}
+
+/// Wait until the running service has no uploads mid-transfer, so a restart
+/// (during an update) never cuts one off — the server keeps upload state in
+/// memory. Best-effort with a ~2-minute ceiling so it can't wait forever on a
+/// stalled upload; any error (service not reachable, old build with no such
+/// field) returns at once.
+fn drain(config_path: &std::path::Path) -> anyhow::Result<()> {
+    let cfg = load(config_path)?;
+    let addr = resolve_bind(&cfg.bind).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let base = format!("http://{addr}");
+    let token = read_admin_token(&cfg.data_dir)?;
+    for _ in 0..60 {
+        let n = admin_get(&base, &token, "/v1/admin/status")
+            .ok()
+            .and_then(|v| v.get("active_uploads").and_then(|x| x.as_u64()))
+            .unwrap_or(0);
+        if n == 0 {
+            return Ok(());
+        }
+        println!("waiting for {n} upload(s) to finish before restarting…");
+        std::thread::sleep(std::time::Duration::from_secs(2));
     }
     Ok(())
 }
