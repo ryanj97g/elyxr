@@ -144,7 +144,11 @@ pub fn spawn(
         app_bin,
         repo,
     };
-    match tray.spawn() {
+    // assume_sni_available: lymnal starts at login, often before the desktop's
+    // tray host is ready. Without this a not-ready host fails the one attempt and
+    // the icon never appears; with it, ksni keeps trying and the icon shows up
+    // once the tray is up.
+    match tray.assume_sni_available(true).spawn() {
         Ok(handle) => Some(handle),
         Err(e) => {
             tracing::debug!(error = %e, "no system tray to show lymnal in");
