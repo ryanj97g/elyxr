@@ -8,6 +8,26 @@ like a flash drive you plugged in.
 - `elyxr/` — the desktop app (Flutter, Linux)
 - `trove/` — mounts the trove as `~/Elyxr` (Rust, FUSE)
 
+## Install the server
+
+On the server (Ubuntu / Zorin / Debian), with the GitHub CLI:
+
+```sh
+gh repo clone ryanj97g/Elyxr && cd Elyxr && ./elyxr.sh
+```
+
+Or without `gh`:
+
+```sh
+git clone https://github.com/ryanj97g/Elyxr.git && cd Elyxr && ./elyxr.sh
+```
+
+One command from nothing to online: `elyxr.sh` installs the toolchains and
+libraries lymnal needs, builds `lymnal` and `trove` and puts them on your PATH,
+writes a starter config, and registers lymnal as a boot service that restarts
+if it dies. It checks before it installs, so re-running is safe. Pass
+`--no-service` to just build the binaries, or `--verbose` to watch every step.
+
 ## Build
 
 ```sh
