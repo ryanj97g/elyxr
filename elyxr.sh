@@ -112,6 +112,11 @@ else
   SUDO_KEEPALIVE=$!
 fi
 
+# Record where the repo lives so `lymnal update` can find and re-run this
+# installer later without being told the path.
+mkdir -p "$HOME/.config/lymnal"
+printf '%s\n' "$HERE" > "$HOME/.config/lymnal/repo.path"
+
 # --- app mode (client machine) ----------------------------------------------
 # Build the Flutter UI and install a .desktop launcher so Elyxr shows up in the
 # applications menu, double-clickable, pointing straight at the built binary —

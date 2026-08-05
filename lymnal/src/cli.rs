@@ -31,6 +31,7 @@ pub fn run(args: &[String]) -> anyhow::Result<()> {
         "token" => token(&config_path, &args[1..]),
         "trove" => trove(&config_path, &args[1..]),
         "bind" => bind(&config_path, &args[1..]),
+        "update" => update(&config_path, &args[1..]),
         "help" | "-h" | "--help" | "" => {
             print_usage();
             Ok(())
@@ -226,6 +227,52 @@ fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
     }
 }
 
+/// Run the installer, which self-updates: pulls the latest, rebuilds only what
+/// changed, and restarts the service if its binary changed. Extra args (e.g.
+/// --verbose) are forwarded to the installer.
+fn update(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
+    let repo = find_repo(config_path)?;
+    let script = repo.join("elyxr.sh");
+    if !script.exists() {
+        anyhow::bail!(
+            "found a recorded repo at {} but no elyxr.sh there. Re-run ./elyxr.sh from the repo once.",
+            repo.display()
+        );
+    }
+    let status = std::process::Command::new("bash")
+        .arg(&script)
+        .args(args)
+        .current_dir(&repo)
+        .status()
+        .map_err(|e| anyhow::anyhow!("couldn't launch the installer at {}: {e}", script.display()))?;
+    if !status.success() {
+        anyhow::bail!("the installer reported a problem (see its output above).");
+    }
+    Ok(())
+}
+
+/// Find the Elyxr repo: first the path the installer recorded next to the
+/// config, then the conventional `~/Elyxr`.
+fn find_repo(config_path: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
+    if let Some(dir) = config_path.parent() {
+        if let Ok(s) = std::fs::read_to_string(dir.join("repo.path")) {
+            let p = std::path::PathBuf::from(s.trim());
+            if p.join("elyxr.sh").exists() {
+                return Ok(p);
+            }
+        }
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        let p = std::path::Path::new(&home).join("Elyxr");
+        if p.join("elyxr.sh").exists() {
+            return Ok(p);
+        }
+    }
+    anyhow::bail!(
+        "couldn't find the Elyxr repo. Clone it and run ./elyxr.sh once so it's recorded."
+    )
+}
+
 /// Read the machine-local admin token lymnal wrote at startup.
 fn read_admin_token(data_dir: &std::path::Path) -> anyhow::Result<String> {
     let path = data_dir.join("admin.token");
@@ -325,7 +372,8 @@ fn print_usage() {
          lymnal bind deny <device>\n\
          lymnal bind close\n\
          lymnal trove set <path>\n\
-         lymnal recount\n\n\
+         lymnal recount\n\
+         lymnal update              pull the latest and rebuild/restart\n\n\
          --config <path>   use a different config file"
     );
 }
