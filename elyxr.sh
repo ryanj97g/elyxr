@@ -334,18 +334,13 @@ fi
 
 splash
 echo
-echo "${GRN}elyxr is installed.${RST}"
+echo "${GRN}elyxr is ready.${RST}"
+echo
 if [ "$APP" = 1 ]; then
-  echo "  Open elyxr from your applications menu — search \"elyxr\"."
-  echo "  In the app: hold the wordmark for settings, then flip THIS DEVICE"
-  echo "  to SERVER (share a folder) or CLIENT (browse another device)."
+  echo "  Open it from your apps menu — search \"elyxr\"."
 fi
-if [ "$INSTALLED_SERVICE" = 1 ]; then
-  echo "  lymnal runs in the background and starts on boot (systemctl --user status lymnal)."
-fi
-echo "  update later with:  lymnal update  — no password, ever again."
+echo "  Update anytime:  lymnal update"
 if [ "$PATH_HAD_BIN" = 0 ]; then
   echo
-  echo "${CYN}  One thing:${RST} open a new terminal so the \"lymnal\" command is found"
-  echo "  (this shell's PATH was set before ~/.local/bin existed on it)."
+  echo "  ${CYN}First time only:${RST} open a new terminal so \"lymnal\" works."
 fi
