@@ -240,12 +240,24 @@ if [ "$APP" = 1 ]; then
   APP_BIN="$HERE/elyxr/build/linux/x64/release/bundle/elyxr"
   APPS_DIR="$HOME/.local/share/applications"
   mkdir -p "$APPS_DIR"
+  # Install the app icon into the user's icon theme, at every size, so the
+  # launcher and the taskbar show elyxr's mark instead of a generic tile.
+  ICONS_DIR="$HOME/.local/share/icons/hicolor"
+  for sz in 16 32 48 64 128 256 512; do
+    src="$HERE/branding/png/elyxr/elyxr-${sz}.png"
+    [ -f "$src" ] || continue
+    dest="$ICONS_DIR/${sz}x${sz}/apps"
+    mkdir -p "$dest"
+    cp "$src" "$dest/elyxr.png"
+  done
+  gtk-update-icon-cache -f -t "$ICONS_DIR" 2>/dev/null || true
   cat > "$APPS_DIR/elyxr.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=elyxr
 Comment=Reach your trove from anywhere
 Exec=$APP_BIN
+Icon=elyxr
 Terminal=false
 Categories=Utility;Network;
 StartupWMClass=elyxr
