@@ -28,21 +28,48 @@ TextButton _btn(Palette p, String label, VoidCallback onTap, {bool accent = fals
       child: Text(label, style: chassis(11, accent ? p.a : p.mid, spacing: 0.1)),
     );
 
-/// "Delete 12 files?" — the same guard any file manager shows.
-Future<bool> showDeleteConfirm(BuildContext context, Palette p, int fileCount) async {
+/// "Delete 12 files?" — the trove is shared, so this warns it removes them for
+/// everyone, and offers a "don't ask again". Returns whether to delete and
+/// whether the person opted out of future confirms.
+Future<({bool ok, bool dontAsk})> showDeleteConfirm(
+    BuildContext context, Palette p, int fileCount) async {
+  bool dontAsk = false;
   final ok = await showDialog<bool>(
     context: context,
-    builder: (context) => _frame(
-      p,
-      'Delete ${fmtCount(fileCount, 'file')}?',
-      Text('This is permanent. The space frees immediately.', style: glass(16, p.soft)),
-      [
-        _btn(p, 'CANCEL', () => Navigator.pop(context, false)),
-        _btn(p, 'DELETE', () => Navigator.pop(context, true), accent: true),
-      ],
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => _frame(
+        p,
+        'Delete ${fmtCount(fileCount, 'file')}?',
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('This removes it from the trove — for everyone, on every device.',
+                style: glass(16, p.soft)),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => setState(() => dontAsk = !dontAsk),
+              behavior: HitTestBehavior.opaque,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(dontAsk ? '▣' : '▢',
+                      style: glass(20, dontAsk ? p.bright : p.foot)),
+                  const SizedBox(width: 8),
+                  Text("Don't ask again — I get it", style: glass(14, p.mid)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        [
+          _btn(p, 'CANCEL', () => Navigator.pop(context, false)),
+          _btn(p, 'DELETE', () => Navigator.pop(context, true), accent: true),
+        ],
+      ),
     ),
   );
-  return ok ?? false;
+  return (ok: ok ?? false, dontAsk: dontAsk);
 }
 
 /// Name a new folder in the same action.

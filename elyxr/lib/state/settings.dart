@@ -31,6 +31,7 @@ class SettingsController extends ChangeNotifier {
   AppMode _appMode = AppMode.client;
   String _downloadDir = '~/Downloads';
   String _mountPath = '~/trove'; // where the trove mounts (its own folder, not the repo)
+  bool _confirmDelete = true; // show the "removes it for everyone" delete guard
   int _atOnce = 3;
 
   Accent get accent => _accent;
@@ -43,6 +44,7 @@ class SettingsController extends ChangeNotifier {
   AppMode get appMode => _appMode;
   String get downloadDir => _downloadDir;
   String get mountPath => _mountPath;
+  bool get confirmDelete => _confirmDelete;
   int get atOnce => _atOnce;
 
   /// Cache slider position → gigabytes (0.5–15 GB across 20 steps).
@@ -61,6 +63,7 @@ class SettingsController extends ChangeNotifier {
         _enumByName(AppMode.values, _prefs.getString('appMode'), AppMode.client);
     _downloadDir = _prefs.getString('downloadDir') ?? '~/Downloads';
     _mountPath = _prefs.getString('mountPath') ?? '~/trove';
+    _confirmDelete = _prefs.getBool('confirmDelete') ?? true;
     _atOnce = _prefs.getInt('atOnce') ?? 3;
   }
 
@@ -82,6 +85,7 @@ class SettingsController extends ChangeNotifier {
   set appMode(AppMode v) => _set('appMode', () => _appMode = v, () => _prefs.setString('appMode', v.name));
   set downloadDir(String v) => _set('downloadDir', () => _downloadDir = v, () => _prefs.setString('downloadDir', v));
   set mountPath(String v) => _set('mountPath', () => _mountPath = v, () => _prefs.setString('mountPath', v));
+  set confirmDelete(bool v) => _set('confirmDelete', () => _confirmDelete = v, () => _prefs.setBool('confirmDelete', v));
   set atOnce(int v) => _set('atOnce', () => _atOnce = v, () => _prefs.setInt('atOnce', v));
 
   void _set(String _, VoidCallback apply, VoidCallback persist) {

@@ -11,6 +11,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/actions.dart';
 import '../state/browse.dart';
+import '../state/settings.dart';
 import '../state/transfers.dart';
 import '../util/format.dart';
 import 'dialogs.dart';
@@ -91,9 +92,13 @@ class _SelectionBarState extends State<SelectionBar> {
   }
 
   Future<void> _delete(BuildContext context, BrowseController browse, Palette p) async {
+    final settings = context.read<SettingsController>();
     final count = _res?.fileCount ?? browse.selection.length;
-    final ok = await showDeleteConfirm(context, p, count);
-    if (!ok || !context.mounted) return;
+    if (settings.confirmDelete) {
+      final r = await showDeleteConfirm(context, p, count);
+      if (!r.ok || !context.mounted) return;
+      if (r.dontAsk) settings.confirmDelete = false;
+    }
     try {
       final result = await browse.deletePaths(browse.selectionPaths);
       if (context.mounted) await showDeleteResult(context, p, result);
