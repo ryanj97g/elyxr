@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'api/admin_client.dart';
+import 'api/lymnal_client.dart';
 import 'state/actions.dart';
 import 'state/browse.dart';
 import 'state/server.dart';
@@ -16,6 +17,7 @@ import 'state/settings.dart';
 import 'state/transfers.dart';
 import 'state/trove_mount.dart';
 import 'state/updater.dart';
+import 'util/drag_out.dart';
 import 'util/paths.dart';
 import 'screens/first_run.dart';
 import 'screens/home.dart';
@@ -72,6 +74,7 @@ class _RootState extends State<_Root> {
   bool _openedOnce = false;
   bool _serverTried = false;
   AppMode? _roleApplied;
+  LymnalClient? _dragClient;
 
   @override
   Widget build(BuildContext context) {
@@ -79,6 +82,13 @@ class _RootState extends State<_Root> {
     final settings = context.watch<SettingsController>();
     final browse = context.read<BrowseController>();
     final server = context.read<ServerController>();
+
+    // Keep the drag-out helper pointed at the live connection, so a file pulled
+    // out of the window can be fetched and written to wherever it's dropped.
+    if (_dragClient != session.client) {
+      _dragClient = session.client;
+      DragOut.useClient(session.client);
+    }
 
     // One owner per device for the trove folder: lymnal serves it in server
     // mode, the mount owns it in client mode. Turn the lymnal service on with

@@ -18,6 +18,7 @@ import '../state/actions.dart';
 import '../state/browse.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../util/drag_out.dart';
 import '../util/format.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/transfer_panel.dart';
@@ -561,6 +562,16 @@ class _Row extends StatelessWidget {
           }
         }
       },
+      // Drag a file sideways to pull it out of the window; where you drop it is
+      // where it downloads. A vertical drag still scrolls the list.
+      onHorizontalDragStart: isDir
+          ? null
+          : (_) {
+              final path = browse.path.isEmpty
+                  ? entry.name
+                  : '${browse.path}/${entry.name}';
+              DragOut.begin(path, entry.name);
+            },
       onDoubleTap: isDir ? null : () => openPreview(context, browse.entries, index),
       onLongPress: () => _renameEntry(context, browse, p, entry.name),
       child: Container(
