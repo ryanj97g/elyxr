@@ -33,11 +33,9 @@ class ServerStatus {
 class PendingRequest {
   final String device;
   final String client;
-  final String phrase;
   PendingRequest.fromJson(Map<String, dynamic> j)
       : device = j['device'] as String,
-        client = j['client'] as String? ?? '',
-        phrase = j['phrase'] as String? ?? '';
+        client = j['client'] as String? ?? '';
 }
 
 class Device {

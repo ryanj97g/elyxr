@@ -91,7 +91,7 @@ pub(super) async fn pending(
         .pairing
         .pending()
         .into_iter()
-        .map(|p| json!({ "device": p.device, "client": p.client, "phrase": p.phrase }))
+        .map(|p| json!({ "device": p.device, "client": p.client }))
         .collect();
     Ok(Json(json!({ "pending": list })))
 }
@@ -138,6 +138,9 @@ pub(super) async fn approve(
             "There is no pending request from that device to approve.",
         ));
     }
+    // Approving is why pairing was opened, so close it — the door doesn't stay
+    // open once the device is in.
+    s.pairing.close();
     Ok(Json(json!({ "device": req.device, "role": role_str(req.role), "max_bytes": max_bytes })))
 }
 

@@ -148,12 +148,9 @@ class _ServerControlsState extends State<ServerControls> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(border: Border.all(color: p.a)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('${req.device} wants access', style: glass(17, p.bright)),
+        Text('"${req.device}" wants access', style: glass(17, p.bright)),
         const SizedBox(height: 2),
-        Text(req.phrase.toUpperCase(),
-            style: glass(20, p.a).copyWith(shadows: [Shadow(color: p.aAlpha(0.6), blurRadius: 9)])),
-        const SizedBox(height: 4),
-        Text('Check this matches the phrase on that device.', style: glass(13, p.foot)),
+        Text('Approve it only if you recognise this device.', style: glass(13, p.foot)),
         const SizedBox(height: 8),
         Row(children: [
           GestureDetector(onTap: () => s.approve(req.device), child: Text('APPROVE (OWNER)', style: chassis(11, p.a, spacing: 0.1))),

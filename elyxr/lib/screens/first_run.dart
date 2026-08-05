@@ -1,6 +1,6 @@
 // First run (§08): elyxr opens with no token, finds the server on the tailnet
-// by itself, you press Request Access, it shows a four-word phrase and waits,
-// and once someone approves it opens on the trove. Denied, timed out, and
+// by itself, you press Request Access, and it waits until someone at the server
+// approves this device by name, then opens on the trove. Denied, timed out, and
 // pairing-not-open are three different messages. Manual address entry is the
 // only place an address is typed, and only when discovery fails.
 
@@ -15,7 +15,6 @@ import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
 import '../util/device.dart';
-import '../util/phrase.dart';
 import '../widgets/rails.dart';
 
 class FirstRunScreen extends StatefulWidget {
@@ -31,7 +30,6 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
   _Phase _phase = _Phase.discovering;
   List<DiscoveredServer> _servers = [];
   String? _errorMessage;
-  String? _phrase;
   final _addrCtrl = TextEditingController();
   final _deviceName = deviceName();
 
@@ -61,7 +59,6 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
   Future<void> _request(String address) async {
     setState(() {
       _phase = _Phase.waiting;
-      _phrase = phraseFor(_deviceName, 'elyxr/1.0.0');
     });
     final session = context.read<SessionController>();
     try {
@@ -247,17 +244,8 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
         children: [
           Text('WAITING FOR APPROVAL', style: chassis(12, p.mid, spacing: 0.16)),
           const SizedBox(height: 16),
-          Text('Check this phrase matches the one on the server:',
-              style: glass(16, p.soft)),
-          const SizedBox(height: 14),
-          Center(
-            child: Text(
-              (_phrase ?? '').toUpperCase(),
-              textAlign: TextAlign.center,
-              style: glass(28, p.bright)
-                  .copyWith(shadows: [Shadow(color: p.aAlpha(0.7), blurRadius: 11)]),
-            ),
-          ),
+          Text('Approve this device on the server, where it appears as '
+              '"$_deviceName".', style: glass(16, p.soft)),
           const SizedBox(height: 18),
           Center(child: Text('…', style: glass(24, p.mid))),
         ],
