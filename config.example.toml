@@ -12,7 +12,11 @@ log_level = "info"                  # error|warn|info|debug|trace
 
 [trove]
 name = "elyxr"
-path = "~/Desktop/elyxr"            # created on first run
+# The folder this machine shares WHEN it acts as a server. It defaults out of
+# sight so a client (which only mounts a remote trove, and shares nothing) never
+# grows a stray empty folder. A server picks a real folder to share with
+# `lymnal trove set <path>`.
+path = "~/.local/share/lymnal/served"
 follow_symlinks = false
 
 # [[token]] entries are added by pairing, not by hand. Shape, for reference:
