@@ -65,9 +65,20 @@ CUR="starting"
 # Colour only on a real terminal.
 if [ -t 1 ]; then
   CYN=$'\033[36m'; GRN=$'\033[32m'; RED=$'\033[31m'; DIM=$'\033[2m'; RST=$'\033[0m'
+  GLD=$'\033[38;5;179m'
 else
-  CYN=""; GRN=""; RED=""; DIM=""; RST=""
+  CYN=""; GRN=""; RED=""; DIM=""; RST=""; GLD=""
 fi
+
+# The lymnal mark, in ASCII, printed in gold when everything succeeds — a small
+# terminal splash. Only on a real terminal; skipped on pipes/logs.
+splash() {
+  [ -t 1 ] || return 0
+  [ -f "$HERE/branding/splash.txt" ] || return 0
+  printf '\n%s' "$GLD"
+  cat "$HERE/branding/splash.txt"
+  printf '%s\n' "$RST"
+}
 
 fail() {
   local code=$?
@@ -321,6 +332,7 @@ UNITEOF
   done_
 fi
 
+splash
 echo
 echo "${GRN}elyxr is installed.${RST}"
 if [ "$APP" = 1 ]; then
