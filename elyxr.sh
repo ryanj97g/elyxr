@@ -92,21 +92,52 @@ sh_() {
   else "$@" >>"$LOG" 2>&1; fi
 }
 
-# Ask for sudo once, up front, and hold the grant for the whole run — so a
-# long build never gets interrupted by a password prompt (and a fat-fingered
-# password fails here, before anything is installed, instead of half-way in).
+# Commands live in the user's own bin, and lymnal runs as a user service, so a
+# routine update never touches anything owned by root — and never needs a
+# password. Admin rights are only needed the first time (system libraries) and
+# to migrate off any old system-wide setup and turn on boot-start.
+BIN_DIR="$HOME/.local/bin"
+# Was ~/.local/bin already on PATH? If not, this shell won't find `lymnal` until
+# a fresh login — we tell the user at the end so the migration feels seamless.
+PATH_HAD_BIN=0
+case ":$PATH:" in *":$BIN_DIR:"*) PATH_HAD_BIN=1 ;; esac
+
+SYS_PKGS=(build-essential pkg-config curl git ca-certificates fuse3 libfuse3-dev)
+[ "$APP" = 1 ] && SYS_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev)
+NEED=()
+if command -v dpkg >/dev/null 2>&1; then
+  for p in "${SYS_PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || NEED+=("$p"); done
+fi
+
+# What still needs root: missing packages, an old system service/binaries to
+# clear, or turning on lingering so the user service starts at boot.
+OLD_SERVICE=0; [ -f /etc/systemd/system/lymnal.service ] && OLD_SERVICE=1
+OLD_BINS=0; { [ -e /usr/local/bin/lymnal ] || [ -e /usr/local/bin/trove ]; } && OLD_BINS=1
+LINGER_ON=0
+if command -v loginctl >/dev/null 2>&1 \
+   && [ "$(loginctl show-user "$(id -un)" --property=Linger --value 2>/dev/null)" = "yes" ]; then
+  LINGER_ON=1
+fi
+NEED_SUDO=0
+[ "${#NEED[@]}" -gt 0 ] && NEED_SUDO=1
+[ "$OLD_SERVICE" = 1 ] && NEED_SUDO=1
+[ "$OLD_BINS" = 1 ] && NEED_SUDO=1
+{ [ "$SERVICE" = 1 ] && [ "$LINGER_ON" = 0 ]; } && NEED_SUDO=1
+
 SUDO_KEEPALIVE=""
 cleanup() { [ -n "$SUDO_KEEPALIVE" ] && kill "$SUDO_KEEPALIVE" 2>/dev/null || true; }
 trap cleanup EXIT
 
 if [ "$(id -u)" -eq 0 ]; then
   SUDO=""
-else
+elif [ "$NEED_SUDO" = 1 ]; then
   SUDO="sudo"
-  echo "elyxr needs sudo to install libraries, the app, and the boot service."
-  sudo -v || { echo "${RED}sudo is required — nothing was installed.${RST}"; exit 1; }
+  echo "elyxr needs your password once for setup. Updates after this won't ask."
+  sudo -v || { echo "${RED}sudo is required for setup — nothing was installed.${RST}"; exit 1; }
   ( while true; do sudo -n true 2>/dev/null; sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
   SUDO_KEEPALIVE=$!
+else
+  SUDO=""
 fi
 
 # Record where the repo lives so `lymnal update` can find and re-run this
@@ -119,12 +150,6 @@ printf '%s\n' "$HERE" > "$HOME/.config/lymnal/repo.path"
 # GTK/clang/etc. build deps unless --no-app.
 phase "system libraries"
 command -v apt-get >/dev/null 2>&1 || { echo "needs an apt-based Linux (Ubuntu/Zorin/Debian)"; exit 1; }
-SYS_PKGS=(build-essential pkg-config curl git ca-certificates fuse3 libfuse3-dev)
-if [ "$APP" = 1 ]; then
-  SYS_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev)
-fi
-NEED=()
-for p in "${SYS_PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || NEED+=("$p"); done
 if [ "${#NEED[@]}" -gt 0 ]; then
   sh_ $SUDO apt-get update
   sh_ $SUDO apt-get install -y "${NEED[@]}"
@@ -179,19 +204,27 @@ if [ "$APP" = 1 ]; then
 fi
 
 # --- put the commands on PATH ----------------------------------------------
-# Only copy a binary if it actually differs from what's installed, and note
-# when lymnal changed so we know whether the running service needs a restart.
+# Into the user's own bin (no root), so updates never need a password. Only copy
+# a binary if it differs, and note when lymnal changed so we know to restart.
 phase "installing commands"
+mkdir -p "$BIN_DIR"
 install_if_changed() {  # $1 built, $2 dest — returns 0 if it (re)installed
   if [ ! -f "$2" ] || ! cmp -s "$1" "$2"; then
-    sh_ $SUDO install -m 0755 "$1" "$2"
+    install -m 0755 "$1" "$2"
     return 0
   fi
   return 1
 }
 LYMNAL_CHANGED=0
-if install_if_changed target/release/lymnal /usr/local/bin/lymnal; then LYMNAL_CHANGED=1; fi
-if install_if_changed target/release/trove  /usr/local/bin/trove;  then :; fi
+if install_if_changed target/release/lymnal "$BIN_DIR/lymnal"; then LYMNAL_CHANGED=1; fi
+if install_if_changed target/release/trove  "$BIN_DIR/trove";  then :; fi
+# Ensure ~/.local/bin is on PATH now and in future login shells.
+case ":$PATH:" in *":$BIN_DIR:"*) ;; *) export PATH="$BIN_DIR:$PATH" ;; esac
+for rc in "$HOME/.profile" "$HOME/.bashrc"; do
+  [ -f "$rc" ] || continue
+  grep -q '.local/bin' "$rc" 2>/dev/null && continue
+  printf '\n# elyxr: user-installed commands on PATH\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$rc"
+done
 done_
 
 # --- app menu launcher (app only) ------------------------------------------
@@ -222,43 +255,49 @@ fi
 done_
 
 # --- boot service -----------------------------------------------------------
-# lymnal starts at boot and restarts if it dies. If it keeps dying, it retries
-# 5 minutes apart, up to 3 times (~15 minutes), then stops so it isn't burning
-# resources on a service that's plainly offline. A service that had been running
-# fine and hits one crash gets a fresh 3 attempts (a 30-minute sliding window),
-# so it only gives up on a sustained outage.
+# lymnal runs as a *user* service (systemctl --user), so starting, stopping, and
+# updating it never needs root. It starts at boot via lingering. If it keeps
+# dying it retries 5 minutes apart, up to 3 times (~15 min), then gives up so it
+# isn't burning resources on a service that's plainly offline; a lone crash after
+# healthy uptime gets a fresh 3 attempts (a 30-minute sliding window).
 INSTALLED_SERVICE=0
 if [ "$SERVICE" = 1 ] && command -v systemctl >/dev/null 2>&1; then
   phase "boot service"
-  RUNUSER="$(id -un)"
-  $SUDO tee /etc/systemd/system/lymnal.service >/dev/null <<UNITEOF
+  # One-time migration off the old system-wide setup, if present.
+  if [ "$OLD_SERVICE" = 1 ]; then
+    sh_ $SUDO systemctl disable --now lymnal.service || true
+    sh_ $SUDO rm -f /etc/systemd/system/lymnal.service
+    sh_ $SUDO systemctl daemon-reload || true
+  fi
+  [ "$OLD_BINS" = 1 ] && sh_ $SUDO rm -f /usr/local/bin/lymnal /usr/local/bin/trove
+
+  USER_UNIT="$HOME/.config/systemd/user"
+  mkdir -p "$USER_UNIT"
+  cat > "$USER_UNIT/lymnal.service" <<UNITEOF
 [Unit]
 Description=lymnal — serves the trove over your tailnet
 Documentation=https://github.com/ryanj97g/elyxr
-After=network-online.target tailscaled.service
-Wants=network-online.target
 StartLimitIntervalSec=1800
 StartLimitBurst=4
 
 [Service]
 Type=simple
-User=$RUNUSER
-ExecStart=/usr/local/bin/lymnal
+ExecStart=$BIN_DIR/lymnal
 Restart=on-failure
 RestartSec=300
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
 UNITEOF
-  sh_ $SUDO systemctl daemon-reload
-  # enable makes it start on boot; restart picks up a new binary (and starts it
-  # if it was stopped). When nothing changed, enable --now just ensures it's up.
+  sh_ systemctl --user daemon-reload
   if [ "$LYMNAL_CHANGED" = 1 ]; then
-    sh_ $SUDO systemctl enable lymnal.service
-    sh_ $SUDO systemctl restart lymnal.service
+    sh_ systemctl --user enable lymnal.service
+    sh_ systemctl --user restart lymnal.service
   else
-    sh_ $SUDO systemctl enable --now lymnal.service
+    sh_ systemctl --user enable --now lymnal.service
   fi
+  # Start at boot without being logged in (one-time; the only sudo left).
+  if [ "$LINGER_ON" = 0 ]; then sh_ $SUDO loginctl enable-linger "$(id -un)" || true; fi
   INSTALLED_SERVICE=1
   done_
 fi
@@ -271,6 +310,11 @@ if [ "$APP" = 1 ]; then
   echo "  to SERVER (share a folder) or CLIENT (browse another device)."
 fi
 if [ "$INSTALLED_SERVICE" = 1 ]; then
-  echo "  lymnal runs in the background and starts on boot (systemctl status lymnal)."
+  echo "  lymnal runs in the background and starts on boot (systemctl --user status lymnal)."
 fi
-echo "  update later with:  lymnal update"
+echo "  update later with:  lymnal update  — no password, ever again."
+if [ "$PATH_HAD_BIN" = 0 ]; then
+  echo
+  echo "${CYN}  One thing:${RST} open a new terminal so the \"lymnal\" command is found"
+  echo "  (this shell's PATH was set before ~/.local/bin existed on it)."
+fi
