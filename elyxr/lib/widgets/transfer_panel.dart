@@ -82,11 +82,12 @@ class _SelectionBarState extends State<SelectionBar> {
       );
 
   Future<void> _download(BuildContext context, BrowseController browse, FileActions actions) async {
+    // Clicking download IS the decision — no plan to confirm. The resolved plan
+    // (loose vs. one zip, and skipping older duplicates) still applies; it just
+    // isn't narrated back at you.
     final paths = browse.selectionPaths;
     final res = _res ?? await actions.resolve(paths);
-    if (res == null || !context.mounted) return;
-    final go = await showDownloadPlan(context, widget.palette, res);
-    if (!go) return;
+    if (res == null) return;
     actions.startDownload(paths, res);
     browse.clearSelection();
   }

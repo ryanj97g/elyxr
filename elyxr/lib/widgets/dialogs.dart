@@ -5,7 +5,6 @@
 import 'package:flutter/material.dart';
 
 import '../api/api_error.dart';
-import '../api/models.dart';
 import '../design/text.dart';
 import '../design/tokens.dart';
 import '../util/format.dart';
@@ -155,36 +154,6 @@ Future<ConflictChoice> showConflict(BuildContext context, Palette p, String name
     ),
   );
   return c ?? ConflictChoice.cancel;
-}
-
-/// State the download plan before it starts: how many files, loose or zip, and
-/// which older duplicates will be skipped.
-Future<bool> showDownloadPlan(BuildContext context, Palette p, ResolveResult res) async {
-  final lines = <String>[
-    res.isZip
-        ? '${fmtCount(res.fileCount, 'file')} — arriving as one zip (${fmtSize(res.totalBytes)}).'
-        : '${fmtCount(res.fileCount, 'file')} — downloaded loose, three at a time (${fmtSize(res.totalBytes)}).',
-  ];
-  for (final c in res.collisions) {
-    lines.add('Skipping ${c.skipped.length} older "${c.name}" — keeping the newest.');
-  }
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (context) => _frame(
-      p,
-      'Download',
-      Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [for (final l in lines) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(l, style: glass(16, p.soft)))],
-      ),
-      [
-        _btn(p, 'CANCEL', () => Navigator.pop(context, false)),
-        _btn(p, 'DOWNLOAD', () => Navigator.pop(context, true), accent: true),
-      ],
-    ),
-  );
-  return ok ?? false;
 }
 
 /// Show a lymnal error word for word, with code/request-id behind a details
