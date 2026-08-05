@@ -12,9 +12,9 @@ log_level = "info"                  # error|warn|info|debug|trace
 
 [trove]
 name = "trove"
-# The trove lives at the same place on every device: on the Desktop, like a
-# plugged-in drive. A server serves this real folder; a client mounts the remote
-# trove here instead. Only one of the two ever owns it on a given device — the
+# The trove lives at the same place on every device: on the Desktop. A server
+# serves this real folder; a client mounts the remote trove here instead. Only
+# one of the two ever owns it on a given device — the
 # app runs the lymnal service in server mode and stops it in client mode — so
 # they never collide. Change it with `lymnal trove set <path>`.
 path = "~/Desktop/trove"

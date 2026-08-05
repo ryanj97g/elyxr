@@ -10,8 +10,9 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
   its server and keeps the device up to date. One binary does both roles and the
   command-line operations, so they can never disagree. It runs as a systemd
   *user* service and shows a system-tray icon while it's running.
-- **trove** (Rust, FUSE) — mounts a served folder so it appears like a local
-  drive. Entries list instantly; a file's contents download when you open it.
+- **trove** (Rust, FUSE) — mounts a served folder so it appears as a normal
+  folder on your machine. Entries list instantly; a file's contents download
+  when you open it.
 - **elyxr** (Flutter) — the app. A Server/Client toggle sets the machine's role,
   and the app starts lymnal in server mode and stops it in client mode so the
   two roles never collide.
