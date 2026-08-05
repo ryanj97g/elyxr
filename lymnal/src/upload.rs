@@ -98,6 +98,18 @@ impl UploadManager {
         }
     }
 
+    /// How many uploads are actively mid-transfer — received some data but not
+    /// yet complete. Used to hold a service restart until in-flight uploads
+    /// finish, so an update never cuts one off (upload state is in memory).
+    pub fn active_count(&self) -> usize {
+        self.uploads
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|u| u.received_bytes() > 0 && !u.complete())
+            .count()
+    }
+
     pub fn chunk_bytes(&self) -> u64 {
         self.chunk_bytes
     }

@@ -1,10 +1,10 @@
 // The update strip, driven by UpdateController's stage. It appears while a
-// background update runs and after it's ready, and does nothing when idle.
-//   updating       → a muted "updating in the background" line (no action)
-//   readyToRefresh → a gold "installed — refresh" the person taps when ready
-//   failed         → an amber line they can tap to retry
-// Used on a client (auto, when behind the server) and on a server (after the
-// "update now" control kicks one off).
+// background update runs and vanishes when the app relaunches itself.
+//   updating          → a muted "updating in the background" line (no action)
+//   waitingForUpload  → "restarting as soon as your upload finishes" (no action)
+//   failed            → an amber line they can tap to retry
+// The restart is automatic and silent — there's no confirm and no refresh
+// button; the strip just narrates what's happening until the app reopens.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -26,20 +26,20 @@ class UpdateBanner extends StatelessWidget {
           bg: p.tubeBg,
           border: p.dim,
           fg: p.mid,
-          text: 'Updating in the background — keep working.',
+          text: 'Updating in the background — it\'ll restart itself when it\'s done.',
           action: null,
           onTap: null,
           actionColor: p.mid,
         );
-      case UpdateStage.readyToRefresh:
+      case UpdateStage.waitingForUpload:
         return _strip(
-          bg: p.a,
-          border: p.a,
-          fg: p.ink,
-          text: 'Update installed.',
-          action: 'REFRESH ▸',
-          onTap: () => u.refreshNow(),
-          actionColor: p.ink,
+          bg: p.tubeBg,
+          border: p.dim,
+          fg: p.mid,
+          text: 'Update ready — restarting as soon as your upload finishes.',
+          action: null,
+          onTap: null,
+          actionColor: p.mid,
         );
       case UpdateStage.failed:
         return _strip(

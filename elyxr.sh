@@ -338,7 +338,12 @@ UNITEOF
     # Start at boot without being logged in (one-time; the only sudo left).
     if [ "$LINGER_ON" = 0 ]; then sh_ $SUDO loginctl enable-linger "$(id -un)" || true; fi
   elif systemctl --user is-enabled --quiet lymnal.service 2>/dev/null; then
-    [ "$LYMNAL_CHANGED" = 1 ] && sh_ systemctl --user restart lymnal.service
+    if [ "$LYMNAL_CHANGED" = 1 ]; then
+      # Hold the restart until any in-flight uploads finish, so an update never
+      # cuts one off (the running service keeps upload state in memory).
+      "$BIN_DIR/lymnal" drain || true
+      sh_ systemctl --user restart lymnal.service
+    fi
   fi
   INSTALLED_SERVICE=1
   done_

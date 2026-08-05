@@ -30,7 +30,9 @@ fn main() -> anyhow::Result<()> {
     match args.first().map(String::as_str) {
         // Troubleshooting commands.
         Some("status") | Some("token") | Some("trove") | Some("bind") | Some("recount")
-        | Some("update") | Some("help") | Some("-h") | Some("--help") => cli::run(&args),
+        | Some("update") | Some("drain") | Some("help") | Some("-h") | Some("--help") => {
+            cli::run(&args)
+        }
         // Explicitly run the service.
         Some("serve") => run_service(daemon_config(&args[1..])),
         // No command (or a bare config path) runs the service.

@@ -133,6 +133,13 @@ class TransferController extends ChangeNotifier {
   Iterable<Transfer> get active =>
       _queue.where((t) => t.state != TransferState.done);
 
+  /// An upload that's running or still queued to run. An auto-restart (after an
+  /// update) waits for this to clear first, so a file mid-upload isn't cut —
+  /// the server holds upload state in memory, so a restart would lose it.
+  bool get hasPendingUpload => _queue.any((t) =>
+      t.direction == Direction.upload &&
+      (t.state == TransferState.running || t.state == TransferState.waiting));
+
   /// Load a persisted queue and resume anything that was mid-flight.
   Future<void> load() async {
     if (!await _store.exists()) return;

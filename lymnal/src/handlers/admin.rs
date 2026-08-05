@@ -54,6 +54,7 @@ pub(super) async fn status(
         "version": s.version,
         "build": s.build,
         "commit": s.commit,
+        "active_uploads": s.uploads.active_count(),
         "uptime_s": s.uptime_s(),
         "bind": s.bind_addr(),
         "trove": s.trove_name(),

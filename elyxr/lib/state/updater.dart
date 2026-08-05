@@ -1,31 +1,32 @@
-// Keeps a device up to date the way good desktop apps do: when this client is
-// behind the server, it pulls and rebuilds *in the background* while you keep
-// working, then — once the new build is ready on disk — invites you to refresh
-// whenever you hit a stopping point. Clicking refresh is a near-instant
-// relaunch, because the slow part (the rebuild) already happened quietly.
+// Runs `lymnal update` from inside the app, then closes and reopens the app on
+// its own once the rebuild is done — no button, no confirmation. Each device
+// updates itself from the repository (`lymnal update` → git), never from another
+// device; the server only tells a client to start.
 //
-// Why background-then-refresh instead of updating in place: rebuilding replaces
-// the app's own files. On Linux the running app keeps its old copy in memory
-// while the new one lands beside it, so nothing breaks mid-use; the relaunch is
-// what actually steps onto the new build. And code always comes from the
-// repository (`lymnal update` → git), never from the server — the server only
-// tells a client it's behind.
+// The rebuild replaces the app's own files, so it can't happen in place — the
+// running app keeps its old copy while the new one lands beside it, and the
+// relaunch is what steps onto the new build. The relaunch is automatic and
+// silent, with one exception: if a file is mid-upload, it waits for that upload
+// to finish first (the server keeps upload state in memory, so restarting
+// mid-upload would lose it), then relaunches the instant it's done.
 
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-enum UpdateStage { idle, updating, readyToRefresh, failed }
+import 'transfers.dart';
+
+enum UpdateStage { idle, updating, waitingForUpload, failed }
 
 class UpdateController extends ChangeNotifier {
+  final TransferController _transfers;
+  UpdateController(this._transfers);
+
   UpdateStage stage = UpdateStage.idle;
   String? error;
-  // The build we last acted on, so a running/finished update isn't retriggered
-  // by the same version news arriving again.
   int _actingOnBuild = 0;
 
-  bool get busy => stage == UpdateStage.updating;
-  bool get ready => stage == UpdateStage.readyToRefresh;
+  bool get busy => stage == UpdateStage.updating || stage == UpdateStage.waitingForUpload;
 
   String _bin(String name) {
     final home = Platform.environment['HOME'];
@@ -39,64 +40,57 @@ class UpdateController extends ChangeNotifier {
   }
 
   /// Called with the server's build when this client learns it's behind. Starts
-  /// a background update once per newer build; ignores repeat news while one is
-  /// already running or already staged.
+  /// once per newer build; ignores repeat news while one is already running.
   void noticeBehind(int serverBuild) {
-    if (stage == UpdateStage.updating || stage == UpdateStage.readyToRefresh) return;
+    if (busy) return;
     if (serverBuild <= _actingOnBuild) return;
     _actingOnBuild = serverBuild;
-    _runBackground();
+    _run();
   }
 
-  /// Trigger the background update by hand (e.g. a server's "update now").
+  /// Trigger the update by hand (the server's "update now", or the client acting
+  /// on the server's live announcement).
   void updateNow() {
-    if (stage == UpdateStage.updating) return;
-    _runBackground();
+    if (busy) return;
+    _run();
   }
 
-  Future<void> _runBackground() async {
+  Future<void> _run() async {
     stage = UpdateStage.updating;
     error = null;
     notifyListeners();
     try {
-      // Runs to completion while the app keeps running; the rebuilt binaries
-      // land on disk as fresh copies without disturbing the live process.
       final proc = await Process.start(_bin('lymnal'), ['update']);
-      // Drain the pipes so the child never blocks on a full buffer.
       proc.stdout.listen((_) {});
       proc.stderr.listen((_) {});
       final code = await proc.exitCode;
       if (code == 0) {
-        stage = UpdateStage.readyToRefresh;
-        _notifyDesktop();
+        await _relaunchWhenClear();
       } else {
         stage = UpdateStage.failed;
         error = 'The update didn\'t finish (exit $code).';
+        notifyListeners();
       }
     } catch (e) {
       stage = UpdateStage.failed;
       error = 'Could not run the update: $e';
+      notifyListeners();
     }
-    notifyListeners();
   }
 
-  /// A best-effort desktop notification, so the "ready to refresh" nudge is seen
-  /// even when elyxr isn't the focused window. Silently absent where notify-send
-  /// isn't installed.
-  Future<void> _notifyDesktop() async {
-    try {
-      await Process.run('notify-send', [
-        '--app-name=elyxr',
-        'elyxr updated',
-        'A new version is installed. Open elyxr and refresh when you\'re ready.',
-      ]);
-    } catch (_) {}
+  /// Relaunch onto the fresh build now, or the instant an in-flight upload ends.
+  Future<void> _relaunchWhenClear() async {
+    while (_transfers.hasPendingUpload) {
+      if (stage != UpdateStage.waitingForUpload) {
+        stage = UpdateStage.waitingForUpload;
+        notifyListeners();
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    await _relaunch();
   }
 
-  /// Step onto the freshly built version: launch the new binary detached, then
-  /// quit this one. Near-instant, since the build already happened.
-  Future<void> refreshNow() async {
-    if (stage != UpdateStage.readyToRefresh) return;
+  Future<void> _relaunch() async {
     try {
       final exe = Platform.resolvedExecutable;
       if (File(exe).existsSync()) {
@@ -112,7 +106,7 @@ class UpdateController extends ChangeNotifier {
 
   /// Retry after a failed update.
   void retry() {
-    if (stage == UpdateStage.updating) return;
-    _runBackground();
+    if (busy) return;
+    _run();
   }
 }
