@@ -43,11 +43,17 @@ cd "$HERE"
 if [ "$UPDATE" = 1 ] && [ -z "${ELYXR_REEXEC:-}" ] \
    && command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   before="$(git rev-parse HEAD 2>/dev/null || true)"
-  git pull --ff-only >/dev/null 2>&1 || true
-  after="$(git rev-parse HEAD 2>/dev/null || true)"
-  if [ "$before" != "$after" ]; then
-    echo "updated to the latest version — restarting installer..."
-    ELYXR_REEXEC=1 exec bash "$SELF" "$@"
+  # Building can regenerate Cargo.lock; discard that drift so an update can
+  # always fast-forward (the committed lockfile is the source of truth).
+  git checkout -- Cargo.lock 2>/dev/null || true
+  if git pull --ff-only >/dev/null 2>&1; then
+    after="$(git rev-parse HEAD 2>/dev/null || true)"
+    if [ "$before" != "$after" ]; then
+      echo "updated to the latest version — restarting installer..."
+      ELYXR_REEXEC=1 exec bash "$SELF" "$@"
+    fi
+  else
+    echo "note: couldn't fast-forward to the latest (local changes?) — building what's checked out."
   fi
 fi
 
