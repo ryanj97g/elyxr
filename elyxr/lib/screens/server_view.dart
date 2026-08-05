@@ -12,6 +12,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/server.dart';
 import '../util/format.dart';
+import '../widgets/update_sheet.dart';
 
 class ServerControls extends StatefulWidget {
   final Palette palette;
@@ -99,10 +100,17 @@ class _ServerControlsState extends State<ServerControls> {
   Widget _service(Palette p, ServerController s) {
     final st = s.status;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _head(p, 'SERVICE'),
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text('SERVICE', style: chassis(12, p.bright, spacing: 0.16)),
+        GestureDetector(
+          onTap: () => showUpdateDialog(context, p),
+          child: Text('UPDATE NOW', style: chassis(11, p.a, spacing: 0.1)),
+        ),
+      ]),
+      const SizedBox(height: 6),
       _row(p, 'STATE', st == null ? '—' : (st.running ? 'RUNNING' : 'STOPPED')),
       if (st != null) ...[
-        _row(p, 'VERSION', st.version),
+        _row(p, 'VERSION', '${st.version} · build ${st.build}'),
         _row(p, 'UPTIME', _uptime(st.uptimeS)),
         _row(p, 'ADDRESS', st.bind),
       ],

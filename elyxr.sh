@@ -199,7 +199,14 @@ done_
 
 if [ "$APP" = 1 ]; then
   phase "building the app"
-  ( cd elyxr && sh_ flutter config --enable-linux-desktop && sh_ flutter pub get && sh_ flutter build linux --release )
+  # Stamp the app with the same build number lymnal carries (git commit count),
+  # so a client can tell when it's behind the server and offer to update.
+  APP_BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+  APP_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  ( cd elyxr && sh_ flutter config --enable-linux-desktop && sh_ flutter pub get \
+      && sh_ flutter build linux --release \
+           --dart-define=ELYXR_BUILD="$APP_BUILD" \
+           --dart-define=ELYXR_COMMIT="$APP_COMMIT" )
   done_
 fi
 

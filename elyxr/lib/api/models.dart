@@ -72,6 +72,8 @@ class ListPage {
 /// The server's health, and the three facts the app keeps at hand.
 class Health {
   final String version;
+  final int build;
+  final String commit;
   final int uptimeS;
   final String trove;
   final int usedBytes;
@@ -81,6 +83,8 @@ class Health {
 
   const Health({
     required this.version,
+    required this.build,
+    required this.commit,
     required this.uptimeS,
     required this.trove,
     required this.usedBytes,
@@ -91,6 +95,8 @@ class Health {
 
   factory Health.fromJson(Map<String, dynamic> j) => Health(
         version: j['version'] as String? ?? '?',
+        build: (j['build'] as num?)?.toInt() ?? 0,
+        commit: j['commit'] as String? ?? 'unknown',
         uptimeS: (j['uptime_s'] as num?)?.toInt() ?? 0,
         trove: j['trove'] as String? ?? 'elyxr',
         usedBytes: (j['used_bytes'] as num?)?.toInt() ?? 0,

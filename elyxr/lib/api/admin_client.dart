@@ -13,6 +13,8 @@ import 'api_error.dart';
 class ServerStatus {
   final bool running;
   final String version;
+  final int build;
+  final String commit;
   final int uptimeS;
   final String bind;
   final String trove;
@@ -20,6 +22,8 @@ class ServerStatus {
   ServerStatus.fromJson(Map<String, dynamic> j)
       : running = j['running'] as bool? ?? false,
         version = j['version'] as String? ?? '?',
+        build = (j['build'] as num?)?.toInt() ?? 0,
+        commit = j['commit'] as String? ?? 'unknown',
         uptimeS = (j['uptime_s'] as num?)?.toInt() ?? 0,
         bind = j['bind'] as String? ?? '',
         trove = j['trove'] as String? ?? 'elyxr',
