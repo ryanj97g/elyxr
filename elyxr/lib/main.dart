@@ -11,6 +11,7 @@ import 'app.dart';
 import 'state/session.dart';
 import 'state/settings.dart';
 import 'state/transfers.dart';
+import 'util/shake_to_close.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,10 +44,12 @@ Future<void> main() async {
   await session.boot();
   await transfers.load();
 
-  runApp(ElyxrApp(
-    settings: settings,
-    session: session,
-    transfers: transfers,
+  runApp(ShakeToClose(
+    child: ElyxrApp(
+      settings: settings,
+      session: session,
+      transfers: transfers,
+    ),
   ));
 }
 

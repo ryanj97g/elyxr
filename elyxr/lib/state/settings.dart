@@ -30,6 +30,7 @@ class SettingsController extends ChangeNotifier {
   int _cache = 10; // 1..20 → 0.5–15 GB
   AppMode _appMode = AppMode.client;
   String _downloadDir = '~/Downloads';
+  String _mountPath = '~/Trove'; // where the trove mounts (its own folder, not the repo)
   int _atOnce = 3;
 
   Accent get accent => _accent;
@@ -41,6 +42,7 @@ class SettingsController extends ChangeNotifier {
   int get cache => _cache;
   AppMode get appMode => _appMode;
   String get downloadDir => _downloadDir;
+  String get mountPath => _mountPath;
   int get atOnce => _atOnce;
 
   /// Cache slider position → gigabytes (0.5–15 GB across 20 steps).
@@ -58,6 +60,7 @@ class SettingsController extends ChangeNotifier {
     _appMode =
         _enumByName(AppMode.values, _prefs.getString('appMode'), AppMode.client);
     _downloadDir = _prefs.getString('downloadDir') ?? '~/Downloads';
+    _mountPath = _prefs.getString('mountPath') ?? '~/Trove';
     _atOnce = _prefs.getInt('atOnce') ?? 3;
   }
 
@@ -78,6 +81,7 @@ class SettingsController extends ChangeNotifier {
   set cache(int v) => _set('cache', () => _cache = v.clamp(1, 20), () => _prefs.setInt('cache', _cache));
   set appMode(AppMode v) => _set('appMode', () => _appMode = v, () => _prefs.setString('appMode', v.name));
   set downloadDir(String v) => _set('downloadDir', () => _downloadDir = v, () => _prefs.setString('downloadDir', v));
+  set mountPath(String v) => _set('mountPath', () => _mountPath = v, () => _prefs.setString('mountPath', v));
   set atOnce(int v) => _set('atOnce', () => _atOnce = v, () => _prefs.setInt('atOnce', v));
 
   void _set(String _, VoidCallback apply, VoidCallback persist) {
