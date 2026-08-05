@@ -43,6 +43,10 @@ pub struct AppState {
     pub pairing: PairingState,
     pub started: Instant,
     pub version: String,
+    /// Monotonic build number (git commit count) and short hash, stamped at
+    /// compile time — how a client tells whether it's behind the server.
+    pub build: u64,
+    pub commit: String,
     /// A local secret that server-mode elyxr (on the same machine) presents to
     /// reach the admin surface. Never leaves the machine.
     pub admin_token: String,
@@ -75,7 +79,9 @@ impl AppState {
             events: EventBus::new(),
             pairing: PairingState::new(),
             started: Instant::now(),
-            version: "1.0.0".into(),
+            version: env!("CARGO_PKG_VERSION").into(),
+            build: env!("ELYXR_BUILD").parse().unwrap_or(0),
+            commit: env!("ELYXR_COMMIT").into(),
             admin_token: mint_admin_token(),
             problems: Mutex::new(VecDeque::with_capacity(20)),
             bound_ok: AtomicBool::new(true),

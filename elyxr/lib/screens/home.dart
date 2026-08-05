@@ -8,7 +8,9 @@ import 'package:provider/provider.dart';
 import '../design/chassis.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../util/build_info.dart';
 import '../widgets/rails.dart';
+import '../widgets/update_sheet.dart';
 import 'files_view.dart';
 import 'server_view.dart';
 import 'settings_view.dart';
@@ -29,6 +31,29 @@ class _HomeScreenState extends State<HomeScreen> {
     final session = context.watch<SessionController>();
     final p = settings.palette;
 
+    // On a client, offer an update when the server is on a newer build than
+    // this app was built at. appBuild is 0 on an un-stamped build, so this never
+    // fires falsely.
+    final serverBuild = session.health?.build ?? 0;
+    final updateReady = settings.appMode == AppMode.client &&
+        !_inSettings &&
+        appBuild > 0 &&
+        serverBuild > appBuild;
+
+    Widget tubeChild;
+    if (_inSettings) {
+      tubeChild = const SettingsView();
+    } else if (settings.appMode == AppMode.server) {
+      tubeChild = ServerControls(palette: p);
+    } else if (updateReady) {
+      tubeChild = Column(children: [
+        UpdateBanner(p: p),
+        const Expanded(child: FilesView()),
+      ]);
+    } else {
+      tubeChild = const FilesView();
+    }
+
     return Chassis(
       palette: p,
       topRail: TopRail(
@@ -38,11 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       tube: Tube(
         palette: p,
-        child: _inSettings
-            ? const SettingsView()
-            : (settings.appMode == AppMode.server
-                ? ServerControls(palette: p)
-                : const FilesView()),
+        child: tubeChild,
       ),
       bottomRail: BottomRail(
         palette: p,

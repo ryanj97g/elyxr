@@ -40,6 +40,8 @@ pub(super) async fn status(
     Ok(Json(json!({
         "running": true,
         "version": s.version,
+        "build": s.build,
+        "commit": s.commit,
         "uptime_s": s.uptime_s(),
         "bind": s.bind_addr(),
         "trove": s.trove_name(),

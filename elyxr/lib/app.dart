@@ -13,6 +13,7 @@ import 'state/session.dart';
 import 'state/settings.dart';
 import 'state/transfers.dart';
 import 'state/trove_mount.dart';
+import 'state/updater.dart';
 import 'util/paths.dart';
 import 'screens/first_run.dart';
 import 'screens/home.dart';
@@ -40,6 +41,7 @@ class ElyxrApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: browse),
         ChangeNotifierProvider(create: (_) => ServerController()),
         ChangeNotifierProvider(create: (_) => TroveMountController()),
+        ChangeNotifierProvider(create: (_) => UpdateController()),
         Provider.value(value: FileActions(browse, transfers, settings)),
       ],
       child: MaterialApp(

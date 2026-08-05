@@ -148,6 +148,8 @@ pub(crate) fn decode_cursor(cursor: &Option<String>) -> usize {
 async fn health(State(s): State<Shared>) -> Json<Value> {
     Json(json!({
         "version": s.version,
+        "build": s.build,
+        "commit": s.commit,
         "uptime_s": s.uptime_s(),
         "trove": s.trove_name(),
         "used_bytes": s.usage.used(),
