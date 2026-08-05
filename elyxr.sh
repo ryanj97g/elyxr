@@ -13,10 +13,11 @@
 # only what changed, re-install a binary only if it differs, and restart the
 # service only when its binary changed. Quiet unless something fails.
 #
-#   --no-app      skip the GUI app (for a headless server with no display)
-#   --no-service  don't register/touch the lymnal boot service
-#   --no-update   skip the self-update git pull (build exactly what's checked out)
-#   --verbose     watch every command
+#   --no-app        skip the GUI app (for a headless server with no display)
+#   --no-service    don't register/touch the lymnal boot service
+#   --no-update     skip the self-update git pull (build exactly what's checked out)
+#   --no-tailscale  skip the Tailscale install/sign-in step (you'll set it up yourself)
+#   --verbose       watch every command
 #
 set -Eeuo pipefail
 
@@ -24,13 +25,15 @@ VERBOSE=0
 SERVICE=1
 UPDATE=1
 APP=1
+TAILSCALE=1
 for a in "$@"; do
   case "$a" in
-    --no-app)      APP=0 ;;
-    --no-service)  SERVICE=0 ;;
-    --no-update)   UPDATE=0 ;;
-    --verbose|-v)  VERBOSE=1 ;;
-    *) echo "unknown flag: $a (use --no-app, --no-service, --no-update, --verbose)"; exit 2 ;;
+    --no-app)        APP=0 ;;
+    --no-service)    SERVICE=0 ;;
+    --no-update)     UPDATE=0 ;;
+    --no-tailscale)  TAILSCALE=0 ;;
+    --verbose|-v)    VERBOSE=1 ;;
+    *) echo "unknown flag: $a (use --no-app, --no-service, --no-update, --no-tailscale, --verbose)"; exit 2 ;;
   esac
 done
 
@@ -125,10 +128,23 @@ if command -v loginctl >/dev/null 2>&1 \
    && [ "$(loginctl show-user "$(id -un)" --property=Linger --value 2>/dev/null)" = "yes" ]; then
   LINGER_ON=1
 fi
+# Tailscale is how devices reach each other. If it isn't installed, or is
+# installed but not connected to a tailnet, this run has to install it and/or
+# walk you through signing in — both need root.
+TS_NEED=0
+if [ "$TAILSCALE" = 1 ]; then
+  if ! command -v tailscale >/dev/null 2>&1; then
+    TS_NEED=1
+  elif ! tailscale ip -4 >/dev/null 2>&1; then
+    TS_NEED=1
+  fi
+fi
+
 NEED_SUDO=0
 [ "${#NEED[@]}" -gt 0 ] && NEED_SUDO=1
 [ "$OLD_SERVICE" = 1 ] && NEED_SUDO=1
 [ "$OLD_BINS" = 1 ] && NEED_SUDO=1
+[ "$TS_NEED" = 1 ] && NEED_SUDO=1
 { [ "$SERVICE" = 1 ] && [ "$LINGER_ON" = 0 ]; } && NEED_SUDO=1
 
 SUDO_KEEPALIVE=""
@@ -163,6 +179,37 @@ if [ "${#NEED[@]}" -gt 0 ]; then
 fi
 command -v cc >/dev/null 2>&1 && pkg-config --exists fuse3
 done_
+
+# --- tailscale --------------------------------------------------------------
+# elyxr reaches your devices over Tailscale, a private network just for them —
+# no ports to open, nothing exposed to the internet. Installing the package is
+# automatic; connecting this machine to your tailnet needs you to sign in once
+# in a browser (an account thing no installer can do for you). This step is
+# quiet once you're connected, and only speaks up the first time.
+if [ "$TAILSCALE" = 1 ]; then
+  phase "tailscale"
+  if ! command -v tailscale >/dev/null 2>&1; then
+    sh_ bash -c "curl -fsSL https://tailscale.com/install.sh | $SUDO sh"
+  fi
+  if tailscale ip -4 >/dev/null 2>&1; then
+    done_                                   # already connected — nothing to do
+  else
+    printf '\n'                             # break the "tailscale ... " line
+    echo "  ${CYN}Connect this device to your Tailscale network${RST}"
+    echo "  A sign-in link will appear just below. Open it in a browser and sign in."
+    echo "  ${DIM}Use the SAME account on every device — that's what lets them see each other.${RST}"
+    echo
+    $SUDO tailscale up                      # prints the link, waits for sign-in
+    echo
+    if tailscale ip -4 >/dev/null 2>&1; then
+      echo "  ${GRN}connected — this device is ${RST}$(tailscale ip -4 | head -n1)"
+    else
+      echo "${RED}Tailscale still isn't connected. Run 'sudo tailscale up', finish the"
+      echo "sign-in, then run elyxr.sh again.${RST}"
+      exit 1
+    fi
+  fi
+fi
 
 # --- rust toolchain ---------------------------------------------------------
 # Test that cargo actually *runs* (a rustup shim with no default toolchain
