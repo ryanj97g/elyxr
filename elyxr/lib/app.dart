@@ -99,11 +99,20 @@ class _RootState extends State<_Root> {
         if (token != null && addr != null) {
           server.connect(AdminClient(baseUrl: 'http://$addr', adminToken: token));
         }
+        // Browse the trove straight off local disk in server mode — the files
+        // are on this machine, so no token and no round-trip.
+        final trovePath = await AdminClient.readTrovePath(dir);
+        if (trovePath != null) {
+          session.useLocalTrove(trovePath);
+          browse.open('');
+          browse.connectEvents();
+        }
       });
     }
     if (settings.appMode == AppMode.client && _serverTried) {
       _serverTried = false;
       server.connect(null);
+      session.useRemote();
     }
 
     // The trove mount (client only): the folder is live while the TROVE switch

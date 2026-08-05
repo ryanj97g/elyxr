@@ -13,6 +13,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/api_error.dart';
+import '../api/local_trove_client.dart';
 import '../api/lymnal_client.dart';
 import '../api/models.dart';
 
@@ -277,5 +278,24 @@ class SessionController extends ChangeNotifier {
   void _setStatus(LinkStatus s) {
     _status = s;
     notifyListeners();
+  }
+
+  /// Server mode: browse the trove straight off local disk. No token — the files
+  /// are on this machine. The browser uses [client] the same as always; it just
+  /// happens to be a local-filesystem-backed one here.
+  void useLocalTrove(String troveRoot) {
+    _client = LocalTroveClient(troveRoot);
+    _serverName = troveRoot.split('/').last;
+    _status = LinkStatus.ok;
+    notifyListeners();
+  }
+
+  /// Return to talking to a remote server over the network (after leaving server
+  /// mode), rebuilding the client from the saved pairing.
+  void useRemote() {
+    if (_serverAddress != null) {
+      _client = _factory(_baseUrl(_serverAddress!), token: _token);
+      refresh();
+    }
   }
 }

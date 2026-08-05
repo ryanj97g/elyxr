@@ -111,6 +111,19 @@ class AdminClient {
     return null;
   }
 
+  /// Read the trove folder lymnal is serving (data_dir/trove.path), so server
+  /// mode reads the files straight off local disk.
+  static Future<String?> readTrovePath(String dataDir) async {
+    try {
+      final f = File('$dataDir/trove.path');
+      if (await f.exists()) {
+        final s = (await f.readAsString()).trim();
+        if (s.isNotEmpty) return s;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Map<String, String> get _headers => {
         'X-Admin-Token': adminToken,
         'Content-Type': 'application/json',

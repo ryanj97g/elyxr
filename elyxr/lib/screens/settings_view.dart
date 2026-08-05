@@ -10,6 +10,7 @@ import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
 import '../util/device.dart';
+import 'server_view.dart';
 
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key});
@@ -52,6 +53,13 @@ class SettingsView extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(15, 13, 15, 0),
               children: [
+                // On the server device, its controls (pairing, limits, recent
+                // problems) live here in Settings, since the tube now shows the
+                // trove's files like every other device.
+                if (settings.appMode == AppMode.server) ...[
+                  ServerControls(palette: p),
+                  const SizedBox(height: 16),
+                ],
                 _section(p, '01', 'ACCENT', _AccentPicker(palette: p)),
                 const SizedBox(height: 13),
                 _section(p, '02', 'DENSITY', _DensityPicker(palette: p)),
