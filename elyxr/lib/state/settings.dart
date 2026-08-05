@@ -25,7 +25,7 @@ class SettingsController extends ChangeNotifier {
   Density _density = Density.mid;
   bool _dark = true;
   ViewMode _mode = ViewMode.text;
-  bool _trove = false; // is trove running (the folder switch)
+  bool _trove = true; // mount the trove on the Desktop — on by default, optional
   bool _notify = true;
   int _cache = 10; // 1..20 → 0.5–15 GB
   AppMode _appMode = AppMode.client;
@@ -56,7 +56,7 @@ class SettingsController extends ChangeNotifier {
         _enumByName(Density.values, _prefs.getString('density'), Density.mid);
     _dark = _prefs.getBool('dark') ?? true;
     _mode = _enumByName(ViewMode.values, _prefs.getString('mode'), ViewMode.text);
-    _trove = _prefs.getBool('trove') ?? false;
+    _trove = _prefs.getBool('trove') ?? true;
     _notify = _prefs.getBool('notify') ?? true;
     _cache = _prefs.getInt('cache') ?? 10;
     _appMode =
