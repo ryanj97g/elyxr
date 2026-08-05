@@ -12,9 +12,10 @@
 //!   lymnal trove set <path>
 //!   lymnal recount
 
+mod agent;
 mod cli;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use lymnal::config::{expand_tilde, Config};
@@ -50,8 +51,19 @@ fn daemon_config(args: &[String]) -> PathBuf {
         .unwrap_or_else(|| expand_tilde("~/.config/lymnal/config.toml"))
 }
 
-/// Build a runtime and run the service to shutdown.
+/// Build a runtime and run the service to shutdown. A device that has bound to a
+/// server (link.json is present next to the config) runs as a client agent —
+/// staying connected to keep itself updated — and never serves a trove of its
+/// own. Everything else serves.
 fn run_service(config_path: PathBuf) -> anyhow::Result<()> {
+    let config_dir = config_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+    if let Some(link) = agent::load_link(&config_dir) {
+        init_tracing("info");
+        agent::run(link, config_path); // never returns
+    }
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(serve(config_path))
 }
