@@ -30,7 +30,7 @@ pub fn run(args: &[String]) -> anyhow::Result<()> {
         "recount" => recount(&config_path),
         "token" => token(&config_path, &args[1..]),
         "trove" => trove(&config_path, &args[1..]),
-        "pair" => pair(&config_path, &args[1..]),
+        "bind" => bind(&config_path, &args[1..]),
         "help" | "-h" | "--help" | "" => {
             print_usage();
             Ok(())
@@ -152,11 +152,11 @@ fn trove(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
     }
 }
 
-/// Manage pairing against the running service's admin surface (§08). Unlike the
-/// other commands, these can't touch the on-disk stores directly — pending
-/// requests live in the running process — so they speak to the local admin
-/// surface over HTTP with the machine-local admin token.
-fn pair(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
+/// Bind devices to the trove against the running service's admin surface (§08).
+/// Unlike the other commands, these can't touch the on-disk stores directly —
+/// pending requests live in the running process — so they speak to the local
+/// admin surface over HTTP with the machine-local admin token.
+fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
     let cfg = load(config_path)?;
     let base = format!("http://{}", cfg.bind);
     let token = read_admin_token(&cfg.data_dir)?;
@@ -164,21 +164,21 @@ fn pair(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
     match args.first().map(String::as_str) {
         Some("open") => {
             admin_post(&base, &token, "/v1/admin/pairing", serde_json::json!({ "open": true }))?;
-            println!("Pairing is open. Open Elyxr on the other device and request access,");
-            println!("then run:  lymnal pair list");
+            println!("Ready to bind. Open Elyxr on the other device and request access,");
+            println!("then run:  lymnal bind list");
             Ok(())
         }
         Some("close") => {
             admin_post(&base, &token, "/v1/admin/pairing", serde_json::json!({ "open": false }))?;
-            println!("Pairing closed.");
+            println!("No longer accepting new devices.");
             Ok(())
         }
         Some("list") | Some("pending") => {
             let v = admin_get(&base, &token, "/v1/admin/pending")?;
             let list = v.get("pending").and_then(|p| p.as_array()).cloned().unwrap_or_default();
             if list.is_empty() {
-                println!("(no devices are waiting to be approved)");
-                println!("If you haven't yet: lymnal pair open");
+                println!("(no devices are waiting to be bound)");
+                println!("If you haven't yet: lymnal bind open");
                 return Ok(());
             }
             println!("{:<18} {:<14} {}", "device", "client", "phrase");
@@ -186,7 +186,7 @@ fn pair(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
                 let s = |k: &str| p.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
                 println!("{:<18} {:<14} {}", s("device"), s("client"), s("phrase"));
             }
-            println!("\nApprove with:  lymnal pair approve <device>");
+            println!("\nBind it with:  lymnal bind approve <device>");
             Ok(())
         }
         Some("approve") => {
@@ -195,7 +195,7 @@ fn pair(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
                 .filter(|a| !a.starts_with("--"))
                 .ok_or_else(|| {
                     anyhow::anyhow!(
-                        "usage: lymnal pair approve <device> [--guest] [--max-bytes N]"
+                        "usage: lymnal bind approve <device> [--guest] [--max-bytes N]"
                     )
                 })?
                 .clone();
@@ -208,20 +208,20 @@ fn pair(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
             }
             let v = admin_post(&base, &token, "/v1/admin/approve", body)?;
             let gb = v.get("max_bytes").and_then(|m| m.as_u64()).unwrap_or(0) as f64 / 1e9;
-            println!("Approved {device} as {role} ({gb:.0} GB). It's connected now.");
+            println!("Bound {device} as {role} ({gb:.0} GB). It's connected now.");
             Ok(())
         }
         Some("deny") => {
             let device = args
                 .get(1)
-                .ok_or_else(|| anyhow::anyhow!("usage: lymnal pair deny <device>"))?
+                .ok_or_else(|| anyhow::anyhow!("usage: lymnal bind deny <device>"))?
                 .clone();
             admin_post(&base, &token, "/v1/admin/deny", serde_json::json!({ "device": device }))?;
-            println!("Denied {device}.");
+            println!("Turned away {device}.");
             Ok(())
         }
         _ => anyhow::bail!(
-            "usage: lymnal pair open | list | approve <device> [--guest] | deny <device> | close"
+            "usage: lymnal bind open | list | approve <device> [--guest] | deny <device> | close"
         ),
     }
 }
@@ -319,6 +319,11 @@ fn print_usage() {
          lymnal token list\n\
          lymnal token new <label> [--role owner|guest] [--max-bytes N]\n\
          lymnal token revoke <label>\n\
+         lymnal bind open\n\
+         lymnal bind list\n\
+         lymnal bind approve <device> [--guest] [--max-bytes N]\n\
+         lymnal bind deny <device>\n\
+         lymnal bind close\n\
          lymnal trove set <path>\n\
          lymnal recount\n\n\
          --config <path>   use a different config file"
