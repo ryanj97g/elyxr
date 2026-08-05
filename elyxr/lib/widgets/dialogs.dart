@@ -44,7 +44,8 @@ Future<({bool ok, bool dontAsk})> showDeleteConfirm(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('This removes it from the trove — for everyone, on every device.',
+            Text('This permanently deletes them. The folder is shared, so they '
+                'disappear from every device — not just this computer.',
                 style: glass(16, p.soft)),
             const SizedBox(height: 12),
             GestureDetector(
