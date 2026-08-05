@@ -78,13 +78,23 @@ command -v cc >/dev/null 2>&1 && pkg-config --exists fuse3
 done_
 
 # --- rust toolchain ---------------------------------------------------------
+# We test that cargo actually *runs*, not merely that it's on PATH: a rustup
+# install with no default toolchain leaves a `cargo` shim that exists but
+# errors ("could not choose a version of cargo to run"). So:
+#   - cargo runs already            -> nothing to do
+#   - rustup present, no default    -> pick the stable toolchain
+#   - no rust at all                -> install rustup (which sets stable)
 phase "rust toolchain"
-if ! command -v cargo >/dev/null 2>&1; then
-  sh_ bash -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path"
+if ! cargo --version >/dev/null 2>&1; then
+  if command -v rustup >/dev/null 2>&1; then
+    sh_ rustup default stable
+  else
+    sh_ bash -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path"
+  fi
 fi
 # shellcheck disable=SC1091
 [ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
-command -v cargo >/dev/null 2>&1
+cargo --version >/dev/null 2>&1
 done_
 
 # --- build ------------------------------------------------------------------
