@@ -1,8 +1,7 @@
 # elyxr
 
-Reach a folder on one of your machines from any of your others — over your
-[Tailscale](https://tailscale.com) network — and have it feel like a drive you
-plugged in.
+Reach a folder on one of your machines from any of your others, over your
+[Tailscale](https://tailscale.com) network.
 
 One machine **serves** a folder. Your others **browse** it live: you see
 everything, but a file only downloads when you open it. Nothing is copied or
@@ -16,7 +15,7 @@ One command sets up all three — you never install them separately:
 - **elyxr** — the app. The only thing you click.
 - **lymnal** — the background service that shares the folder and keeps this
   machine up to date. It sits in your system tray while it runs.
-- **trove** — makes a shared folder show up like a plugged-in drive.
+- **trove** — makes a shared folder show up as a normal folder on your machine.
 
 ## Install
 

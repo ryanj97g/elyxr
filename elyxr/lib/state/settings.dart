@@ -30,7 +30,7 @@ class SettingsController extends ChangeNotifier {
   int _cache = 10; // 1..20 → 0.5–15 GB
   AppMode _appMode = AppMode.client;
   String _downloadDir = '~/Downloads';
-  String _mountPath = '~/Desktop/trove'; // where the trove mounts — on the Desktop, like a plugged-in drive
+  String _mountPath = '~/Desktop/trove'; // where the trove mounts — a normal folder on the Desktop
   bool _confirmDelete = true; // show the "removes it for everyone" delete guard
   int _atOnce = 3;
 
