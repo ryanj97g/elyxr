@@ -112,11 +112,16 @@ sh_() {
 # to migrate off any old system-wide setup and turn on boot-start.
 BIN_DIR="$HOME/.local/bin"
 
-SYS_PKGS=(build-essential pkg-config curl git ca-certificates fuse3 libfuse3-dev)
-[ "$APP" = 1 ] && SYS_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev)
-NEED=()
+# The packages are split in two so the handful that Tailscale needs in order to
+# install itself (a downloader and the certificates that verify its download)
+# go on first, before the Tailscale step. The heavier build tools follow it.
+BASE_PKGS=(curl ca-certificates)
+BUILD_PKGS=(build-essential pkg-config git fuse3 libfuse3-dev)
+[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev)
+BASE_NEED=(); BUILD_NEED=()
 if command -v dpkg >/dev/null 2>&1; then
-  for p in "${SYS_PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || NEED+=("$p"); done
+  for p in "${BASE_PKGS[@]}";  do dpkg -s "$p" >/dev/null 2>&1 || BASE_NEED+=("$p"); done
+  for p in "${BUILD_PKGS[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || BUILD_NEED+=("$p"); done
 fi
 
 # What still needs root: missing packages, an old system service/binaries to
@@ -141,7 +146,7 @@ if [ "$TAILSCALE" = 1 ]; then
 fi
 
 NEED_SUDO=0
-[ "${#NEED[@]}" -gt 0 ] && NEED_SUDO=1
+{ [ "${#BASE_NEED[@]}" -gt 0 ] || [ "${#BUILD_NEED[@]}" -gt 0 ]; } && NEED_SUDO=1
 [ "$OLD_SERVICE" = 1 ] && NEED_SUDO=1
 [ "$OLD_BINS" = 1 ] && NEED_SUDO=1
 [ "$TS_NEED" = 1 ] && NEED_SUDO=1
@@ -168,48 +173,61 @@ fi
 mkdir -p "$HOME/.config/lymnal"
 printf '%s\n' "$HERE" > "$HOME/.config/lymnal/repo.path"
 
-# --- system libraries -------------------------------------------------------
-# lymnal/trove need a C toolchain (rusqlite/blake3) and FUSE. The app adds the
-# GTK/clang/etc. build deps unless --no-app.
-phase "system libraries"
-command -v apt-get >/dev/null 2>&1 || { echo "needs an apt-based Linux (Ubuntu/Zorin/Debian)"; exit 1; }
-if [ "${#NEED[@]}" -gt 0 ]; then
+# --- base packages ----------------------------------------------------------
+# A downloader and the certificates that verify its downloads, which Tailscale
+# needs to fetch and check its own installer. These are installed first so the
+# Tailscale step can run early, before the long build.
+phase "base packages"
+command -v apt-get >/dev/null 2>&1 || { echo "elyxr needs an apt-based Linux, such as Ubuntu, Zorin, or Debian."; exit 1; }
+if [ "${#BASE_NEED[@]}" -gt 0 ] || [ "${#BUILD_NEED[@]}" -gt 0 ]; then
   sh_ $SUDO apt-get update
-  sh_ $SUDO apt-get install -y "${NEED[@]}"
 fi
-command -v cc >/dev/null 2>&1 && pkg-config --exists fuse3
+if [ "${#BASE_NEED[@]}" -gt 0 ]; then
+  sh_ $SUDO apt-get install -y "${BASE_NEED[@]}"
+fi
 done_
 
 # --- tailscale --------------------------------------------------------------
-# elyxr reaches your devices over Tailscale, a private network just for them —
-# no ports to open, nothing exposed to the internet. Installing the package is
-# automatic; connecting this machine to your tailnet needs you to sign in once
-# in a browser (an account thing no installer can do for you). This step is
-# quiet once you're connected, and only speaks up the first time.
+# elyxr reaches your other devices over Tailscale, a private network meant only
+# for them, so nothing is exposed to the open internet. Installing the software
+# is automatic, but connecting this machine to your network requires you to sign
+# in once in a browser, which no installer can do on your behalf. This step runs
+# early, so the one part that needs you is finished before the long build
+# begins, and it stays silent on every run once you are connected.
 if [ "$TAILSCALE" = 1 ]; then
   phase "tailscale"
   if ! command -v tailscale >/dev/null 2>&1; then
     sh_ bash -c "curl -fsSL https://tailscale.com/install.sh | $SUDO sh"
   fi
   if tailscale ip -4 >/dev/null 2>&1; then
-    done_                                   # already connected — nothing to do
+    done_                                   # already connected, so there is nothing to do
   else
-    printf '\n'                             # break the "tailscale ... " line
-    echo "  ${CYN}Connect this device to your Tailscale network${RST}"
+    printf '\n'                             # end the "tailscale ... " line
+    echo "  ${CYN}Connect this device to your Tailscale network.${RST}"
     echo "  A sign-in link will appear just below. Open it in a browser and sign in."
-    echo "  ${DIM}Use the SAME account on every device — that's what lets them see each other.${RST}"
+    echo "  ${DIM}Sign in with the same account on every device, because that is what lets them find each other.${RST}"
     echo
-    $SUDO tailscale up                      # prints the link, waits for sign-in
+    $SUDO tailscale up                      # prints the link, then waits for you to sign in
     echo
     if tailscale ip -4 >/dev/null 2>&1; then
-      echo "  ${GRN}connected — this device is ${RST}$(tailscale ip -4 | head -n1)"
+      echo "  ${GRN}Connected.${RST} This device is $(tailscale ip -4 | head -n1) on your tailnet."
     else
-      echo "${RED}Tailscale still isn't connected. Run 'sudo tailscale up', finish the"
-      echo "sign-in, then run elyxr.sh again.${RST}"
+      echo "${RED}Tailscale is not connected yet. Run 'sudo tailscale up', finish the"
+      echo "sign-in in your browser, then run elyxr.sh again.${RST}"
       exit 1
     fi
   fi
 fi
+
+# --- build tools ------------------------------------------------------------
+# lymnal and trove need a C toolchain (for rusqlite and blake3) and FUSE. The
+# app adds the GTK and related build dependencies unless you pass --no-app.
+phase "build tools"
+if [ "${#BUILD_NEED[@]}" -gt 0 ]; then
+  sh_ $SUDO apt-get install -y "${BUILD_NEED[@]}"
+fi
+command -v cc >/dev/null 2>&1 && pkg-config --exists fuse3
+done_
 
 # --- rust toolchain ---------------------------------------------------------
 # Test that cargo actually *runs* (a rustup shim with no default toolchain

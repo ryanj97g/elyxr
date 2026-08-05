@@ -160,6 +160,17 @@ fn trove(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
 /// pending requests live in the running process — so they speak to the local
 /// admin surface over HTTP with the machine-local admin token.
 fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
+    // `lymnal bind` with no argument explains the two sides. A recognised
+    // subcommand (open, seal, and so on) is the accepting side, run on the
+    // machine with the files. Anything else is taken to be a server's address:
+    // "bind this device to that server."
+    match args.first().map(String::as_str) {
+        None => return bind_help(),
+        Some("open") | Some("seal") | Some("close") | Some("list") | Some("pending")
+        | Some("approve") | Some("deny") => {}
+        Some(address) => return bind_to(config_path, address),
+    }
+
     let cfg = load(config_path)?;
     let addr = resolve_bind(&cfg.bind).map_err(|e| anyhow::anyhow!("{e}"))?;
     let base = format!("http://{addr}");
@@ -385,6 +396,105 @@ fn read_admin_token(data_dir: &std::path::Path) -> anyhow::Result<String> {
         )
     })?;
     Ok(raw.trim().to_string())
+}
+
+/// Explain the two sides of binding when `lymnal bind` is run with no argument.
+fn bind_help() -> anyhow::Result<()> {
+    println!("`lymnal bind` connects two devices.\n");
+    println!("On the machine with the files (the server), run one of these:");
+    println!("  lymnal bind open              Accept a device, then approve it when it appears.");
+    println!("  lymnal bind seal              Approve the one device that is waiting.");
+    println!("  lymnal bind list              Show the devices waiting, with their four words.");
+    println!("  lymnal bind approve <name> [--guest]");
+    println!("  lymnal bind deny <name>");
+    println!("  lymnal bind close             Stop accepting devices.\n");
+    println!("On the other machine (the client), give it the server's address:");
+    println!("  lymnal bind <address>         Bind this device to that server, for example");
+    println!("                                lymnal bind 100.101.82.7:7749");
+    Ok(())
+}
+
+/// Bind this device to a server: request access, show the four-word phrase so
+/// you can confirm it matches the server, wait for approval, then save the
+/// connection to a small file that the app imports the next time it opens.
+fn bind_to(config_path: &std::path::Path, address: &str) -> anyhow::Result<()> {
+    let stored = address
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_end_matches('/')
+        .to_string();
+    let base = format!("http://{stored}");
+    let device = hostname();
+    let client = format!("lymnal/{}", env!("CARGO_PKG_VERSION"));
+    let phrase = lymnal::pairing::phrase_for(&device, &client);
+
+    println!("Requesting access to {stored} as \"{device}\".\n");
+    println!("  Your four words are:  {phrase}\n");
+    println!("Confirm they match the four words shown on the server, then approve this device");
+    println!("there (tap APPROVE in elyxr, or run `lymnal bind seal`). Waiting up to two minutes...");
+
+    let resp = ureq::post(&format!("{base}/v1/pair"))
+        .timeout(std::time::Duration::from_secs(130))
+        .send_json(serde_json::json!({ "device": device, "client": client }));
+    let body = match resp {
+        Ok(r) => r.into_json::<serde_json::Value>().unwrap_or_default(),
+        Err(ureq::Error::Status(code, r)) => {
+            let b: serde_json::Value = r.into_json().unwrap_or_default();
+            let msg = b
+                .get("message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("the server declined the request");
+            anyhow::bail!("{msg} (HTTP {code})");
+        }
+        Err(e) => anyhow::bail!(
+            "couldn't reach the server at {stored}: {e}. Is it turned on, and are both \
+             devices signed in to the same Tailscale network?"
+        ),
+    };
+    let token = body
+        .get("token")
+        .and_then(|t| t.as_str())
+        .ok_or_else(|| anyhow::anyhow!("the server approved the request but sent no access token."))?;
+
+    // The trove's own name makes a friendlier label than the raw address.
+    let name = ureq::get(&format!("{base}/v1/health"))
+        .timeout(std::time::Duration::from_secs(5))
+        .call()
+        .ok()
+        .and_then(|r| r.into_json::<serde_json::Value>().ok())
+        .and_then(|h| h.get("trove").and_then(|t| t.as_str()).map(str::to_string))
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| stored.clone());
+
+    // Hand the connection to the app. It reads this on its next launch, moves the
+    // token into the system keyring, and deletes the file.
+    let dir = config_path
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    std::fs::create_dir_all(&dir)?;
+    let handoff = serde_json::json!({ "token": token, "address": stored, "name": name });
+    std::fs::write(dir.join("pending-bind.json"), serde_json::to_vec_pretty(&handoff)?)?;
+
+    println!("\nConnected to {name}. Open elyxr to browse the trove.");
+    Ok(())
+}
+
+/// This machine's hostname, used as the device name when pairing.
+fn hostname() -> String {
+    if let Ok(out) = std::process::Command::new("hostname").output() {
+        if out.status.success() {
+            let h = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !h.is_empty() {
+                return h;
+            }
+        }
+    }
+    std::fs::read_to_string("/etc/hostname")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "device".to_string())
 }
 
 fn admin_get(base: &str, token: &str, path: &str) -> anyhow::Result<serde_json::Value> {
