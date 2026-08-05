@@ -265,9 +265,11 @@ fn find_repo(config_path: &std::path::Path) -> anyhow::Result<std::path::PathBuf
         }
     }
     if let Ok(home) = std::env::var("HOME") {
-        let p = std::path::Path::new(&home).join("Elyxr");
-        if p.join("elyxr.sh").exists() {
-            return Ok(p);
+        for name in ["elyxr", "Elyxr"] {
+            let p = std::path::Path::new(&home).join(name);
+            if p.join("elyxr.sh").exists() {
+                return Ok(p);
+            }
         }
     }
     anyhow::bail!(

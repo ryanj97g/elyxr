@@ -26,8 +26,8 @@ internet, no port forwarding.
 On each device (Ubuntu / Zorin / Debian):
 
 ```sh
-git clone https://github.com/ryanj97g/Elyxr.git
-cd Elyxr
+git clone https://github.com/ryanj97g/elyxr.git
+cd elyxr
 ./elyxr.sh
 ```
 
