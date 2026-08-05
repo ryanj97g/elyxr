@@ -93,11 +93,13 @@ class SessionController extends ChangeNotifier {
     _serverName = _prefs.getString('serverName');
 
     if (_token == null || _serverAddress == null) {
+      await _syncLink(); // no pairing: make sure lymnal isn't left as an agent
       _setStatus(LinkStatus.firstRun);
       return;
     }
     _client = _factory(_baseUrl(_serverAddress!), token: _token);
     await refresh();
+    await _syncLink();
     _startPolling();
   }
 
@@ -132,6 +134,35 @@ class SessionController extends ChangeNotifier {
     } catch (_) {
       // A malformed hand-off file must never block startup.
     }
+  }
+
+  /// Keep ~/.config/lymnal/link.json in step with the current pairing. The
+  /// lymnal background service reads it to know this device is a client and
+  /// which server to stay connected to — that's what keeps the device updated
+  /// with the app closed. When the contents change, nudge lymnal to re-read.
+  Future<void> _syncLink() async {
+    final home = Platform.environment['HOME'];
+    if (home == null) return;
+    final f = File('$home/.config/lymnal/link.json');
+    try {
+      if (_token == null || _serverAddress == null) {
+        if (await f.exists()) {
+          await f.delete();
+          await Process.run('systemctl', ['--user', 'restart', 'lymnal.service']);
+        }
+        return;
+      }
+      final content = jsonEncode({
+        'server': _serverAddress,
+        'token': _token,
+        'name': _serverName ?? _serverAddress,
+      });
+      final existing = await f.exists() ? await f.readAsString() : null;
+      if (existing == content) return; // already current — don't restart lymnal
+      await f.parent.create(recursive: true);
+      await f.writeAsString(content);
+      await Process.run('systemctl', ['--user', 'restart', 'lymnal.service']);
+    } catch (_) {}
   }
 
   /// Re-check the server every so often while paired, so a change on the server
@@ -224,6 +255,7 @@ class SessionController extends ChangeNotifier {
     await _prefs.setString('serverName', _serverName!);
     _client = _factory(_baseUrl(address), token: _token);
     await refresh();
+    await _syncLink(); // let the lymnal service start keeping this device updated
   }
 
   /// Forget this server: delete the token, drop the pairing, and return to
@@ -238,6 +270,7 @@ class SessionController extends ChangeNotifier {
     _serverName = null;
     _client = null;
     _health = null;
+    await _syncLink(); // removes link.json and returns lymnal to serving
     _setStatus(LinkStatus.firstRun);
   }
 

@@ -2,8 +2,6 @@
 // the dark desk, and chooses between first run and the connected home from the
 // session's link status.
 
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -73,7 +71,6 @@ class _Root extends StatefulWidget {
 class _RootState extends State<_Root> {
   bool _openedOnce = false;
   bool _serverTried = false;
-  AppMode? _roleApplied;
   LymnalClient? _dragClient;
 
   @override
@@ -90,20 +87,6 @@ class _RootState extends State<_Root> {
       DragOut.useClient(session.client);
     }
 
-    // One owner per device for the trove folder: lymnal serves it in server
-    // mode, the mount owns it in client mode. Turn the lymnal service on with
-    // server mode and off with client mode so the two never fight over the same
-    // path (they're the same path on every device — ~/Desktop/trove).
-    if (_roleApplied != settings.appMode) {
-      _roleApplied = settings.appMode;
-      final serverMode = settings.appMode == AppMode.server;
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        try {
-          await Process.run('systemctl',
-              ['--user', serverMode ? 'enable' : 'disable', '--now', 'lymnal.service']);
-        } catch (_) {}
-      });
-    }
 
     // Server mode connects to the local lymnal admin surface with the
     // machine-local admin token.

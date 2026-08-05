@@ -362,7 +362,7 @@ fn announce_update_to_clients(config_path: &std::path::Path) -> anyhow::Result<(
 
 /// Find the elyxr repo: first the path the installer recorded next to the
 /// config, then the conventional `~/elyxr`.
-fn find_repo(config_path: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
+pub(crate) fn find_repo(config_path: &std::path::Path) -> anyhow::Result<std::path::PathBuf> {
     if let Some(dir) = config_path.parent() {
         if let Ok(s) = std::fs::read_to_string(dir.join("repo.path")) {
             let p = std::path::PathBuf::from(s.trim());
@@ -471,6 +471,10 @@ fn bind_to(config_path: &std::path::Path, address: &str) -> anyhow::Result<()> {
     std::fs::create_dir_all(&dir)?;
     let handoff = serde_json::json!({ "token": token, "address": stored, "name": name });
     std::fs::write(dir.join("pending-bind.json"), serde_json::to_vec_pretty(&handoff)?)?;
+    // The service reads this to know it's a client: it stays connected to the
+    // server and keeps this device updated even when the app is closed.
+    let link = serde_json::json!({ "server": stored, "token": token, "name": name });
+    std::fs::write(dir.join("link.json"), serde_json::to_vec_pretty(&link)?)?;
 
     println!("\nConnected to {name}. Open elyxr to browse the trove.");
     Ok(())

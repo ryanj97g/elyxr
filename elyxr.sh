@@ -414,6 +414,15 @@ UNITEOF
   done_
 fi
 
+# If the elyxr window was open when this ran (for example the client agent
+# triggered the update in the background), restart it onto the fresh build so an
+# open window doesn't linger on the old version. Skipped when nothing's running.
+if [ "$APP" = 1 ] && [ -n "${APP_BIN:-}" ] && pgrep -f "$APP_BIN" >/dev/null 2>&1; then
+  pkill -f "$APP_BIN" 2>/dev/null || true
+  sleep 1
+  ( setsid "$APP_BIN" >/dev/null 2>&1 & ) 2>/dev/null || true
+fi
+
 splash
 echo
 echo "${GRN}elyxr is ready.${RST}"
