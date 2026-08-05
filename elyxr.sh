@@ -108,10 +108,6 @@ sh_() {
 # password. Admin rights are only needed the first time (system libraries) and
 # to migrate off any old system-wide setup and turn on boot-start.
 BIN_DIR="$HOME/.local/bin"
-# Was ~/.local/bin already on PATH? If not, this shell won't find `lymnal` until
-# a fresh login — we tell the user at the end so the migration feels seamless.
-PATH_HAD_BIN=0
-case ":$PATH:" in *":$BIN_DIR:"*) PATH_HAD_BIN=1 ;; esac
 
 SYS_PKGS=(build-essential pkg-config curl git ca-certificates fuse3 libfuse3-dev)
 [ "$APP" = 1 ] && SYS_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev)
@@ -340,7 +336,3 @@ if [ "$APP" = 1 ]; then
   echo "  Open it from your apps menu — search \"elyxr\"."
 fi
 echo "  Update anytime:  lymnal update"
-if [ "$PATH_HAD_BIN" = 0 ]; then
-  echo
-  echo "  ${CYN}First time only:${RST} open a new terminal so \"lymnal\" works."
-fi
