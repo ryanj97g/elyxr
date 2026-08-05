@@ -122,13 +122,32 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
       style: glass(18, p.bright),
       child: Padding(
         padding: const EdgeInsets.all(22),
-        child: switch (_phase) {
-          _Phase.discovering => _centered(p, 'LOOKING FOR A SERVER ON THE TAILNET…'),
-          _Phase.chooseServer => _chooseServer(p),
-          _Phase.noneFound => _noneFound(p),
-          _Phase.waiting => _waiting(p),
-          _Phase.error => _error(p),
-        },
+        child: Column(
+          children: [
+            Expanded(
+              child: switch (_phase) {
+                _Phase.discovering => _centered(p, 'LOOKING FOR A SERVER ON THE TAILNET…'),
+                _Phase.chooseServer => _chooseServer(p),
+                _Phase.noneFound => _noneFound(p),
+                _Phase.waiting => _waiting(p),
+                _Phase.error => _error(p),
+              },
+            ),
+            // This device can be the server instead of a client — the way out
+            // of the first-run screen when it's the machine holding the files.
+            if (_phase != _Phase.waiting)
+              GestureDetector(
+                onTap: () =>
+                    context.read<SettingsController>().appMode = AppMode.server,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text('THIS DEVICE IS THE SERVER ▸',
+                      style: chassis(10, p.mid, spacing: 0.1)),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

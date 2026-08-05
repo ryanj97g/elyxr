@@ -1,6 +1,8 @@
-// The Server area (§09), present in server mode only — lymnal needs no
-// interface of its own. Service state, pending requests and approved devices,
-// trove location, editable space limits, and recent problems.
+// The Server controls, shown inside the tube when this device is in server
+// mode. lymnal needs no interface of its own; this manages the local service:
+// service state, pending requests and approved devices, trove space limits, and
+// recent problems. It talks to lymnal's local admin surface (connected by the
+// app root).
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,79 +11,75 @@ import '../api/admin_client.dart';
 import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/server.dart';
-import '../state/settings.dart';
 import '../util/format.dart';
 
-Future<void> openServerControls(BuildContext context) async {
-  final p = context.read<SettingsController>().palette;
-  final server = context.read<ServerController>();
-  await server.refresh();
-  if (!context.mounted) return;
-  await Navigator.of(context).push(MaterialPageRoute(
-    builder: (_) => ChangeNotifierProvider.value(
-      value: server,
-      child: _ServerScreen(palette: p),
-    ),
-  ));
+class ServerControls extends StatefulWidget {
+  final Palette palette;
+  const ServerControls({super.key, required this.palette});
+
+  @override
+  State<ServerControls> createState() => _ServerControlsState();
 }
 
-class _ServerScreen extends StatelessWidget {
-  final Palette palette;
-  const _ServerScreen({required this.palette});
+class _ServerControlsState extends State<ServerControls> {
+  @override
+  void initState() {
+    super.initState();
+    // Refresh once shown; the admin client is connected by the app root.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<ServerController>().refresh();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final p = palette;
+    final p = widget.palette;
     final server = context.watch<ServerController>();
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0B0D),
-      body: Center(
-        child: Container(
-          width: kAppWidth,
-          height: kAppHeight,
-          color: p.tubeBg,
-          child: Column(
+    return Column(
+      children: [
+        Container(
+          color: p.a,
+          padding: const EdgeInsets.fromLTRB(15, 10, 12, 10),
+          child: Row(
             children: [
-              Container(
-                color: p.a,
-                padding: const EdgeInsets.fromLTRB(15, 10, 12, 10),
-                child: Row(
-                  children: [
-                    Text('SERVER', style: chassis(22, p.ink, weight: FontWeight.w700, spacing: 0.2)),
-                    const Spacer(),
-                    GestureDetector(onTap: () => server.refresh(), child: Text('↻', style: glass(22, p.ink))),
-                    const SizedBox(width: 14),
-                    GestureDetector(onTap: () => Navigator.pop(context), child: Text('✕', style: glass(20, p.ink))),
-                  ],
-                ),
-              ),
-              if (server.error != null)
-                Container(
-                  width: double.infinity,
-                  color: const Color(0xFF2e2f18),
-                  padding: const EdgeInsets.all(8),
-                  child: Text(server.error!, style: glass(14, const Color(0xFFf5b942))),
-                ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(15, 12, 15, 20),
-                  children: [
-                    _service(p, server),
-                    const SizedBox(height: 16),
-                    _pairing(context, p, server),
-                    const SizedBox(height: 16),
-                    _devices(context, p, server),
-                    const SizedBox(height: 16),
-                    _space(context, p, server),
-                    const SizedBox(height: 16),
-                    _problems(p, server),
-                  ],
-                ),
-              ),
+              Text('SERVER',
+                  style: chassis(22, p.ink, weight: FontWeight.w700, spacing: 0.2)),
+              const Spacer(),
+              GestureDetector(
+                  onTap: () => server.refresh(),
+                  child: Text('↻', style: glass(22, p.ink))),
             ],
           ),
         ),
-      ),
+        if (!server.available)
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Text('Connecting to the local service…', style: glass(15, p.mid)),
+          ),
+        if (server.error != null)
+          Container(
+            width: double.infinity,
+            color: const Color(0xFF2e2f18),
+            padding: const EdgeInsets.all(8),
+            child: Text(server.error!, style: glass(14, const Color(0xFFf5b942))),
+          ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(15, 12, 15, 20),
+            children: [
+              _service(p, server),
+              const SizedBox(height: 16),
+              _pairing(context, p, server),
+              const SizedBox(height: 16),
+              _devices(context, p, server),
+              const SizedBox(height: 16),
+              _space(context, p, server),
+              const SizedBox(height: 16),
+              _problems(p, server),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
