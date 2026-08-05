@@ -33,9 +33,11 @@ cd elyxr
 That's the whole install. It sets everything up, puts **elyxr** in your
 applications menu, and starts the background service.
 
-- **Tailscale is set up for you.** If it isn't already on the machine, the
-  installer installs it and walks you through the one browser sign-in. Use the
-  **same account on every device** — that's what lets them find each other.
+- **Tailscale, set up as far as an installer can take it.** elyxr uses it to
+  connect your devices. If it isn't already on this one, the installer installs
+  it and walks you to the single step it can't do for you — signing in, once, in
+  your browser. Use the **same account on every device**; that's what lets them
+  find each other.
 - **You're asked for your password once**, for first-time setup. After that,
   updates never ask again.
 - Headless server with no screen? Add `--no-app` to skip the app.
