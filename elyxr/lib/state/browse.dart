@@ -440,8 +440,20 @@ class BrowseController extends ChangeNotifier {
     if (hasSelection || _query.isNotEmpty) {
       _dirty = true;
     } else {
-      refreshFolder();
+      _scheduleRefresh();
     }
+  }
+
+  Timer? _refreshDebounce;
+
+  /// One filesystem change fires several low-level events (create, then write),
+  /// so a single add can arrive as a burst. Coalesce a burst into one refresh
+  /// instead of firing several that race each other.
+  void _scheduleRefresh() {
+    _refreshDebounce?.cancel();
+    _refreshDebounce = Timer(const Duration(milliseconds: 150), () {
+      if (!hasSelection && _query.isEmpty) refreshFolder();
+    });
   }
 
   /// Apply any deferred updates once the list is idle again.
@@ -454,6 +466,7 @@ class BrowseController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _refreshDebounce?.cancel();
     _events?.cancel();
     super.dispose();
   }
