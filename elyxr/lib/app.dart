@@ -78,9 +78,10 @@ class _RootState extends State<_Root> {
     if (settings.appMode == AppMode.server && !_serverTried) {
       _serverTried = true;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        final token = await AdminClient.readToken(expandTilde('~/.local/share/lymnal'));
-        final addr = session.serverAddress ?? kKnownServer;
-        if (token != null) {
+        final dir = expandTilde('~/.local/share/lymnal');
+        final token = await AdminClient.readToken(dir);
+        final addr = await AdminClient.readAddress(dir) ?? session.serverAddress;
+        if (token != null && addr != null) {
           server.connect(AdminClient(baseUrl: 'http://$addr', adminToken: token));
         }
       });

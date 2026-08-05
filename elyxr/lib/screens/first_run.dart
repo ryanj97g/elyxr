@@ -14,6 +14,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../util/device.dart';
 import '../util/phrase.dart';
 import '../widgets/rails.dart';
 
@@ -32,7 +33,7 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
   String? _errorMessage;
   String? _phrase;
   final _addrCtrl = TextEditingController();
-  static const _deviceName = 'probookrjg';
+  final _deviceName = deviceName();
 
   @override
   void initState() {
@@ -197,7 +198,7 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
                     decoration: InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
-                      hintText: '100.127.82.110:7749',
+                      hintText: '100.x.x.x:7749',
                       hintStyle: glass(16, p.foot),
                     ),
                   ),

@@ -34,7 +34,7 @@ class PairResult {
 }
 
 class LymnalClient {
-  /// Base like `http://100.127.82.110:7749`.
+  /// Base like `http://100.x.y.z:7749` (the server's tailnet address).
   final String baseUrl;
   final String? token;
   final http.Client _http;

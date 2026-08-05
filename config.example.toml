@@ -1,10 +1,12 @@
-# Example lymnal config. Normally Elyxr writes this in server mode; it is
-# reproduced here for reference and local runs. Copy to
-# ~/.config/lymnal/config.toml and adjust `bind` to this machine's Tailscale
-# address. Tokens are never written by hand — they are minted at pairing and
-# stored as argon2id hashes.
+# Example lymnal config. The installer copies this to
+# ~/.config/lymnal/config.toml on first run. Tokens are never written by hand —
+# they are minted at pairing and stored as argon2id hashes.
 
-bind      = "100.127.82.110:7749"   # Tailscale address only — no LAN, no forwarding
+# "auto" binds this machine's own Tailscale address (found via `tailscale ip`),
+# so nothing is hardcoded and it follows the machine if its IP changes. You can
+# also set an explicit "100.x.y.z:7749" if you prefer. Tailscale only — no LAN,
+# no port forwarding.
+bind      = "auto:7749"
 data_dir  = "~/.local/share/lymnal"
 log_level = "info"                  # error|warn|info|debug|trace
 

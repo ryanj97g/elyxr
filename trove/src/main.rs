@@ -2,7 +2,7 @@
 //!
 //! Installed with Elyxr; the folder is a switch in Elyxr's settings. Reads the
 //! server address and bearer token from the environment (Elyxr passes them):
-//!   ELYXR_SERVER   host:port on the tailnet (default 100.127.82.110:7749)
+//!   ELYXR_SERVER   host:port on the tailnet (set by Elyxr once paired)
 //!   ELYXR_TOKEN    the bearer token (from the system keyring, via Elyxr)
 //!   ELYXR_MOUNT    where to mount (default ~/Elyxr)
 //!   ELYXR_CACHE    cache directory (default ~/.cache/trove)
@@ -13,7 +13,13 @@ use trove::{Cache, Lymnal, TroveFs};
 use fuser::MountOption;
 
 fn main() -> anyhow::Result<()> {
-    let server = std::env::var("ELYXR_SERVER").unwrap_or_else(|_| "100.127.82.110:7749".into());
+    let server = match std::env::var("ELYXR_SERVER") {
+        Ok(s) if !s.is_empty() => s,
+        _ => {
+            eprintln!("trove: no server address. Elyxr provides it via ELYXR_SERVER once paired.");
+            std::process::exit(1);
+        }
+    };
     let token = match std::env::var("ELYXR_TOKEN") {
         Ok(t) if !t.is_empty() => t,
         _ => {

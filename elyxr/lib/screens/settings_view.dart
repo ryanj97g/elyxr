@@ -9,6 +9,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../util/device.dart';
 import 'server_view.dart';
 
 class SettingsView extends StatelessWidget {
@@ -40,7 +41,7 @@ class SettingsView extends StatelessWidget {
                   children: [
                     Text('THIS DEVICE',
                         style: chassis(9, p.ink.withValues(alpha: 0.62), spacing: 0.16)),
-                    Text(session.serverName ?? 'probookrjg',
+                    Text(session.serverName ?? deviceName(),
                         style: mono(12, p.ink, weight: FontWeight.w600)),
                   ],
                 ),
