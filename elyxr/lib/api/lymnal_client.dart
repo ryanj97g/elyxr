@@ -69,9 +69,8 @@ class LymnalClient {
 
   Future<Health> health() async {
     // Health is used for discovery too, so give it a shorter fuse.
-    final r = await _send(() => _http
-        .get(_uri('/v1/health'), headers: _headers())
-        .timeout(const Duration(seconds: 3)));
+    final r = await _send(() => _http.get(_uri('/v1/health'), headers: _headers()),
+        deadline: const Duration(seconds: 3));
     return Health.fromJson(_ok(r));
   }
 
@@ -79,13 +78,12 @@ class LymnalClient {
     // Pairing blocks until a person approves (up to 120s), so it needs a long
     // fuse of its own rather than the default request timeout.
     final r = await _send(
-      () => _http
-          .post(
-            _uri('/v1/pair'),
-            headers: _headers(json: true),
-            body: jsonEncode({'device': device, 'client': client}),
-          )
-          .timeout(const Duration(seconds: 130)),
+      () => _http.post(
+        _uri('/v1/pair'),
+        headers: _headers(json: true),
+        body: jsonEncode({'device': device, 'client': client}),
+      ),
+      deadline: const Duration(seconds: 130),
     );
     return PairResult.fromJson(_ok(r));
   }
@@ -353,9 +351,13 @@ class LymnalClient {
 
   /// Run a request, turning the network faults lymnal can't report into a
   /// [ConnectionError] with the right fault.
-  Future<http.Response> _send(Future<http.Response> Function() run) async {
+  Future<http.Response> _send(Future<http.Response> Function() run,
+      {Duration? deadline}) async {
     try {
-      return await run();
+      // Every request gets a deadline. Without one, a request over a stale
+      // connection (e.g. after the server restarts) hangs forever, which the UI
+      // shows as a permanent "READING…". health and pair pass their own.
+      return await run().timeout(deadline ?? timeout);
     } on TimeoutException {
       throw const ConnectionError(ConnectionFault.unreachable);
     } on SocketException catch (e) {
