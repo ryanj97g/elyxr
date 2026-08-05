@@ -216,6 +216,7 @@ class BrowseController extends ChangeNotifier {
       _fault = e.fault;
       // Nudge the global link status so the whole app reflects it.
       unawaited(session.refresh());
+      _scheduleRetry();
     } on LymnalError catch (e) {
       // A folder that no longer exists offers to go up (§03).
       _state = e.code == 'NOT_FOUND' ? FolderState.gone : FolderState.ready;
@@ -464,9 +465,21 @@ class BrowseController extends ChangeNotifier {
     }
   }
 
+  /// After a connection error, keep re-attempting the load so the list recovers
+  /// on its own once the server is reachable again (e.g. after it restarts),
+  /// instead of sitting on the offline notice until the person navigates.
+  Timer? _retry;
+  void _scheduleRetry() {
+    _retry?.cancel();
+    _retry = Timer(const Duration(seconds: 4), () {
+      if (_state == FolderState.offline) _load();
+    });
+  }
+
   @override
   void dispose() {
     _refreshDebounce?.cancel();
+    _retry?.cancel();
     _events?.cancel();
     super.dispose();
   }
