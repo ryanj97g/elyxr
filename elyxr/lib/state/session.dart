@@ -4,6 +4,8 @@
 // server's address and name are ordinary prefs. First run is simply "no token
 // yet" (§08); forgetting a server returns here (§10).
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -93,6 +95,24 @@ class SessionController extends ChangeNotifier {
     }
     _client = _factory(_baseUrl(_serverAddress!), token: _token);
     await refresh();
+    _startPolling();
+  }
+
+  /// Re-check the server every so often while paired, so a change on the server
+  /// — including it moving to a newer build — is noticed live rather than only
+  /// at app start. Cheap: one small health call.
+  Timer? _poll;
+  void _startPolling() {
+    _poll?.cancel();
+    _poll = Timer.periodic(const Duration(seconds: 45), (_) {
+      if (_client != null) refresh();
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
   }
 
   /// Re-check the server. Keeps the folder you were in on failure; the app
