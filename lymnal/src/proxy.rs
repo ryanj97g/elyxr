@@ -186,8 +186,15 @@ async fn upload_commit(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>)
             px.held.lock().unwrap().remove(&p.path);
             Json(resp).into_response()
         }
-        // Couldn't reach the trove: it stays held, the pusher will keep trying,
-        // and the save still reads as done so the user isn't left hanging.
+        // The trove refused it (full, denied, …): don't queue it, drop the limbo
+        // copy, and surface the coded error so the save doesn't look done.
+        Ok(Err(PushErr::Rejected(parts))) => {
+            px.limbo.drop(&p.path);
+            px.held.lock().unwrap().remove(&p.path);
+            parts.into_response()
+        }
+        // Couldn't reach the trove: it stays held, the pusher keeps trying, and
+        // the save still reads as done so the user isn't left hanging.
         _ => Json(json!({ "path": p.path, "held": true })).into_response(),
     }
 }
@@ -198,18 +205,44 @@ async fn reconcile(State(px): State<Arc<Proxy>>) -> Response {
     Json(json!({ "held": still_held })).into_response()
 }
 
+/// Why a push to the trove failed.
+enum PushErr {
+    /// The trove couldn't be reached — keep the file held and retry.
+    Unreachable,
+    /// The trove answered with a refusal (full, denied, …) — don't queue it,
+    /// surface the coded error to whoever's waiting.
+    Rejected(Parts),
+}
+
+fn push_map(e: ureq::Error) -> PushErr {
+    match e {
+        ureq::Error::Transport(_) => PushErr::Unreachable,
+        ureq::Error::Status(_, _) => PushErr::Rejected(ureq_err_parts(e)),
+    }
+}
+
 /// Push a whole file to the trove with the upload protocol (init, chunks,
-/// commit). Blocking; call inside spawn_blocking.
-fn remote_upload(remote: &str, token: &str, path: &str, bytes: &[u8], mtime: i64) -> Result<Value, ()> {
+/// commit). Blocking; call inside spawn_blocking. A transport failure is
+/// `Unreachable` (retryable); an HTTP refusal is `Rejected` (surface it).
+fn remote_upload(
+    remote: &str,
+    token: &str,
+    path: &str,
+    bytes: &[u8],
+    mtime: i64,
+) -> Result<Value, PushErr> {
     let auth = format!("Bearer {token}");
     let base = format!("http://{remote}");
     let init: Value = ureq::post(&format!("{base}/v1/upload/init"))
         .set("Authorization", &auth)
         .send_json(json!({ "path": path, "size_bytes": bytes.len(), "mtime": mtime }))
-        .map_err(|_| ())?
+        .map_err(push_map)?
         .into_json()
-        .map_err(|_| ())?;
-    let id = init.get("upload_id").and_then(|v| v.as_str()).ok_or(())?;
+        .map_err(|_| PushErr::Unreachable)?;
+    let id = init
+        .get("upload_id")
+        .and_then(|v| v.as_str())
+        .ok_or(PushErr::Unreachable)?;
     let chunk = init
         .get("chunk_bytes")
         .and_then(|v| v.as_u64())
@@ -224,15 +257,15 @@ fn remote_upload(remote: &str, token: &str, path: &str, bytes: &[u8], mtime: i64
             .set("Authorization", &auth)
             .set("Content-Range", &range)
             .send_bytes(&bytes[offset..end])
-            .map_err(|_| ())?;
+            .map_err(push_map)?;
         offset = end;
     }
     ureq::post(&format!("{base}/v1/upload/{id}/commit"))
         .set("Authorization", &auth)
         .send_json(json!({}))
-        .map_err(|_| ())?
+        .map_err(push_map)?
         .into_json()
-        .map_err(|_| ())
+        .map_err(|_| PushErr::Unreachable)
 }
 
 // --- reads & pass-through ----------------------------------------------------
