@@ -16,7 +16,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::{
     body::{Body, Bytes},
@@ -47,16 +47,32 @@ pub struct Proxy {
     pending: Mutex<HashMap<String, Pending>>,
     /// Paths currently held (unsynced), with the mtime to push them under.
     held: Mutex<HashMap<String, i64>>,
+    /// For ordinary calls (a list, a stat): fail the connect fast and cap the
+    /// whole call, so a slow or vanished trove can't hang the request forever
+    /// and exhaust the blocking pool — the cause of the app sitting on "READING…".
+    quick: ureq::Agent,
+    /// For long transfers (downloads, the event stream, pushes): fail the connect
+    /// fast but put no cap on the body, which may legitimately run for a while.
+    stream: ureq::Agent,
 }
 
 impl Proxy {
     pub fn new(remote: String, token: String, limbo: Limbo) -> Proxy {
+        let quick = ureq::AgentBuilder::new()
+            .timeout_connect(Duration::from_secs(5))
+            .timeout(Duration::from_secs(30))
+            .build();
+        let stream = ureq::AgentBuilder::new()
+            .timeout_connect(Duration::from_secs(5))
+            .build();
         Proxy {
             remote,
             token,
             limbo,
             pending: Mutex::new(HashMap::new()),
             held: Mutex::new(HashMap::new()),
+            quick,
+            stream,
         }
     }
 
@@ -80,7 +96,7 @@ impl Proxy {
                 self.held.lock().unwrap().remove(&path);
                 continue;
             };
-            if remote_upload(&self.remote, &self.token, &path, &bytes, mtime).is_ok() {
+            if remote_upload(&self.stream, &self.remote, &self.token, &path, &bytes, mtime).is_ok() {
                 self.limbo.set_held(&path, false); // now passing-through
                 self.held.lock().unwrap().remove(&path);
             }
@@ -170,13 +186,14 @@ async fn upload_commit(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>)
     px.held.lock().unwrap().insert(p.path.clone(), p.mtime);
 
     // Try to push it right now.
+    let agent = px.stream.clone();
     let remote = px.remote.clone();
     let token = px.token.clone();
     let path = p.path.clone();
     let buf = p.buf.clone();
     let mtime = p.mtime;
     let pushed = tokio::task::spawn_blocking(move || {
-        remote_upload(&remote, &token, &path, &buf, mtime)
+        remote_upload(&agent, &remote, &token, &path, &buf, mtime)
     })
     .await;
 
@@ -225,6 +242,7 @@ fn push_map(e: ureq::Error) -> PushErr {
 /// commit). Blocking; call inside spawn_blocking. A transport failure is
 /// `Unreachable` (retryable); an HTTP refusal is `Rejected` (surface it).
 fn remote_upload(
+    agent: &ureq::Agent,
     remote: &str,
     token: &str,
     path: &str,
@@ -233,7 +251,8 @@ fn remote_upload(
 ) -> Result<Value, PushErr> {
     let auth = format!("Bearer {token}");
     let base = format!("http://{remote}");
-    let init: Value = ureq::post(&format!("{base}/v1/upload/init"))
+    let init: Value = agent
+        .post(&format!("{base}/v1/upload/init"))
         .set("Authorization", &auth)
         .send_json(json!({ "path": path, "size_bytes": bytes.len(), "mtime": mtime }))
         .map_err(push_map)?
@@ -253,14 +272,16 @@ fn remote_upload(
     while offset < total {
         let end = (offset + chunk).min(total);
         let range = format!("bytes {offset}-{}/{total}", end - 1);
-        ureq::put(&format!("{base}/v1/upload/{id}"))
+        agent
+            .put(&format!("{base}/v1/upload/{id}"))
             .set("Authorization", &auth)
             .set("Content-Range", &range)
             .send_bytes(&bytes[offset..end])
             .map_err(push_map)?;
         offset = end;
     }
-    ureq::post(&format!("{base}/v1/upload/{id}/commit"))
+    agent
+        .post(&format!("{base}/v1/upload/{id}/commit"))
         .set("Authorization", &auth)
         .send_json(json!({}))
         .map_err(push_map)?
@@ -312,9 +333,10 @@ async fn forward(State(px): State<Arc<Proxy>>, req: Request) -> Response {
     };
     let url = px.url(uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/"));
     let auth = px.auth();
+    let agent = px.quick.clone();
 
     let sent = tokio::task::spawn_blocking(move || {
-        let mut r = ureq::request(method.as_str(), &url).set("Authorization", &auth);
+        let mut r = agent.request(method.as_str(), &url).set("Authorization", &auth);
         if let Some(ct) = &content_type {
             r = r.set("Content-Type", ct);
         }
@@ -353,8 +375,9 @@ async fn download(State(px): State<Arc<Proxy>>, req: Request) -> Response {
     // it isn't here — limbo always caches the complete copy.
     let url = px.url(uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/v1/download"));
     let auth = px.auth();
+    let agent = px.stream.clone();
     let fetched = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, Parts> {
-        match ureq::get(&url).set("Authorization", &auth).call() {
+        match agent.get(&url).set("Authorization", &auth).call() {
             Ok(r) => {
                 let mut buf = Vec::new();
                 std::io::Read::read_to_end(&mut r.into_reader(), &mut buf).map_err(|_| io_parts())?;
@@ -378,10 +401,11 @@ async fn download(State(px): State<Arc<Proxy>>, req: Request) -> Response {
 async fn events(State(px): State<Arc<Proxy>>) -> Response {
     let url = px.url("/v1/events");
     let auth = px.auth();
+    let agent = px.stream.clone();
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Bytes, std::io::Error>>(16);
 
     tokio::task::spawn_blocking(move || {
-        let resp = match ureq::get(&url).set("Authorization", &auth).call() {
+        let resp = match agent.get(&url).set("Authorization", &auth).call() {
             Ok(r) => r,
             Err(_) => return,
         };

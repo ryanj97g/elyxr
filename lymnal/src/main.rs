@@ -109,11 +109,16 @@ async fn run_proxy(link: agent::Link) -> anyhow::Result<()> {
 
     let app = lymnal::proxy::router(proxy);
     let addr = "127.0.0.1:7749";
-    let listener = match tokio::net::TcpListener::bind(addr).await {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("lymnal can't open the local proxy on {addr}: {e}");
-            std::process::exit(1);
+    // Retry the bind rather than exit — right after a restart the port can still
+    // be in TIME_WAIT. Exiting here would take down the update-watcher too and
+    // strand the device for the service's 5-minute restart window.
+    let listener = loop {
+        match tokio::net::TcpListener::bind(addr).await {
+            Ok(l) => break l,
+            Err(e) => {
+                tracing::warn!(%addr, error = %e, "proxy can't bind yet — retrying in 3s");
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            }
         }
     };
     tracing::info!(%addr, remote = %link.server, "client proxy listening");
