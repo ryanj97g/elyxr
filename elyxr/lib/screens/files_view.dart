@@ -549,17 +549,23 @@ class _Row extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
+      // A single click selects (so a folder can be selected to delete/move,
+      // like any file); a folder opens on double-click and a file previews —
+      // the standard file-manager convention.
       onTap: () {
+        if (HardwareKeyboard.instance.isShiftPressed) {
+          browse.selectRange(index);
+        } else {
+          browse.toggle(index);
+        }
+      },
+      onDoubleTap: () {
         if (isDir) {
           browse.open(entry.name.isEmpty
               ? browse.path
               : (browse.path.isEmpty ? entry.name : '${browse.path}/${entry.name}'));
         } else {
-          if (HardwareKeyboard.instance.isShiftPressed) {
-            browse.selectRange(index);
-          } else {
-            browse.toggle(index);
-          }
+          openPreview(context, browse.entries, index);
         }
       },
       // Drag a file sideways to pull it out of the window; where you drop it is
@@ -572,7 +578,6 @@ class _Row extends StatelessWidget {
                   : '${browse.path}/${entry.name}';
               DragOut.begin(path, entry.name);
             },
-      onDoubleTap: isDir ? null : () => openPreview(context, browse.entries, index),
       onLongPress: () => _renameEntry(context, browse, p, entry.name),
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 6, vertical: density.pad),
@@ -678,11 +683,14 @@ class _FileGrid extends StatelessWidget {
           final selected = browse.selection.contains(e.name);
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () {
+            // Single click selects; double-click opens a folder or previews a
+            // file — so a folder can be selected to delete/move like any file.
+            onTap: () => browse.toggle(i),
+            onDoubleTap: () {
               if (e.isDir) {
                 browse.open(browse.path.isEmpty ? e.name : '${browse.path}/${e.name}');
               } else {
-                browse.toggle(i);
+                openPreview(context, browse.entries, i);
               }
             },
             child: Container(
