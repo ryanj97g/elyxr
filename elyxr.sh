@@ -241,13 +241,15 @@ if [ "$TAILSCALE" = 1 ]; then
 fi
 
 # --- build tools ------------------------------------------------------------
-# lymnal and trove need a C toolchain (for rusqlite and blake3) and FUSE. The
-# app adds the GTK and related build dependencies unless you pass --no-app.
+# lymnal needs a C toolchain (for rusqlite and blake3). The app adds the GTK and
+# related build dependencies unless you pass --no-app. FUSE is only for the
+# optional gate; it isn't checked here, so a machine without it still installs
+# elyxr fully — the gate just won't build.
 phase "build tools"
 if [ "${#BUILD_NEED[@]}" -gt 0 ]; then
   sh_ $SUDO apt-get install -y "${BUILD_NEED[@]}"
 fi
-command -v cc >/dev/null 2>&1 && pkg-config --exists fuse3
+command -v cc >/dev/null 2>&1
 done_
 
 # --- rust toolchain ---------------------------------------------------------
@@ -286,9 +288,17 @@ phase "building lymnal"
 sh_ cargo build --release -p lymnal
 done_
 
+# The gate (the optional file-browser mount) is best-effort: it's a Linux-only
+# FUSE extra, and a build failure must never block the app or an update. elyxr
+# works fully without it.
+GATE_BUILT=0
 phase "building gate"
-sh_ cargo build --release -p gate
-done_
+if sh_ cargo build --release -p gate; then
+  GATE_BUILT=1
+  done_
+else
+  printf '%s\n' "${DIM}skipped — the optional file-browser mount didn't build; elyxr works without it${RST}"
+fi
 
 if [ "$APP" = 1 ]; then
   phase "building the app"
@@ -317,7 +327,7 @@ install_if_changed() {  # $1 built, $2 dest — returns 0 if it (re)installed
 }
 LYMNAL_CHANGED=0
 if install_if_changed target/release/lymnal "$BIN_DIR/lymnal"; then LYMNAL_CHANGED=1; fi
-if install_if_changed target/release/gate   "$BIN_DIR/gate";   then :; fi
+if [ "$GATE_BUILT" = 1 ] && install_if_changed target/release/gate "$BIN_DIR/gate"; then :; fi
 rm -f "$BIN_DIR/trove"  # old name for the mount, now 'gate'
 # Ensure ~/.local/bin is on PATH now and in future login shells.
 case ":$PATH:" in *":$BIN_DIR:"*) ;; *) export PATH="$BIN_DIR:$PATH" ;; esac

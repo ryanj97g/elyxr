@@ -2,6 +2,8 @@
 // view inside the same tube, with the same scanlines and sweep. Numbered
 // sections, an inverted accent header, and HOLD ELYXR TO EXIT in the footer.
 
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -61,8 +63,9 @@ class SettingsView extends StatelessWidget {
                   const SizedBox(height: 16),
                 ],
                 // A client can also surface the trove as a real folder in its
-                // file manager (the optional gate mount). Off by default.
-                if (settings.appMode == AppMode.client) ...[
+                // file manager (the optional gate mount) — Linux only, since the
+                // gate is FUSE. Hidden where it can't run. Off by default.
+                if (settings.appMode == AppMode.client && Platform.isLinux) ...[
                   _section(p, 'FS', 'USE SYSTEM FILE BROWSER', _GateRow(palette: p)),
                   const SizedBox(height: 13),
                 ],
