@@ -1,0 +1,67 @@
+name: windows-build
+
+# Builds the Windows binaries on a runner that already has the C++ toolchain, so
+# no one needs Visual Studio on their own machine. Produces elyxr-windows.zip —
+# the app bundle plus lymnal.exe — as a downloadable artifact. This is the
+# factory the one-click installer and the self-update packages will build on;
+# for now it hands back a zip you can run directly.
+
+on:
+  push:
+    branches: [windows-client]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the build number is `git rev-list --count HEAD`
+          # (see lymnal/build.rs and the app's ELYXR_BUILD), which a shallow
+          # clone would report as 1.
+          fetch-depth: 0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build lymnal
+        run: cargo build --release -p lymnal
+
+      - name: Build the elyxr app
+        working-directory: elyxr
+        shell: pwsh
+        run: |
+          $build = (git rev-list --count HEAD).Trim()
+          $commit = (git rev-parse --short HEAD).Trim()
+          flutter config --enable-windows-desktop
+          # The repo only carries the Linux runner; scaffold the Windows one.
+          flutter create --platforms=windows .
+          flutter pub get
+          flutter build windows --release `
+            --dart-define=ELYXR_BUILD=$build `
+            --dart-define=ELYXR_COMMIT=$commit
+
+      - name: Package elyxr-windows.zip
+        shell: pwsh
+        run: |
+          $stage = "elyxr-windows"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          # The app: elyxr.exe plus its DLLs and data/ folder — the whole bundle
+          # has to stay together.
+          Copy-Item -Recurse elyxr\build\windows\x64\runner\Release\* $stage\
+          # lymnal alongside it (a standalone binary).
+          Copy-Item target\release\lymnal.exe $stage\
+          Compress-Archive -Path "$stage\*" -DestinationPath elyxr-windows.zip -Force
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: elyxr-windows
+          path: elyxr-windows.zip
+          if-no-files-found: error
