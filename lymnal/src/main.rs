@@ -95,6 +95,18 @@ async fn run_proxy(link: agent::Link) -> anyhow::Result<()> {
         link.token.clone(),
         limbo,
     ));
+    // Keep pushing anything stranded in limbo (a save made during a lapse) until
+    // it lands and can be unpinned.
+    let pusher = proxy.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(10));
+        loop {
+            tick.tick().await;
+            let p = pusher.clone();
+            let _ = tokio::task::spawn_blocking(move || p.retry_held()).await;
+        }
+    });
+
     let app = lymnal::proxy::router(proxy);
     let addr = "127.0.0.1:7749";
     let listener = match tokio::net::TcpListener::bind(addr).await {

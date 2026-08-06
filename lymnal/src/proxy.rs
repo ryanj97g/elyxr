@@ -2,27 +2,40 @@
 //!
 //! On a client, lymnal runs a small local HTTP server that the app (and the
 //! gate) talk to, and forwards every call to the remote trove — with limbo in
-//! front of it. Reads (`/v1/download`) are cached in limbo and served from there
-//! next time; everything else is forwarded straight through with the stored
-//! bearer token, so the app never holds a token itself and never talks to the
-//! remote directly.
+//! front of it.
 //!
-//! This is the plumbing only. Queuing an edit into limbo when the trove is
-//! unreachable — held work, sync-then-unpin — is the monitor's job and lands
-//! next.
+//!   reads  (`/v1/download`)  are cached in limbo and served from there next time.
+//!   writes (`/v1/upload/*`)  assemble into limbo, push to the trove, and unpin
+//!                            on success. If the trove is unreachable the file
+//!                            stays *held*, and a background pusher keeps trying
+//!                            until it lands — so "save and you're done" holds
+//!                            even through a connection lapse.
+//!   everything else          is forwarded straight through with the stored
+//!                            bearer token, so the app never holds a token and
+//!                            never talks to the remote directly.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{
     body::{Body, Bytes},
-    extract::{Request, State},
-    http::{header, HeaderMap, Method, StatusCode, Uri},
+    extract::{Path as AxPath, Request, State},
+    http::{header, StatusCode, Uri},
     response::{IntoResponse, Response},
-    routing::any,
-    Router,
+    routing::{any, post, put},
+    Json, Router,
 };
+use serde_json::{json, Value};
 
-use crate::limbo::Limbo;
+use crate::limbo::{Limbo, StoreErr};
+
+/// An upload being assembled locally before it's pushed to the trove.
+struct Pending {
+    path: String,
+    mtime: i64,
+    buf: Vec<u8>,
+}
 
 pub struct Proxy {
     /// host:port of the remote trove on the tailnet.
@@ -30,11 +43,21 @@ pub struct Proxy {
     /// The bearer token this device was approved with.
     token: String,
     limbo: Limbo,
+    /// Uploads mid-assembly, keyed by the id we handed the app.
+    pending: Mutex<HashMap<String, Pending>>,
+    /// Paths currently held (unsynced), with the mtime to push them under.
+    held: Mutex<HashMap<String, i64>>,
 }
 
 impl Proxy {
     pub fn new(remote: String, token: String, limbo: Limbo) -> Proxy {
-        Proxy { remote, token, limbo }
+        Proxy {
+            remote,
+            token,
+            limbo,
+            pending: Mutex::new(HashMap::new()),
+            held: Mutex::new(HashMap::new()),
+        }
     }
 
     fn auth(&self) -> String {
@@ -44,18 +67,177 @@ impl Proxy {
     fn url(&self, path_and_query: &str) -> String {
         format!("http://{}{}", self.remote, path_and_query)
     }
+
+    /// Retry every held file: push it to the trove, and unpin on success. Called
+    /// on a timer and whenever the app asks to reconcile. Returns how many are
+    /// still held afterwards.
+    pub fn retry_held(self: &Arc<Self>) -> usize {
+        let keys: Vec<String> = self.held.lock().unwrap().keys().cloned().collect();
+        for path in keys {
+            let mtime = self.held.lock().unwrap().get(&path).copied().unwrap_or_else(now);
+            let Some(bytes) = self.limbo.read(&path) else {
+                // The bytes are gone; drop the stale queue entry.
+                self.held.lock().unwrap().remove(&path);
+                continue;
+            };
+            if remote_upload(&self.remote, &self.token, &path, &bytes, mtime).is_ok() {
+                self.limbo.set_held(&path, false); // now passing-through
+                self.held.lock().unwrap().remove(&path);
+            }
+        }
+        self.held.lock().unwrap().len()
+    }
 }
 
 pub fn router(proxy: Arc<Proxy>) -> Router {
     Router::new()
         .route("/v1/download", any(download))
         .route("/v1/events", any(events))
+        .route("/v1/upload/init", post(upload_init))
+        .route("/v1/upload/:id", put(upload_chunk))
+        .route("/v1/upload/:id/commit", post(upload_commit))
+        .route("/v1/reconcile", post(reconcile))
         .fallback(forward)
         .with_state(proxy)
 }
 
-/// A trove-relative path from a `?path=` query, percent-decoded loosely (the
-/// values elyxr sends are simple). Used as the limbo cache key.
+fn now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+// --- uploads → limbo → trove -------------------------------------------------
+
+async fn upload_init(State(px): State<Arc<Proxy>>, Json(body): Json<Value>) -> Response {
+    let path = body.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    if path.is_empty() {
+        return coded(400, "BAD_PATH", "The upload needs a path.");
+    }
+    let mtime = body.get("mtime").and_then(|v| v.as_i64()).unwrap_or_else(now);
+    let id = format!("up_{}", ulid::Ulid::new());
+    px.pending
+        .lock()
+        .unwrap()
+        .insert(id.clone(), Pending { path, mtime, buf: Vec::new() });
+    Json(json!({ "upload_id": id, "chunk_bytes": 8 * 1024 * 1024 })).into_response()
+}
+
+async fn upload_chunk(
+    State(px): State<Arc<Proxy>>,
+    AxPath(id): AxPath<String>,
+    req: Request,
+) -> Response {
+    let offset = req
+        .headers()
+        .get(header::CONTENT_RANGE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(parse_range_start)
+        .unwrap_or(0) as usize;
+    let bytes = match axum::body::to_bytes(req.into_body(), usize::MAX).await {
+        Ok(b) => b,
+        Err(_) => return coded(400, "IO_ERROR", "The chunk couldn't be read."),
+    };
+    let mut pending = px.pending.lock().unwrap();
+    let Some(p) = pending.get_mut(&id) else {
+        return coded(404, "NOT_FOUND", "That upload isn't open.");
+    };
+    let end = offset + bytes.len();
+    if p.buf.len() < end {
+        p.buf.resize(end, 0);
+    }
+    p.buf[offset..end].copy_from_slice(&bytes);
+    Json(json!({ "received_bytes": p.buf.len(), "complete": false })).into_response()
+}
+
+async fn upload_commit(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>) -> Response {
+    let Some(p) = px.pending.lock().unwrap().remove(&id) else {
+        return coded(404, "NOT_FOUND", "That upload isn't open.");
+    };
+    // Hold the whole file in limbo first — it's the only copy until it lands.
+    match px.limbo.store(&p.path, &p.buf, true) {
+        Ok(()) => {}
+        Err(StoreErr::NoRoomHeldBlocks) => {
+            return coded(
+                507,
+                "LIMBO_FULL",
+                "Unsynced changes can't be dropped, and free space is low. Save them somewhere local, restore the lymnal bond, then retry the sync.",
+            );
+        }
+        Err(StoreErr::Io(_)) => return coded(500, "IO_ERROR", "The edit couldn't be saved locally."),
+    }
+    px.held.lock().unwrap().insert(p.path.clone(), p.mtime);
+
+    // Try to push it right now.
+    let remote = px.remote.clone();
+    let token = px.token.clone();
+    let path = p.path.clone();
+    let buf = p.buf.clone();
+    let mtime = p.mtime;
+    let pushed = tokio::task::spawn_blocking(move || {
+        remote_upload(&remote, &token, &path, &buf, mtime)
+    })
+    .await;
+
+    match pushed {
+        Ok(Ok(resp)) => {
+            px.limbo.set_held(&p.path, false); // synced → passing-through
+            px.held.lock().unwrap().remove(&p.path);
+            Json(resp).into_response()
+        }
+        // Couldn't reach the trove: it stays held, the pusher will keep trying,
+        // and the save still reads as done so the user isn't left hanging.
+        _ => Json(json!({ "path": p.path, "held": true })).into_response(),
+    }
+}
+
+/// `/v1/reconcile` — the refresh control. Push anything stranded in limbo now.
+async fn reconcile(State(px): State<Arc<Proxy>>) -> Response {
+    let still_held = px.retry_held();
+    Json(json!({ "held": still_held })).into_response()
+}
+
+/// Push a whole file to the trove with the upload protocol (init, chunks,
+/// commit). Blocking; call inside spawn_blocking.
+fn remote_upload(remote: &str, token: &str, path: &str, bytes: &[u8], mtime: i64) -> Result<Value, ()> {
+    let auth = format!("Bearer {token}");
+    let base = format!("http://{remote}");
+    let init: Value = ureq::post(&format!("{base}/v1/upload/init"))
+        .set("Authorization", &auth)
+        .send_json(json!({ "path": path, "size_bytes": bytes.len(), "mtime": mtime }))
+        .map_err(|_| ())?
+        .into_json()
+        .map_err(|_| ())?;
+    let id = init.get("upload_id").and_then(|v| v.as_str()).ok_or(())?;
+    let chunk = init
+        .get("chunk_bytes")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(8 * 1024 * 1024) as usize;
+
+    let total = bytes.len();
+    let mut offset = 0usize;
+    while offset < total {
+        let end = (offset + chunk).min(total);
+        let range = format!("bytes {offset}-{}/{total}", end - 1);
+        ureq::put(&format!("{base}/v1/upload/{id}"))
+            .set("Authorization", &auth)
+            .set("Content-Range", &range)
+            .send_bytes(&bytes[offset..end])
+            .map_err(|_| ())?;
+        offset = end;
+    }
+    ureq::post(&format!("{base}/v1/upload/{id}/commit"))
+        .set("Authorization", &auth)
+        .send_json(json!({}))
+        .map_err(|_| ())?
+        .into_json()
+        .map_err(|_| ())
+}
+
+// --- reads & pass-through ----------------------------------------------------
+
+/// A trove-relative path from a `?path=` query, percent-decoded loosely.
 fn path_param(uri: &Uri) -> Option<String> {
     let q = uri.query()?;
     for pair in q.split('&') {
@@ -72,9 +254,7 @@ fn percent_decode(s: &str) -> String {
     let mut it = bytes.bytes();
     while let Some(b) = it.next() {
         if b == b'%' {
-            let h = it.next();
-            let l = it.next();
-            if let (Some(h), Some(l)) = (h, l) {
+            if let (Some(h), Some(l)) = (it.next(), it.next()) {
                 if let (Some(h), Some(l)) = ((h as char).to_digit(16), (l as char).to_digit(16)) {
                     out.push((h * 16 + l) as u8);
                     continue;
@@ -87,24 +267,15 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// Forward any request to the remote trove verbatim, injecting the bearer token,
-/// and hand the response back. Used for everything except download and events.
+/// Forward any request to the remote trove verbatim, injecting the bearer token.
 async fn forward(State(px): State<Arc<Proxy>>, req: Request) -> Response {
     let method = req.method().clone();
     let uri = req.uri().clone();
-    let content_type = req
-        .headers()
-        .get(header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_owned);
-    let content_range = req
-        .headers()
-        .get(header::CONTENT_RANGE)
-        .and_then(|v| v.to_str().ok())
-        .map(str::to_owned);
+    let content_type = header_str(&req, header::CONTENT_TYPE);
+    let content_range = header_str(&req, header::CONTENT_RANGE);
     let body = match axum::body::to_bytes(req.into_body(), usize::MAX).await {
         Ok(b) => b,
-        Err(_) => return (StatusCode::BAD_REQUEST, "unreadable request body").into_response(),
+        Err(_) => return coded(400, "IO_ERROR", "The request body couldn't be read."),
     };
     let url = px.url(uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/"));
     let auth = px.auth();
@@ -117,11 +288,7 @@ async fn forward(State(px): State<Arc<Proxy>>, req: Request) -> Response {
         if let Some(cr) = &content_range {
             r = r.set("Content-Range", cr);
         }
-        let resp = if body.is_empty() {
-            r.call()
-        } else {
-            r.send_bytes(&body)
-        };
+        let resp = if body.is_empty() { r.call() } else { r.send_bytes(&body) };
         ureq_to_parts(resp)
     })
     .await;
@@ -132,40 +299,29 @@ async fn forward(State(px): State<Arc<Proxy>>, req: Request) -> Response {
     }
 }
 
-/// `/v1/download` — serve from limbo when cached, otherwise fetch the whole file
-/// from the trove, cache it (passing-through), and serve. Honors a `Range:
-/// bytes=N-` request by slicing, so the app's resume path keeps working.
 async fn download(State(px): State<Arc<Proxy>>, req: Request) -> Response {
     let uri = req.uri().clone();
     let range_from = req
         .headers()
         .get(header::RANGE)
         .and_then(|v| v.to_str().ok())
-        .and_then(parse_range_from);
+        .and_then(parse_range_start);
 
     let Some(key) = path_param(&uri) else {
-        return (StatusCode::BAD_REQUEST, "missing path").into_response();
+        return coded(400, "BAD_PATH", "The download needs a path.");
     };
 
-    // Cache hit.
     if let Some(bytes) = px.limbo.read(&key) {
         return ranged(bytes, range_from);
     }
 
-    // Miss — fetch the whole file from the trove and cache it.
-    let url = px.url(uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/"));
+    let url = px.url(&format!("/v1/download?path={}", key.replace('/', "%2f")));
     let auth = px.auth();
     let fetched = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, Parts> {
-        // Fetch the whole file (no Range) so limbo holds the complete copy.
-        let base = url.split('&').next().unwrap_or(&url);
-        let clean = base.strip_suffix('?').unwrap_or(base).to_string();
-        // Keep only path=..., dropping any range-ish extras the app added.
-        let resp = ureq::get(&clean).set("Authorization", &auth).call();
-        match resp {
+        match ureq::get(&url).set("Authorization", &auth).call() {
             Ok(r) => {
                 let mut buf = Vec::new();
-                std::io::Read::read_to_end(&mut r.into_reader(), &mut buf)
-                    .map_err(|_| io_parts())?;
+                std::io::Read::read_to_end(&mut r.into_reader(), &mut buf).map_err(|_| io_parts())?;
                 Ok(buf)
             }
             Err(e) => Err(ureq_err_parts(e)),
@@ -175,8 +331,7 @@ async fn download(State(px): State<Arc<Proxy>>, req: Request) -> Response {
 
     match fetched {
         Ok(Ok(bytes)) => {
-            // Best-effort cache; serving still works if the store is refused.
-            let _ = px.limbo.store(&key, &bytes, false);
+            let _ = px.limbo.store(&key, &bytes, false); // passing-through
             ranged(bytes, range_from)
         }
         Ok(Err(parts)) => parts.into_response(),
@@ -184,8 +339,6 @@ async fn download(State(px): State<Arc<Proxy>>, req: Request) -> Response {
     }
 }
 
-/// `/v1/events` — forward the trove's server-sent event stream so live changes
-/// reach the app. Read on a blocking thread, piped into the response body.
 async fn events(State(px): State<Arc<Proxy>>) -> Response {
     let url = px.url("/v1/events");
     let auth = px.auth();
@@ -203,7 +356,7 @@ async fn events(State(px): State<Arc<Proxy>>) -> Response {
                 Ok(0) => break,
                 Ok(n) => {
                     if tx.blocking_send(Ok(Bytes::copy_from_slice(&buf[..n]))).is_err() {
-                        break; // the app disconnected
+                        break;
                     }
                 }
                 Err(_) => break,
@@ -220,7 +373,11 @@ async fn events(State(px): State<Arc<Proxy>>) -> Response {
         .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }
 
-// --- turning a blocking ureq response into an axum response ------------------
+// --- ureq → axum plumbing ----------------------------------------------------
+
+fn header_str(req: &Request, name: header::HeaderName) -> Option<String> {
+    req.headers().get(name).and_then(|v| v.to_str().ok()).map(str::to_owned)
+}
 
 struct Parts {
     status: u16,
@@ -253,8 +410,6 @@ fn ureq_to_parts(resp: Result<ureq::Response, ureq::Error>) -> Parts {
     }
 }
 
-/// A ureq error becomes the coded body the app already understands, so an
-/// unreachable trove reads as a connection fault rather than a bare 502.
 fn ureq_err_parts(e: ureq::Error) -> Parts {
     match e {
         ureq::Error::Status(code, r) => {
@@ -279,17 +434,23 @@ fn io_parts() -> Parts {
     }
 }
 
+fn coded(status: u16, code: &str, message: &str) -> Response {
+    Parts {
+        status,
+        content_type: Some("application/json".into()),
+        body: json!({ "code": code, "message": message }).to_string().into_bytes(),
+    }
+    .into_response()
+}
+
 fn unreachable() -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, "proxy task failed").into_response()
 }
 
-/// Parse `bytes=N-` and return N.
-fn parse_range_from(v: &str) -> Option<u64> {
-    v.strip_prefix("bytes=")?
-        .split('-')
-        .next()?
-        .parse::<u64>()
-        .ok()
+/// Parse the start offset from `bytes=N-` or `bytes N-…`.
+fn parse_range_start(v: &str) -> Option<u64> {
+    let v = v.trim_start_matches("bytes").trim_start_matches(['=', ' ']);
+    v.split(['-', ' ']).next()?.parse::<u64>().ok()
 }
 
 /// Serve `bytes`, honoring a resume offset with a 206 and Content-Range.
@@ -312,7 +473,3 @@ fn ranged(bytes: Vec<u8>, range_from: Option<u64>) -> Response {
             .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response()),
     }
 }
-
-// Silence an unused-warning on Method when the fallback captures it via Request.
-#[allow(dead_code)]
-fn _uses(_m: Method, _h: HeaderMap) {}
