@@ -38,6 +38,9 @@ WizardStyle=modern
 Source: "stage\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 ; …and the hidden launcher for the login task.
 Source: "lymnal-launch.vbs"; DestDir: "{app}"; Flags: ignoreversion
+; The starter config template — seeded into the user's config on first install
+; (see CurStepChanged) so this device can serve the trove, exactly like Linux.
+Source: "..\..\config.example.toml"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 ; Start menu shortcut for the app.
@@ -68,4 +71,24 @@ var
 begin
   Exec('taskkill.exe', '/im lymnal.exe /f', '', SW_HIDE, ewWaitUntilTerminated, rc);
   Result := '';
+end;
+
+// After install, seed the lymnal config from the template if the user has none
+// yet — the same first-run copy elyxr.sh does on Linux — so this device can act
+// as a server (serve mode reads a config; a client just ignores it). Left alone
+// on later updates so a customised config is never clobbered. The path matches
+// lymnal's home_dir (%USERPROFILE% on Windows).
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  cfgDir, cfg, tmpl: String;
+begin
+  if CurStep = ssPostInstall then begin
+    cfgDir := ExpandConstant('{userprofile}\.config\lymnal');
+    cfg := cfgDir + '\config.toml';
+    if not FileExists(cfg) then begin
+      ForceDirectories(cfgDir);
+      tmpl := ExpandConstant('{app}\config.example.toml');
+      FileCopy(tmpl, cfg, True);
+    end;
+  end;
 end;

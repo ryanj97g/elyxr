@@ -405,25 +405,21 @@ class _DeviceRows extends StatelessWidget {
 
     return Column(
       children: [
-        // Server/Client is a Linux-only choice for now; a non-Linux device is
-        // always a client, so the toggle isn't shown there.
-        if (Platform.isLinux) ...[
-          row(
-            'MODE',
-            GestureDetector(
-              onTap: () => settings.appMode =
-                  settings.appMode == AppMode.server ? AppMode.client : AppMode.server,
-              behavior: HitTestBehavior.opaque,
-              child: Text('${settings.appMode.name.toUpperCase()}  ⇄', style: glass(20, p.a)),
-            ),
+        row(
+          'MODE',
+          GestureDetector(
+            onTap: () => settings.appMode =
+                settings.appMode == AppMode.server ? AppMode.client : AppMode.server,
+            behavior: HitTestBehavior.opaque,
+            child: Text('${settings.appMode.name.toUpperCase()}  ⇄', style: glass(20, p.a)),
           ),
-          if (settings.appMode == AppMode.server)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Text('Server controls are on the main screen (exit settings).',
-                  style: glass(14, p.foot)),
-            ),
-        ],
+        ),
+        if (settings.appMode == AppMode.server)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Text('Server controls are on the main screen (exit settings).',
+                style: glass(14, p.foot)),
+          ),
         row('DOWNLOADS', Text(settings.downloadDir, style: glass(20, p.bright))),
         // The mount path only matters where the gate can run (a Linux client);
         // in server mode there's no mount, so it isn't shown.
