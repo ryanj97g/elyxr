@@ -4,8 +4,6 @@
 // pairing-not-open are three different messages. Manual address entry is the
 // only place an address is typed, and only when discovery fails.
 
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -134,9 +132,7 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
             ),
             // This device can be the server instead of a client — the way out
             // of the first-run screen when it's the machine holding the files.
-            // Linux only for now: a non-Linux device is always a client, and
-            // showing this would only let it strand itself in a mode it can't run.
-            if (_phase != _Phase.waiting && Platform.isLinux)
+            if (_phase != _Phase.waiting)
               GestureDetector(
                 onTap: () =>
                     context.read<SettingsController>().appMode = AppMode.server,

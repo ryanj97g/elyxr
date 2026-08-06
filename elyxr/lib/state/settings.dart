@@ -2,8 +2,6 @@
 // State). The bearer token is never here — it lives in the keyring (see
 // session.dart). Everything in this file is about this machine only.
 
-import 'dart:io' show Platform;
-
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -54,10 +52,6 @@ class SettingsController extends ChangeNotifier {
     _trove = _prefs.getBool('trove') ?? false;
     _appMode =
         _enumByName(AppMode.values, _prefs.getString('appMode'), AppMode.client);
-    // Server mode is Linux-only for now — it manages a local lymnal server. A
-    // non-Linux device is always a client, so a stray or legacy server setting
-    // can never strand it on a screen it can't use.
-    if (!Platform.isLinux) _appMode = AppMode.client;
     _downloadDir = _prefs.getString('downloadDir') ?? '~/Downloads';
     _mountPath = _prefs.getString('mountPath') ?? '~/Desktop/trove';
     _confirmDelete = _prefs.getBool('confirmDelete') ?? true;

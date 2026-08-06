@@ -172,14 +172,18 @@ class SessionController extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// The user's home directory: `$HOME`, falling back to `%USERPROFILE%` on
-  /// Windows, so link.json lands where lymnal looks for it on either platform.
+  /// The user's home directory, matching lymnal's own resolution so link.json
+  /// lands where lymnal looks for it: `%USERPROFILE%` first on Windows, `$HOME`
+  /// first elsewhere.
   String? _homeDir() {
     final env = Platform.environment;
-    final home = env['HOME'];
-    if (home != null && home.isNotEmpty) return home;
-    final profile = env['USERPROFILE'];
-    if (profile != null && profile.isNotEmpty) return profile;
+    final order = Platform.isWindows
+        ? const ['USERPROFILE', 'HOME']
+        : const ['HOME', 'USERPROFILE'];
+    for (final v in order) {
+      final val = env[v];
+      if (val != null && val.isNotEmpty) return val;
+    }
     return null;
   }
 
