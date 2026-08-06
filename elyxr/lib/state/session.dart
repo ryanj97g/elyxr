@@ -124,7 +124,7 @@ class SessionController extends ChangeNotifier {
   /// connection in a small file for the app to adopt. Import it once: move the
   /// token into the keyring, remember the server, and delete the file.
   Future<void> _importPendingBind() async {
-    final home = Platform.environment['HOME'];
+    final home = _homeDir();
     if (home == null) return;
     final f = File('$home/.config/lymnal/pending-bind.json');
     try {
@@ -148,14 +148,14 @@ class SessionController extends ChangeNotifier {
   /// which server to stay connected to — that's what keeps the device updated
   /// with the app closed. When the contents change, nudge lymnal to re-read.
   Future<void> _syncLink() async {
-    final home = Platform.environment['HOME'];
+    final home = _homeDir();
     if (home == null) return;
     final f = File('$home/.config/lymnal/link.json');
     try {
       if (_token == null || _serverAddress == null) {
         if (await f.exists()) {
           await f.delete();
-          await Process.run('systemctl', ['--user', 'restart', 'lymnal.service']);
+          await _restartLymnal(running: false); // unpaired — stop the proxy
         }
         return;
       }
@@ -168,8 +168,46 @@ class SessionController extends ChangeNotifier {
       if (existing == content) return; // already current — don't restart lymnal
       await f.parent.create(recursive: true);
       await f.writeAsString(content);
-      await Process.run('systemctl', ['--user', 'restart', 'lymnal.service']);
+      await _restartLymnal(running: true);
     } catch (_) {}
+  }
+
+  /// The user's home directory: `$HOME`, falling back to `%USERPROFILE%` on
+  /// Windows, so link.json lands where lymnal looks for it on either platform.
+  String? _homeDir() {
+    final env = Platform.environment;
+    final home = env['HOME'];
+    if (home != null && home.isNotEmpty) return home;
+    final profile = env['USERPROFILE'];
+    if (profile != null && profile.isNotEmpty) return profile;
+    return null;
+  }
+
+  /// Restart the lymnal service so it re-reads link.json — the one place the app
+  /// touches the service's lifecycle, done the platform's way. On Linux that's
+  /// systemd; on Windows there's no service manager reachable from here, so stop
+  /// the process and relaunch it hidden from where the app is installed. When
+  /// [running] is false (the device was unpaired) it's only stopped.
+  Future<void> _restartLymnal({required bool running}) async {
+    if (Platform.isLinux) {
+      await Process.run('systemctl', ['--user', 'restart', 'lymnal.service']);
+      return;
+    }
+    if (Platform.isWindows) {
+      await Process.run('taskkill', ['/IM', 'lymnal.exe', '/F']);
+      if (!running) return;
+      final dir = File(Platform.resolvedExecutable).parent.path;
+      final vbs = File('$dir\\lymnal-launch.vbs');
+      if (await vbs.exists()) {
+        // The installed hidden launcher: no console window.
+        await Process.start('wscript', [vbs.path],
+            mode: ProcessStartMode.detached);
+      } else {
+        // Running from the raw zip (no installer): launch lymnal directly.
+        await Process.start('$dir\\lymnal.exe', const [],
+            mode: ProcessStartMode.detached);
+      }
+    }
   }
 
   /// Re-check the server every so often while paired, so a change on the server
