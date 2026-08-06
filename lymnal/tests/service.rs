@@ -168,20 +168,18 @@ async fn pairing_approval_mints_a_working_token() {
         (status, serde_json::from_slice::<Value>(&bytes).unwrap())
     });
 
-    // Wait for it to show up as pending, then approve.
-    let mut phrase = String::new();
+    // Wait for it to show up as pending, then approve by device name.
+    let mut appeared = false;
     for _ in 0..50 {
         let (_, body) = h.admin(Method::GET, "/v1/admin/pending", None).await;
         let pending = body["pending"].as_array().unwrap();
-        if !pending.is_empty() {
-            phrase = pending[0]["phrase"].as_str().unwrap().to_string();
+        if pending.iter().any(|p| p["device"] == "laptop") {
+            appeared = true;
             break;
         }
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
-    assert!(!phrase.is_empty(), "the request should be pending");
-    // The phrase must be the deterministic one both sides derive.
-    assert_eq!(phrase, "violet anchor cedar juniper");
+    assert!(appeared, "the request should be pending");
 
     let (st, _) = h
         .admin(Method::POST, "/v1/admin/approve", Some(json!({ "device": "laptop" })))

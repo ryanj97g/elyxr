@@ -248,6 +248,9 @@ class LymnalClient {
     if (streamed.statusCode == 401) {
       throw const ConnectionError(ConnectionFault.notApproved);
     }
+    if (streamed.statusCode == 502 || streamed.statusCode == 503) {
+      throw const ConnectionError(ConnectionFault.unreachable);
+    }
     if (streamed.statusCode >= 400) {
       final body = await streamed.stream.bytesToString();
       _throwCoded(body, streamed.statusCode);
@@ -291,6 +294,9 @@ class LymnalClient {
         () => _http.get(_uri('/v1/download', {'path': path}), headers: _headers()));
     if (r.statusCode == 401) {
       throw const ConnectionError(ConnectionFault.notApproved);
+    }
+    if (r.statusCode == 502 || r.statusCode == 503) {
+      throw const ConnectionError(ConnectionFault.unreachable);
     }
     if (r.statusCode >= 400) _throwCoded(r.body, r.statusCode);
     return r.bodyBytes;
@@ -394,6 +400,12 @@ class LymnalClient {
     }
     if (r.statusCode == 401) {
       throw const ConnectionError(ConnectionFault.notApproved);
+    }
+    // 502/503 come from the *local* proxy when it can't reach the trove — that's
+    // an unreachable server, not a coded error, so the app shows offline + retry
+    // rather than a ready-but-empty folder.
+    if (r.statusCode == 502 || r.statusCode == 503) {
+      throw const ConnectionError(ConnectionFault.unreachable);
     }
     Map<String, dynamic> body;
     try {

@@ -315,7 +315,10 @@ async fn download(State(px): State<Arc<Proxy>>, req: Request) -> Response {
         return ranged(bytes, range_from);
     }
 
-    let url = px.url(&format!("/v1/download?path={}", key.replace('/', "%2f")));
+    // Fetch the whole file from the trove, forwarding the original query verbatim
+    // (so a path with spaces or other characters survives). Range is a header, so
+    // it isn't here — limbo always caches the complete copy.
+    let url = px.url(uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/v1/download"));
     let auth = px.auth();
     let fetched = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, Parts> {
         match ureq::get(&url).set("Authorization", &auth).call() {
