@@ -150,6 +150,17 @@ class LymnalClient {
     return _ok(r);
   }
 
+  /// Ask the local proxy to push anything stranded in limbo now (the reconcile /
+  /// refresh action). Returns how many edits are still held afterwards.
+  Future<int> reconcile() async {
+    final r = await _send(() => _http.post(
+          _uri('/v1/reconcile'),
+          headers: _headers(json: true),
+          body: '{}',
+        ));
+    return (_ok(r)['held'] as num?)?.toInt() ?? 0;
+  }
+
   Future<Map<String, dynamic>> mkdir(String path) async {
     final r = await _send(() => _http.post(
           _uri('/v1/mkdir'),

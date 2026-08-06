@@ -15,6 +15,7 @@ import '../design/tokens.dart';
 import '../state/actions.dart';
 import '../state/browse.dart';
 import '../state/settings.dart';
+import '../util/open_external.dart';
 
 /// Show a preview over the whole window, starting at [start] within [files].
 Future<void> openPreview(
@@ -147,19 +148,41 @@ class _PreviewState extends State<_Preview> {
       if (_bytes != null) return InteractiveViewer(child: Image.memory(_bytes!, fit: BoxFit.contain));
       return const SizedBox.shrink();
     }
-    // PDF / video / other: offer a download instead (§07).
+    // PDF / video / other: open it in the default program (edits sync back), or
+    // download a copy to keep.
     final kind = _isPdf ? 'PDF' : _isVideo ? 'video' : 'file';
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('This $kind opens by downloading it.', style: glass(17, p.bright), textAlign: TextAlign.center),
-        const SizedBox(height: 12),
-        GestureDetector(
-          onTap: () => _download(context),
-          child: Text('DOWNLOAD', style: chassis(12, p.a, spacing: 0.1)),
+        Text('Open this $kind in your default app — edits you save come back to the trove.',
+            style: glass(17, p.bright), textAlign: TextAlign.center),
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            GestureDetector(
+              onTap: () => _open(context),
+              child: Text('OPEN', style: chassis(12, p.a, spacing: 0.1)),
+            ),
+            const SizedBox(width: 28),
+            GestureDetector(
+              onTap: () => _download(context),
+              child: Text('DOWNLOAD A COPY', style: chassis(12, p.mid, spacing: 0.1)),
+            ),
+          ],
         ),
       ],
     );
+  }
+
+  void _open(BuildContext context) async {
+    final browse = context.read<BrowseController>();
+    final client = browse.session.client;
+    final path = browse.path.isEmpty ? _entry.name : '${browse.path}/${_entry.name}';
+    Navigator.pop(context);
+    if (client != null) {
+      await OpenExternal.open(client, path, _entry.name);
+    }
   }
 
   void _download(BuildContext context) {

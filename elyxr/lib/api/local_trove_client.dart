@@ -151,6 +151,9 @@ class LocalTroveClient extends LymnalClient {
       );
 
   @override
+  Future<int> reconcile() async => 0; // the server has no queue — nothing to drain
+
+  @override
   Future<Map<String, dynamic>> mkdir(String path) async {
     await Directory(_abs(path)).create(recursive: true);
     return const {};
