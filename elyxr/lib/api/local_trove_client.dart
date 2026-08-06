@@ -249,8 +249,143 @@ class LocalTroveClient extends LymnalClient {
     }
   }
 
+  // ---- uploads (server mode writes straight to the trove) ----
+  //
+  // On the server device an "add" is just a file landing in the trove folder on
+  // this machine — there's no network, no staging service. These mirror the
+  // three upload calls the transfer queue makes (init, chunk, commit), plus
+  // status and cancel, by assembling the file in a temp staging file and moving
+  // it into the trove on commit. Same-name overwrites and reports `replaced`,
+  // matching the network server (upload.rs).
+
+  final Map<String, _LocalUpload> _uploads = {};
+  int _uploadSeq = 0;
+
+  @override
+  Future<UploadSession> uploadInit(String path, int sizeBytes,
+      {String? checksum, int? mtime}) async {
+    final targetAbs = _abs(path); // also rejects paths that leave the trove
+    final exists =
+        await FileSystemEntity.type(targetAbs) != FileSystemEntityType.notFound;
+    final staging = File(
+        '${Directory.systemTemp.path}/elyxr-up-${DateTime.now().microsecondsSinceEpoch}-${_uploadSeq++}.part');
+    // Open the handle once and keep it, so chunks can be written at their exact
+    // offset (append mode would ignore the offset and only ever tack on the end).
+    final raf = await staging.open(mode: FileMode.write);
+    final id = 'local_${DateTime.now().microsecondsSinceEpoch}_${_uploadSeq}';
+    _uploads[id] = _LocalUpload(
+      targetAbs: targetAbs,
+      staging: staging,
+      raf: raf,
+      size: sizeBytes,
+      mtime: mtime,
+    );
+    return UploadSession(
+      uploadId: id,
+      chunkBytes: 8 * 1024 * 1024,
+      receivedBytes: 0,
+      targetExists: exists,
+      expiresAt: 0,
+    );
+  }
+
+  @override
+  Future<(int, bool)> uploadChunk(
+      String id, int offset, List<int> bytes, int total) async {
+    final up = _uploads[id];
+    if (up == null) {
+      throw LymnalError.fromJson(
+          {'code': 'NOT_FOUND', 'message': 'That upload isn\'t open.'}, 404);
+    }
+    await up.raf.setPosition(offset);
+    await up.raf.writeFrom(bytes);
+    up.received = offset + bytes.length;
+    return (up.received, up.received >= total);
+  }
+
+  @override
+  Future<(int, int, List<List<int>>, int)> uploadStatus(String id) async {
+    final up = _uploads[id];
+    if (up == null) {
+      throw LymnalError.fromJson(
+          {'code': 'NOT_FOUND', 'message': 'That upload isn\'t open.'}, 404);
+    }
+    final missing =
+        up.received < up.size ? [<int>[up.received, up.size]] : <List<int>>[];
+    return (up.received, up.size, missing, 0);
+  }
+
+  @override
+  Future<Map<String, dynamic>> uploadCommit(String id) async {
+    final up = _uploads.remove(id);
+    if (up == null) {
+      throw LymnalError.fromJson(
+          {'code': 'NOT_FOUND', 'message': 'That upload isn\'t open.'}, 404);
+    }
+    final replaced =
+        await FileSystemEntity.type(up.targetAbs) != FileSystemEntityType.notFound;
+    await up.raf.flush();
+    await up.raf.close();
+    // Make sure the destination folder exists (a drop into a subfolder).
+    final parent = Directory(up.targetAbs.substring(0, up.targetAbs.lastIndexOf('/')));
+    if (!await parent.exists()) await parent.create(recursive: true);
+    try {
+      // A move is instant within one filesystem; fall back to copy across mounts
+      // (the temp dir can be a different device than the trove).
+      try {
+        await up.staging.rename(up.targetAbs);
+      } on FileSystemException {
+        await up.staging.copy(up.targetAbs);
+        await up.staging.delete();
+      }
+      if (up.mtime != null) {
+        await File(up.targetAbs)
+            .setLastModified(DateTime.fromMillisecondsSinceEpoch(up.mtime! * 1000));
+      }
+    } catch (e) {
+      throw LymnalError.fromJson(
+          {'code': 'IO_ERROR', 'message': 'The file couldn\'t be saved: $e'}, 500);
+    }
+    return {'replaced': replaced};
+  }
+
+  @override
+  Future<void> uploadCancel(String id) async {
+    final up = _uploads.remove(id);
+    if (up == null) return;
+    try {
+      await up.raf.close();
+    } catch (_) {}
+    try {
+      if (await up.staging.exists()) await up.staging.delete();
+    } catch (_) {}
+  }
+
   @override
   void close() {
-    // Nothing network-backed to close.
+    // Drop any half-assembled staging files.
+    for (final up in _uploads.values) {
+      up.raf.close().catchError((_) {});
+      up.staging.delete().catchError((_) => up.staging);
+    }
+    _uploads.clear();
   }
+}
+
+/// One in-progress local upload: where it's going, its temp staging file and
+/// open handle, the expected size, and the mtime to stamp it with on commit.
+class _LocalUpload {
+  final String targetAbs;
+  final File staging;
+  final RandomAccessFile raf;
+  final int size;
+  final int? mtime;
+  int received = 0;
+  _LocalUpload({
+    required this.targetAbs,
+    required this.staging,
+    required this.raf,
+    required this.size,
+    required this.mtime,
+  });
 }
