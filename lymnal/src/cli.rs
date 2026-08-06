@@ -371,9 +371,10 @@ pub(crate) fn find_repo(config_path: &std::path::Path) -> anyhow::Result<std::pa
             }
         }
     }
-    if let Ok(home) = std::env::var("HOME") {
-        for name in ["elyxr", "elyxr"] {
-            let p = std::path::Path::new(&home).join(name);
+    {
+        let home = lymnal::config::home_dir();
+        for name in ["elyxr", "Elyxr"] {
+            let p = home.join(name);
             if p.join("elyxr.sh").exists() {
                 return Ok(p);
             }

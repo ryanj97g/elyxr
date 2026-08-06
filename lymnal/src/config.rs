@@ -177,19 +177,37 @@ fn default_trove_name() -> String {
     "elyxr".into()
 }
 
+/// The user's home directory: `$HOME` on Unix, `%USERPROFILE%` (or
+/// `%HOMEDRIVE%%HOMEPATH%`) on Windows. Falls back to `.` so a path always
+/// resolves to something rather than panicking.
+pub fn home_dir() -> PathBuf {
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.is_empty() {
+            return PathBuf::from(home);
+        }
+    }
+    if let Ok(profile) = std::env::var("USERPROFILE") {
+        if !profile.is_empty() {
+            return PathBuf::from(profile);
+        }
+    }
+    if let (Ok(drive), Ok(path)) = (std::env::var("HOMEDRIVE"), std::env::var("HOMEPATH")) {
+        if !drive.is_empty() {
+            return PathBuf::from(format!("{drive}{path}"));
+        }
+    }
+    PathBuf::from(".")
+}
+
 /// Expand a leading `~` to the user's home directory. Paths without a leading
 /// tilde are returned unchanged.
 pub fn expand_tilde(p: impl AsRef<str>) -> PathBuf {
     let p = p.as_ref();
     if let Some(rest) = p.strip_prefix("~/") {
-        if let Ok(home) = std::env::var("HOME") {
-            return Path::new(&home).join(rest);
-        }
+        return home_dir().join(rest);
     }
     if p == "~" {
-        if let Ok(home) = std::env::var("HOME") {
-            return PathBuf::from(home);
-        }
+        return home_dir();
     }
     PathBuf::from(p)
 }
