@@ -97,23 +97,40 @@ fn listen(link: &Link, config_path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Run the installer in its own systemd scope, so restarting lymnal partway
-/// through (the installer does that) doesn't kill the update along with the
-/// agent that started it.
+/// Apply an update this device was told about. The trigger (the live event and
+/// the build poll) is identical on every platform; only *how* an update is
+/// applied differs — a source rebuild on Linux, a prebuilt fetch on Windows —
+/// so the "update the server and every device follows" promise holds the same
+/// on both.
 fn run_installer(config_path: &Path) {
     // Only one install at a time, whichever trigger fires first.
     if INSTALLING.swap(true, Ordering::SeqCst) {
         return;
     }
+    tracing::info!("client agent: server announced an update, updating this device");
+    #[cfg(not(target_os = "windows"))]
+    update_from_source(config_path);
+    #[cfg(target_os = "windows")]
+    {
+        let _ = config_path; // the Windows update doesn't need the repo
+        update_from_release();
+    }
+}
+
+/// Linux/Unix: rebuild from the checked-out source by re-running the installer
+/// in its own systemd scope, so restarting lymnal partway through (the installer
+/// does that) doesn't kill the update along with the agent that started it.
+#[cfg(not(target_os = "windows"))]
+fn update_from_source(config_path: &Path) {
     let repo = match crate::cli::find_repo(config_path) {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!(error = %e, "client agent: can't find the repo to update from");
+            INSTALLING.store(false, Ordering::SeqCst);
             return;
         }
     };
     let script = repo.join("elyxr.sh");
-    tracing::info!("client agent: server announced an update, updating this device");
     let started = std::process::Command::new("systemd-run")
         .args(["--user", "--scope", "--quiet", "bash"])
         .arg(&script)
@@ -126,5 +143,38 @@ fn run_installer(config_path: &Path) {
             .arg(&script)
             .current_dir(&repo)
             .spawn();
+    }
+}
+
+/// Windows: there is no compiler on the device, so an update is a *fetch*, not a
+/// rebuild. Download the published installer and run it silently; it stops
+/// lymnal, swaps the binaries, and starts it again — the same end state as the
+/// Linux rebuild, reached the way every Windows app updates itself.
+#[cfg(target_os = "windows")]
+fn update_from_release() {
+    const INSTALLER_URL: &str =
+        "https://github.com/ryanj97g/elyxr/releases/latest/download/elyxr-setup.exe";
+    let dest = std::env::temp_dir().join("elyxr-setup.exe");
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(10))
+        .timeout(Duration::from_secs(600))
+        .build();
+    let result = (|| -> anyhow::Result<()> {
+        let resp = agent.get(INSTALLER_URL).call()?;
+        let mut reader = resp.into_reader();
+        let mut file = std::io::BufWriter::new(std::fs::File::create(&dest)?);
+        std::io::copy(&mut reader, &mut file)?;
+        std::io::Write::flush(&mut file)?;
+        drop(file);
+        // Inno Setup silent flags: no UI, no prompts, and never reboot the box.
+        std::process::Command::new(&dest)
+            .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+            .spawn()?;
+        Ok(())
+    })();
+    if let Err(e) = result {
+        tracing::warn!(error = %e, "client agent: Windows update failed; will retry later");
+        // Let a later trigger try again, since the installer never launched.
+        INSTALLING.store(false, Ordering::SeqCst);
     }
 }
