@@ -36,9 +36,16 @@ tokio-util = { version = "0.7", features = ["io", "compat"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 unicode-normalization = "0.1"
 rand = "0.8"
-libc = "0.2"
 base64 = "0.22"
 ureq = { version = "2", features = ["json"] }
+# Cross-platform disk free/total (statvfs on Unix, GetDiskFreeSpaceEx on Windows)
+# and file mtime, so the same binary builds on Linux and Windows.
+fs2 = "0.4"
+filetime = "0.2"
+
+# The tray is StatusNotifierItem over D-Bus — Linux only. On other platforms
+# lymnal runs the same, just without a tray icon, so these aren't pulled in.
+[target.'cfg(target_os = "linux")'.dependencies]
 ksni = { version = "0.3.6", default-features = false, features = ["blocking", "tokio"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
 
@@ -47,4 +54,3 @@ tempfile = "3"
 tower = { version = "0.4", features = ["util"] }
 http-body-util = "0.1"
 blake3 = "1"
-libc = "0.2"

@@ -126,16 +126,14 @@ async fn run_proxy(link: agent::Link) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Where limbo keeps its files: `~/.cache/lymnal/limbo` (honoring XDG).
+/// Where limbo keeps its files: `~/.cache/lymnal/limbo` (honoring XDG on Linux,
+/// falling back to the user profile on Windows).
 fn limbo_dir() -> PathBuf {
     let base = std::env::var("XDG_CACHE_HOME")
         .ok()
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-            PathBuf::from(home).join(".cache")
-        });
+        .unwrap_or_else(|| lymnal::config::home_dir().join(".cache"));
     base.join("lymnal").join("limbo")
 }
 
@@ -277,12 +275,15 @@ fn spawn_maintenance(state: lymnal::Shared) {
 }
 
 /// Write the admin token where server-mode elyxr on this machine can read it,
-/// user-only (0600). Never sent over the network.
+/// user-only (0600 on Unix). Never sent over the network.
 fn write_admin_token(data_dir: &std::path::Path, token: &str) {
-    use std::os::unix::fs::PermissionsExt;
     let path = data_dir.join("admin.token");
     if std::fs::write(&path, token).is_ok() {
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        }
     }
 }
 
