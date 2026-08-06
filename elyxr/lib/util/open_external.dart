@@ -70,7 +70,11 @@ class OpenExternal {
           final h = _hash(bytes);
           if (h == lastHash) return;
           lastHash = h;
-          await _syncBack(client, remotePath, bytes);
+          // The edit's own save time is the timestamp that rides to the trove —
+          // last writer wins, and this is when this writer wrote.
+          final mtime =
+              (await local.lastModified()).millisecondsSinceEpoch ~/ 1000;
+          await _syncBack(client, remotePath, bytes, mtime);
         } catch (_) {
           // A transient read/upload failure is retried on the next save; the
           // proxy's own queue covers a lapse.
@@ -82,8 +86,7 @@ class OpenExternal {
   /// Upload the edited bytes back. This goes to the local proxy, which holds it
   /// in limbo and pushes it to the trove (queuing if the trove is unreachable).
   static Future<void> _syncBack(
-      LymnalClient client, String remotePath, List<int> bytes) async {
-    final mtime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      LymnalClient client, String remotePath, List<int> bytes, int mtime) async {
     final session = await client.uploadInit(remotePath, bytes.length, mtime: mtime);
     final chunk = session.chunkBytes;
     var offset = 0;
