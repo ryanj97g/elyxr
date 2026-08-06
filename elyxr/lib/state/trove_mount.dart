@@ -1,7 +1,8 @@
-// Runs the trove mount: launches the `trove` program with the server address,
-// the bearer token, and where to mount, then stops it on request. trove itself
-// is the filesystem (on-demand reads, write-back, cache); this just starts and
-// stops it and reflects whether it's running.
+// Runs the optional folder mount: launches the `gate` program with the server
+// address, the bearer token, and where to mount, then stops it on request. gate
+// itself is the filesystem window (it rides the local lymnal proxy's limbo);
+// this just starts and stops it, reflects whether it's running, and clears the
+// mount point away afterwards so no phantom folder is left behind.
 
 import 'dart:io';
 
@@ -91,28 +92,53 @@ class TroveMountController extends ChangeNotifier {
       if (home == null) return;
       final iconPath = '$home/.cache/elyxr/trove.png';
       final iconFile = File(iconPath);
-      if (!await iconFile.exists()) {
-        await iconFile.parent.create(recursive: true);
-        final bytes = await rootBundle.load('assets/branding/trove.png');
-        await iconFile.writeAsBytes(
-            bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
-            flush: true);
-      }
+      // Always (re)write it, so a branding change refreshes the cached copy
+      // instead of leaving an old icon behind.
+      await iconFile.parent.create(recursive: true);
+      final bytes = await rootBundle.load('assets/branding/trove.png');
+      await iconFile.writeAsBytes(
+          bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
+          flush: true);
       await Process.run('gio', ['set', mountPath, 'metadata::custom-icon', 'file://$iconPath']);
     } catch (_) {
       // Cosmetic only — never let it affect the mount.
     }
   }
 
-  /// Stop the mount. Safe to call when nothing is running.
+  /// Stop the mount, then clear the mount point away so no phantom folder is
+  /// left on the Desktop. Safe to call when nothing is running.
   Future<void> unmount({required String mountPath}) async {
     final p = _proc;
     _proc = null;
     notifyListeners();
     if (p != null) p.kill(ProcessSignal.sigterm);
-    // trove auto-unmounts when it exits, but make sure the point is clear.
+    await _removeMountPoint(mountPath);
+  }
+
+  /// Remove a mount point left over from a previous run: clear its custom icon
+  /// and delete the folder. Only touches a folder this app owns and never one
+  /// with real files in it — the non-recursive delete refuses a non-empty
+  /// folder or a live mount. No-op while we're mounting here.
+  Future<void> cleanupStaleMount({required String mountPath}) async {
+    if (_proc != null) return;
+    if (!Directory(mountPath).existsSync()) return;
+    await _removeMountPoint(mountPath);
+  }
+
+  /// The shared teardown: unmount anything still mounted here (including a dead
+  /// mount a crashed gate left behind), drop the folder's custom icon, then
+  /// remove the folder if it's empty. Every step is best-effort.
+  Future<void> _removeMountPoint(String mountPath) async {
     try {
       await Process.run('fusermount3', ['-u', mountPath]);
+    } catch (_) {}
+    try {
+      await Process.run('gio', ['set', '-t', 'unset', mountPath, 'metadata::custom-icon']);
+    } catch (_) {}
+    try {
+      // Non-recursive: throws on a non-empty folder (real user files) or a busy
+      // mount, so it only ever removes an empty leftover point.
+      await Directory(mountPath).delete();
     } catch (_) {}
   }
 }

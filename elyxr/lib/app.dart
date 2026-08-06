@@ -71,6 +71,7 @@ class _Root extends StatefulWidget {
 class _RootState extends State<_Root> {
   bool _openedOnce = false;
   bool _serverTried = false;
+  bool _troveCleaned = false;
   LymnalClient? _dragClient;
 
   @override
@@ -137,6 +138,18 @@ class _RootState extends State<_Root> {
     } else if (!wantMount && mount.mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         mount.unmount(mountPath: expandTilde(settings.mountPath));
+      });
+    } else if (settings.appMode == AppMode.client &&
+        !wantMount &&
+        !mount.mounted &&
+        !_troveCleaned) {
+      // A folder left over from a previous session (or an old build) hangs
+      // around because nothing is mounted to unmount. Clear it once at startup
+      // when the gate is off, so no phantom trove folder lingers on the Desktop.
+      // Client only: on the server this same path is the real trove.
+      _troveCleaned = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        mount.cleanupStaleMount(mountPath: expandTilde(settings.mountPath));
       });
     }
 
