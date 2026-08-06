@@ -428,21 +428,38 @@ RestartSec=300
 WantedBy=default.target
 UNITEOF
   sh_ systemctl --user daemon-reload
-  # The app decides whether this device serves (server mode → on) or only mounts
-  # (client mode → off), so we don't force the service on behind it. First
-  # install starts it on (a fresh device is server-capable); later runs only
-  # restart it if it's still enabled and its binary changed — a client that
-  # turned it off stays off.
+  # A client device (it has a link.json) must always keep the service up: it's
+  # both the update-agent and the local proxy the app talks to. A server-capable
+  # device that isn't a client can be left however the app set it.
+  CLIENT=0; [ -f "$HOME/.config/lymnal/link.json" ] && CLIENT=1
   if [ "$had_unit" = 0 ]; then
+    # First install: start it on (a fresh device is server-capable) and make it
+    # survive a reboot.
     sh_ systemctl --user enable --now lymnal.service
-    # Start at boot without being logged in (one-time; the only sudo left).
     if [ "$LINGER_ON" = 0 ]; then sh_ $SUDO loginctl enable-linger "$(id -un)" || true; fi
-  elif systemctl --user is-enabled --quiet lymnal.service 2>/dev/null; then
-    if [ "$LYMNAL_CHANGED" = 1 ]; then
-      # Hold the restart until any in-flight uploads finish, so an update never
-      # cuts one off (the running service keeps upload state in memory).
-      "$BIN_DIR/lymnal" drain || true
-      sh_ systemctl --user restart lymnal.service
+  else
+    # A client's service must be enabled (so it comes back after a reboot) and
+    # running (so the proxy exists at all).
+    if [ "$CLIENT" = 1 ]; then
+      systemctl --user is-enabled --quiet lymnal.service 2>/dev/null \
+        || sh_ systemctl --user enable lymnal.service || true
+      if [ "$LINGER_ON" = 0 ]; then sh_ $SUDO loginctl enable-linger "$(id -un)" || true; fi
+    fi
+    # If the service is running and its binary changed, restart it onto the new
+    # build. This is gated on *is-active*, not is-enabled: a running-but-disabled
+    # service (which is how a client can end up) was being skipped here, so every
+    # update rebuilt the binary but left the old process running — the app then
+    # found nothing on the proxy port and sat on "READING…".
+    if systemctl --user is-active --quiet lymnal.service 2>/dev/null; then
+      if [ "$LYMNAL_CHANGED" = 1 ]; then
+        # Hold the restart until any in-flight uploads finish, so an update never
+        # cuts one off (the running service keeps upload state in memory).
+        "$BIN_DIR/lymnal" drain || true
+        sh_ systemctl --user restart lymnal.service
+      fi
+    elif [ "$CLIENT" = 1 ]; then
+      # A client whose service somehow isn't running: bring it up.
+      sh_ systemctl --user start lymnal.service || true
     fi
   fi
   INSTALLED_SERVICE=1
