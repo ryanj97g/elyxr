@@ -10,9 +10,12 @@
 #[cfg(target_os = "linux")]
 pub use linux_tray::spawn;
 
-/// No tray outside Linux (yet). lymnal runs the same without one, so this is a
-/// no-op that reports "no tray" the same way a missing host does on Linux.
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "windows")]
+pub use windows_tray::spawn;
+
+/// No tray on platforms without a supported host — only Linux (D-Bus) and
+/// Windows (Shell_NotifyIcon) have one. lymnal runs the same without it.
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 pub fn spawn(
     _status: String,
     _app_bin: Option<std::path::PathBuf>,
@@ -173,5 +176,107 @@ mod linux_tray {
                 None
             }
         }
+    }
+}
+
+#[cfg(target_os = "windows")]
+mod windows_tray {
+    use std::path::PathBuf;
+
+    use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem};
+    use tray_icon::{Icon, TrayIconBuilder};
+
+    /// Holds the tray thread alive. The thread owns the icon and runs the message
+    /// loop for the life of the process; the caller keeps this for symmetry with
+    /// the Linux handle.
+    pub struct Handle(#[allow(dead_code)] std::thread::JoinHandle<()>);
+
+    pub fn spawn(
+        status: String,
+        _app_bin: Option<PathBuf>,
+        repo: Option<PathBuf>,
+    ) -> Option<Handle> {
+        // On Windows the app sits next to lymnal (the installer puts elyxr.exe and
+        // lymnal.exe in one folder), so find it there rather than trusting the
+        // Linux bundle path the caller computed.
+        let app_bin = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("elyxr.exe")))
+            .filter(|p| p.exists());
+
+        let handle = std::thread::spawn(move || {
+            if let Err(e) = run(status, app_bin, repo) {
+                tracing::debug!(error = %e, "couldn't show lymnal in the system tray");
+            }
+        });
+        Some(Handle(handle))
+    }
+
+    fn run(status: String, app_bin: Option<PathBuf>, _repo: Option<PathBuf>) -> anyhow::Result<()> {
+        let menu = Menu::new();
+        let status_item = MenuItem::new(&status, false, None);
+        menu.append(&status_item)?;
+        menu.append(&PredefinedMenuItem::separator())?;
+        let open_item = MenuItem::new("Open elyxr", app_bin.is_some(), None);
+        menu.append(&open_item)?;
+        let update_item = MenuItem::new("Update now", true, None);
+        menu.append(&update_item)?;
+
+        let open_id: MenuId = open_item.id().clone();
+        let update_id: MenuId = update_item.id().clone();
+
+        // The tray icon must outlive the message loop, so keep it in scope here.
+        let _tray = TrayIconBuilder::new()
+            .with_tooltip(format!("lymnal — {status}"))
+            .with_icon(load_icon()?)
+            .with_menu(Box::new(menu))
+            .build()?;
+
+        let menu_rx = MenuEvent::receiver();
+        pump_messages(|| {
+            while let Ok(ev) = menu_rx.try_recv() {
+                if ev.id == open_id {
+                    if let Some(bin) = &app_bin {
+                        let _ = std::process::Command::new(bin).spawn();
+                    }
+                } else if ev.id == update_id {
+                    // Same update the agent runs — a prebuilt fetch on Windows.
+                    crate::agent::update_now(std::path::Path::new(""));
+                }
+            }
+        });
+        Ok(())
+    }
+
+    /// A minimal Win32 message loop. tray-icon posts its click and menu messages
+    /// to this thread's queue; after each dispatched message we drain the menu
+    /// channel. Blocks for the life of the process, which is what we want — the
+    /// service runs until it's stopped.
+    fn pump_messages(mut on_tick: impl FnMut()) {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            DispatchMessageW, GetMessageW, TranslateMessage, MSG,
+        };
+        let mut msg: MSG = unsafe { std::mem::zeroed() };
+        loop {
+            // hwnd = null: messages for any window on this thread, plus thread
+            // messages. Returns 0 on WM_QUIT, -1 on error — stop on either.
+            let r = unsafe { GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) };
+            if r <= 0 {
+                break;
+            }
+            unsafe {
+                let _ = TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+            on_tick();
+        }
+    }
+
+    /// The silhouette mark, embedded so the tray never depends on an install path.
+    fn load_icon() -> anyhow::Result<Icon> {
+        let bytes = include_bytes!("../../branding/png/lymnal/lymnal-sil-32.png");
+        let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)?;
+        let (w, h) = (img.width(), img.height());
+        Ok(Icon::from_rgba(img.into_rgba8().into_vec(), w, h)?)
     }
 }

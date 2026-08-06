@@ -102,6 +102,14 @@ fn listen(link: &Link, config_path: &Path) -> anyhow::Result<()> {
 /// applied differs — a source rebuild on Linux, a prebuilt fetch on Windows —
 /// so the "update the server and every device follows" promise holds the same
 /// on both.
+/// Trigger an update now, the same one the server's announcement would — used by
+/// the Windows tray's "Update now" (a prebuilt fetch). Guarded, so a click during
+/// an in-flight update is a no-op.
+#[cfg(target_os = "windows")]
+pub fn update_now(config_path: &Path) {
+    run_installer(config_path);
+}
+
 fn run_installer(config_path: &Path) {
     // Only one install at a time, whichever trigger fires first.
     if INSTALLING.swap(true, Ordering::SeqCst) {
