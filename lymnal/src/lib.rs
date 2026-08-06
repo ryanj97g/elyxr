@@ -14,6 +14,7 @@ pub mod limbo;
 pub mod limits;
 pub mod model;
 pub mod pairing;
+pub mod proxy;
 pub mod state;
 pub mod trove;
 pub mod upload;

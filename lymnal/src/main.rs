@@ -65,13 +65,61 @@ fn run_service(config_path: PathBuf) -> anyhow::Result<()> {
     if let Some(link) = agent::load_link(&config_dir) {
         init_tracing("info");
         // A client device: the tray shows it's linked to its server and stays up
-        // while the agent keeps the device updated in the background.
+        // while lymnal keeps the device updated and proxies the trove locally.
         let host = link.server.split(':').next().unwrap_or(&link.server).to_string();
         let _tray = tray::spawn(format!("connected to {host}"), app_bin, repo);
-        agent::run(link, config_path); // never returns
+        // The update-watcher runs on its own thread (a blocking SSE loop)…
+        let watch = agent::Link {
+            server: link.server.clone(),
+            token: link.token.clone(),
+        };
+        let wcfg = config_path.clone();
+        std::thread::spawn(move || agent::run(watch, wcfg));
+        // …and the local caching proxy runs on the tokio runtime (never returns).
+        let rt = tokio::runtime::Runtime::new()?;
+        return rt.block_on(run_proxy(link));
     }
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(serve(config_path, repo, app_bin))
+}
+
+/// The client's local caching proxy: a small HTTP server on loopback that the
+/// app and the gate talk to, forwarding to the remote trove with limbo in front.
+/// The app points here instead of at the remote, so it never holds a token and
+/// never reaches across the tailnet itself.
+async fn run_proxy(link: agent::Link) -> anyhow::Result<()> {
+    let cache_dir = limbo_dir();
+    let limbo = lymnal::limbo::Limbo::open(&cache_dir)?;
+    let proxy = std::sync::Arc::new(lymnal::proxy::Proxy::new(
+        link.server.clone(),
+        link.token.clone(),
+        limbo,
+    ));
+    let app = lymnal::proxy::router(proxy);
+    let addr = "127.0.0.1:7749";
+    let listener = match tokio::net::TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("lymnal can't open the local proxy on {addr}: {e}");
+            std::process::exit(1);
+        }
+    };
+    tracing::info!(%addr, remote = %link.server, "client proxy listening");
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+/// Where limbo keeps its files: `~/.cache/lymnal/limbo` (honoring XDG).
+fn limbo_dir() -> PathBuf {
+    let base = std::env::var("XDG_CACHE_HOME")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+            PathBuf::from(home).join(".cache")
+        });
+    base.join("lymnal").join("limbo")
 }
 
 /// Where the tray's menu points: the elyxr repo (for "Update now") and the
