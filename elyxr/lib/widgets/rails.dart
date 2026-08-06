@@ -178,23 +178,20 @@ class _TopRailState extends State<TopRail> {
   }
 }
 
-/// The bottom rail: TEXT/GRID rocker · TROVE switch · status LED.
+/// The bottom rail: TEXT/GRID rocker · status LED. (The optional file-browser
+/// mount toggle now lives in Settings, since it's off by default.)
 class BottomRail extends StatelessWidget {
   final Palette palette;
   final ViewMode mode;
-  final bool trove;
   final LinkStatus status;
   final ValueChanged<ViewMode> onMode;
-  final VoidCallback onToggleTrove;
 
   const BottomRail({
     super.key,
     required this.palette,
     required this.mode,
-    required this.trove,
     required this.status,
     required this.onMode,
-    required this.onToggleTrove,
   });
 
   @override
@@ -219,33 +216,6 @@ class BottomRail extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          // TROVE switch.
-          GestureDetector(
-            onTap: onToggleTrove,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              width: 30,
-              height: 15,
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              alignment: trove ? Alignment.centerRight : Alignment.centerLeft,
-              decoration: BoxDecoration(
-                color: p.mv1,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Container(
-                width: 11,
-                height: 11,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: trove ? p.a : p.mb,
-                  boxShadow: trove ? [BoxShadow(color: p.a, blurRadius: 6)] : null,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text('TROVE', style: chassis(9, trove ? p.ml : p.mt, spacing: 0.1)),
           const Spacer(),
           _led(p),
         ],

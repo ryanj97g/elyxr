@@ -60,6 +60,12 @@ class SettingsView extends StatelessWidget {
                   ServerControls(palette: p),
                   const SizedBox(height: 16),
                 ],
+                // A client can also surface the trove as a real folder in its
+                // file manager (the optional gate mount). Off by default.
+                if (settings.appMode == AppMode.client) ...[
+                  _section(p, 'FS', 'USE SYSTEM FILE BROWSER', _GateRow(palette: p)),
+                  const SizedBox(height: 13),
+                ],
                 _section(p, '01', 'ACCENT', _AccentPicker(palette: p)),
                 const SizedBox(height: 13),
                 _section(p, '02', 'DENSITY', _DensityPicker(palette: p)),
@@ -120,6 +126,57 @@ class SettingsView extends StatelessWidget {
           body,
         ],
       );
+}
+
+/// The "Use System File Browser" switch: turns the optional gate mount on and
+/// off. Off means the trove lives in elyxr; on also surfaces it as a folder in
+/// the file manager.
+class _GateRow extends StatelessWidget {
+  final Palette palette;
+  const _GateRow({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<SettingsController>();
+    final p = palette;
+    final on = s.trove;
+    return GestureDetector(
+      onTap: () => s.trove = !on,
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              on
+                  ? 'On — the trove also appears as a folder in your file manager, on the Desktop.'
+                  : 'Off — the trove lives in elyxr. Turn this on to also open it as a folder in your file manager.',
+              style: glass(15, p.mid),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Container(
+            width: 34,
+            height: 18,
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+            decoration: BoxDecoration(
+              color: p.mv1,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Container(
+              width: 13,
+              height: 13,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: on ? p.a : p.mb,
+                boxShadow: on ? [BoxShadow(color: p.a, blurRadius: 6)] : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _AccentPicker extends StatelessWidget {

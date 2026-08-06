@@ -16,17 +16,16 @@ class TroveMountController extends ChangeNotifier {
   bool get mounted => _proc != null;
   String? get error => _error;
 
-  String _troveBin() {
-    // The installer now puts binaries in ~/.local/bin (no root, password-free
-    // updates); fall back to the old system-wide spot, then to PATH.
+  String _gateBin() {
+    // The mount program is now 'gate' (a thin FUSE window). Installed in the
+    // user's own bin; fall back to PATH.
     final home = Platform.environment['HOME'];
     for (final path in [
-      if (home != null) '$home/.local/bin/trove',
-      '/usr/local/bin/trove',
+      if (home != null) '$home/.local/bin/gate',
     ]) {
       if (File(path).existsSync()) return path;
     }
-    return 'trove';
+    return 'gate';
   }
 
   /// Start the mount. No-op if it's already running or starting.
@@ -52,10 +51,13 @@ class TroveMountController extends ChangeNotifier {
         await Process.run('fusermount3', ['-u', mountPath]);
       } catch (_) {}
       final proc = await Process.start(
-        _troveBin(),
+        _gateBin(),
         const [],
         environment: {
-          'ELYXR_SERVER': serverAddress,
+          // The gate talks to the *local* lymnal proxy, not the remote — so it
+          // rides limbo (cached reads, queued writes) like the app does. The
+          // proxy injects the real token; the gate's own is unused.
+          'ELYXR_SERVER': '127.0.0.1:7749',
           'ELYXR_TOKEN': token,
           'ELYXR_MOUNT': mountPath,
         },
