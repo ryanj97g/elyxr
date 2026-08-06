@@ -65,9 +65,13 @@ ran. The `:7749` after it is always elyxr's port.
 **Back on the desktop:** the laptop appears by name. Tap **APPROVE** and it
 connects — approving also closes pairing, so nothing else can slip in.
 
-Now flip the **TROVE** switch on the laptop: the shared folder appears at
-`~/Desktop/trove`, and the desktop's files are right there, each downloading only
-when you open it.
+The laptop is connected, and the desktop's files are **right there in elyxr** —
+browse them, open them, add and delete — each one downloading only when you open
+it. Nothing is copied to the laptop; the files stay the desktop's.
+
+Want the trove as a real folder in your file manager too? On the laptop, hold the
+wordmark → Settings → **Use System File Browser**. It's off by default and
+Linux-only — the in-app browser is the main way in; the folder is an extra.
 
 Rather stay in the terminal, or the server has no screen? The same thing:
 
@@ -83,15 +87,17 @@ lymnal bind seal
 
 The trove is a live window into the server, not a copy:
 
-- **Open a file** and just that file downloads, right then.
-- **Add a file** — drop it into the trove folder or use the app's upload
-  button — and it's saved to the server, so every device sees it.
-- **Drag a file out** of the app's window and it downloads to wherever you drop
-  it.
-- **Delete a file** and it's gone everywhere. The app asks first, since the
-  folder is shared.
+- **Open a file** and just that file downloads, right then. Images preview in the
+  app; other files open in your default program, and any edits you save come back
+  to the trove on their own.
+- **Add a file** — the app's upload button, or drag one in — and it's saved to the
+  server, so every device sees it.
+- **Drag a file out** of the app's window and it downloads to wherever you drop it.
+- **Delete a file** and it's gone everywhere. The app asks first, since the trove
+  is shared.
 
-No syncing by hand — using the files *is* the sync.
+No syncing by hand — using the files *is* the sync. A save made while the server
+is unreachable waits on this device and lands the moment it's back.
 
 ## Updates
 

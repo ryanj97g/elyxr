@@ -5,17 +5,18 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
 
 ## The three programs
 
-- **lymnal** (Rust) — the background service. On a **server** it shares one
-  folder (the trove) over your tailnet; on a **client** it stays connected to
-  its server and keeps the device up to date. One binary does both roles and the
-  command-line operations, so they can never disagree. It runs as a systemd
-  *user* service and shows a system-tray icon while it's running.
-- **trove** (Rust, FUSE) — mounts a served folder so it appears as a normal
-  folder on your device. Entries list instantly; a file's contents download
-  when you open it.
-- **elyxr** (Flutter) — the app. A Server/Client toggle sets the device's role,
-  and the app starts lymnal in server mode and stops it in client mode so the
-  two roles never collide.
+- **lymnal** (Rust) — the background service, one binary, both roles. On a
+  **server** it shares one folder (the trove) over your tailnet. On a **client**
+  it does two jobs: it keeps the device updated, and it runs a small local proxy
+  the app talks to — caching reads and queuing writes in **limbo** — so the app
+  never reaches across the tailnet itself. It runs as a systemd *user* service
+  and shows a system-tray icon.
+- **elyxr** (Flutter) — the app, and the main way in on every device. It browses,
+  opens, and edits the trove; a Server/Client toggle sets the device's role.
+- **gate** (Rust, FUSE) — optional, Linux-only. Surfaces the trove as a real
+  folder in your file manager (off by default; Settings → *Use System File
+  Browser*). It's a thin window onto the local lymnal proxy, so it rides the same
+  limbo the app does. (Formerly the `trove` crate.)
 
 ## Network
 
@@ -27,9 +28,11 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
 
 ## Where things live
 
-- Binaries: `~/.local/bin/lymnal` and `~/.local/bin/trove`. User-space, which is
-  why updates never need a password.
+- Binaries: `~/.local/bin/lymnal`, and `~/.local/bin/gate` (the optional mount).
+  User-space, which is why updates never need a password.
 - Config: `~/.config/lymnal/config.toml`.
+- limbo (a client's cache and queue): `~/.cache/lymnal/limbo`. Ephemeral — safe
+  to delete, costs only a re-fetch, except for anything still *held*.
 - A client's link to its server: `~/.config/lymnal/link.json`. Its presence is
   what marks a device as a client — lymnal reads it to know which server to
   follow. The app writes it on pairing and removes it on forget.
@@ -38,13 +41,32 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
 
 ## One copy, one owner
 
-- **The server holds the only real copy.** Clients show a live window onto it, so
-  nothing drifts out of sync and there are no conflicts to resolve. When the
-  server is unreachable the folder simply isn't live — there is no stale local
-  copy to reconcile later.
-- **One trove path per device.** The server *serves* the folder; a client
-  *mounts* it at the same place. Because the app runs lymnal in exactly one role
-  per device, a serve and a mount never fight over the same path.
+- **The server holds the only real copy** — the trove, the source of truth. A
+  client keeps no copy; its lymnal caches only what you've opened, in limbo,
+  bounded so it can never become a full mirror.
+- **The client routes through its own lymnal.** The app (and the gate) talk to
+  `127.0.0.1:7749`, the local proxy, which forwards to the remote trove with limbo
+  in front. The **server** reads its own disk directly — routing it through its
+  own lymnal would be a loop with no purpose.
+
+## limbo, editing, and sync
+
+- **limbo** is the client's lobby: a capped working-set and outbound queue, owned
+  by lymnal. It's bounded by *leaving room* — free disk never falls below 15% of
+  the disk or 2 GB, whichever is larger — rather than a fixed size. A file in it
+  is either **held** (unsynced, never evicted, the only copy until it lands) or
+  **passing through** (synced, ordinary LRU). It is never the trove and never a
+  user-facing folder.
+- **Editing syncs back.** Open a file in your default program and elyxr watches
+  the copy; a real change — writes settled for a moment, and the content actually
+  different — uploads back through the proxy. It lands on the trove at once when
+  reachable, and otherwise stays *held*, where a background pusher retries every
+  few seconds until it lands. So a save made during a lapse is never lost, and the
+  refresh control drains the queue on demand.
+- **Last writer wins.** A write is a deliberate act, so the most recent upload is
+  the truth; each carries the edit's own save time. A commit that could only fit
+  in limbo by dropping held work is refused instead — held work is never
+  sacrificed.
 
 ## Pairing
 
@@ -86,9 +108,9 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
 The installer sets all of this up for you; this is only for building by hand.
 
 ```sh
-cargo build --release              # lymnal + trove (Rust)
+cargo build --release              # lymnal + gate (Rust)
 cd elyxr && flutter build linux    # the app (Flutter)
 ```
 
-Requirements: a Rust toolchain, FUSE 3, and — for the app — the Flutter SDK with
-the Linux desktop build dependencies.
+Requirements: a Rust toolchain, the Flutter SDK with the Linux desktop build
+dependencies, and — only for the optional gate — FUSE 3.
