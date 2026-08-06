@@ -71,73 +71,78 @@ class Tube extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = palette;
-    return Flicker(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: p.tubeBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFF0A0C0B), width: 1),
-        ),
-        child: Stack(
-          children: [
-            // Bezel: a 3px recess ring just inside the border.
-            Positioned.fill(
-              child: Container(
-                margin: const EdgeInsets.all(1),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: p.tubeBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF0A0C0B), width: 1),
+      ),
+      child: Stack(
+        children: [
+          // Bezel: a 3px recess ring just inside the border.
+          Positioned.fill(
+            child: Container(
+              margin: const EdgeInsets.all(1),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: p.mv1, width: 3),
+              ),
+            ),
+          ),
+          // The terminal content.
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: child,
+            ),
+          ),
+          // Accent glow + vignette, drawn over content, non-interactive. The
+          // dark ring is kept light enough that the corners stay legible — a
+          // gentle falloff, not a heavy black frame.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: p.mv1, width: 3),
-                ),
-              ),
-            ),
-            // The terminal content.
-            Positioned.fill(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: child,
-              ),
-            ),
-            // Accent glow + vignette, drawn over content, non-interactive.
-            Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    gradient: RadialGradient(
-                      radius: 1.1,
-                      colors: [
-                        p.aAlpha(p.dark ? 0.04 : 0.0),
-                        Colors.black.withValues(alpha: p.dark ? 0.85 : 0.22),
-                      ],
-                      stops: const [0.55, 1.0],
-                    ),
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: RadialGradient(
+                    radius: 1.2,
+                    colors: [
+                      p.aAlpha(p.dark ? 0.04 : 0.0),
+                      Colors.black.withValues(alpha: p.dark ? 0.42 : 0.12),
+                    ],
+                    stops: const [0.6, 1.0],
                   ),
                 ),
               ),
             ),
-            // The moving sweep band.
-            Positioned.fill(
-              child: IgnorePointer(child: _Sweep(palette: p)),
-            ),
-            // Scanlines on top of everything.
-            Positioned.fill(
-              child: IgnorePointer(
+          ),
+          // The moving scan beam.
+          Positioned.fill(
+            child: IgnorePointer(child: _Sweep(palette: p)),
+          ),
+          // Static scanlines on top of everything. Cached to a layer with a
+          // RepaintBoundary so scaling the fixed chassis to the window resamples
+          // one rasterised texture instead of re-drawing crisp hairlines each
+          // frame — which is what made them shimmer.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: RepaintBoundary(
                 child: CustomPaint(painter: _ScanlinePainter()),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// `repeating-linear-gradient(180deg, transparent 0 2px, rgba(0,0,0,0.32) 3px 4px)`
+/// Hairline scanlines every 4px. Soft enough to read as texture, not stripes.
 class _ScanlinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.32)
+      ..color = Colors.black.withValues(alpha: 0.22)
       ..strokeWidth = 1;
     for (double y = 3; y < size.height; y += 4) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
@@ -148,7 +153,10 @@ class _ScanlinePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// The 120px band that slides down the tube over 8s, looping (DESIGN.md).
+/// A soft scan beam that travels top to bottom over 8s, looping. Brightest at
+/// its leading (lower) edge, fading up like phosphor decay behind it, so it
+/// reads as a single beam sweeping down — starting right at the top — rather
+/// than a band that appears mid-screen.
 class _Sweep extends StatefulWidget {
   final Palette palette;
   const _Sweep({required this.palette});
@@ -158,6 +166,8 @@ class _Sweep extends StatefulWidget {
 }
 
 class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
+  static const double _trail = 90; // how far the glow trails above the beam
+
   late final AnimationController _c =
       AnimationController(vsync: this, duration: const Duration(seconds: 8))
         ..repeat();
@@ -171,77 +181,38 @@ class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final p = widget.palette;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final h = constraints.maxHeight;
-        return AnimatedBuilder(
-          animation: _c,
-          builder: (context, _) {
-            // Travel from just above the top to just past the bottom.
-            final y = -120.0 + (h + 120.0) * _c.value;
-            return Transform.translate(
-              offset: Offset(0, y),
-              child: Container(
-                height: 120,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      p.aAlpha(0),
-                      p.aAlpha(0.05),
-                      p.aAlpha(0.10),
-                    ],
-                    stops: const [0, 0.72, 1],
+    return RepaintBoundary(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final h = constraints.maxHeight;
+          return AnimatedBuilder(
+            animation: _c,
+            builder: (context, _) {
+              // The beam's leading edge runs from the very top (y=0) to the
+              // bottom (y=h); its trailing glow sits in the band above it.
+              final beamY = h * _c.value;
+              return Transform.translate(
+                offset: Offset(0, beamY - _trail),
+                child: Container(
+                  height: _trail,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        p.aAlpha(0),
+                        p.aAlpha(0.05),
+                        p.aAlpha(0.13),
+                      ],
+                      stops: const [0, 0.75, 1],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-/// Opacity 1, dipping to 0.88 at 94% and 0.94 at 97% of a 9s loop. Subtle.
-class Flicker extends StatefulWidget {
-  final Widget child;
-  const Flicker({super.key, required this.child});
-
-  @override
-  State<Flicker> createState() => _FlickerState();
-}
-
-class _FlickerState extends State<Flicker>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 9))
-        ..repeat();
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  double _opacityAt(double t) {
-    // Piecewise, matching the CSS keyframes.
-    if (t < 0.92) return 1.0;
-    if (t < 0.94) return _lerp(1.0, 0.88, (t - 0.92) / 0.02);
-    if (t < 0.97) return _lerp(0.88, 0.94, (t - 0.94) / 0.03);
-    return _lerp(0.94, 1.0, (t - 0.97) / 0.03);
-  }
-
-  double _lerp(double a, double b, double f) => a + (b - a) * f;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (context, child) =>
-          Opacity(opacity: _opacityAt(_c.value), child: child),
-      child: widget.child,
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

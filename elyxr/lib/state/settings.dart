@@ -26,8 +26,6 @@ class SettingsController extends ChangeNotifier {
   bool _dark = true;
   ViewMode _mode = ViewMode.text;
   bool _trove = false; // "Use System File Browser" — the optional gate mount, off by default
-  bool _notify = true;
-  int _cache = 10; // 1..20 → 0.5–15 GB
   AppMode _appMode = AppMode.client;
   String _downloadDir = '~/Downloads';
   String _mountPath = '~/Desktop/trove'; // where the trove mounts — a normal folder on the Desktop
@@ -39,16 +37,11 @@ class SettingsController extends ChangeNotifier {
   bool get dark => _dark;
   ViewMode get mode => _mode;
   bool get trove => _trove;
-  bool get notify => _notify;
-  int get cache => _cache;
   AppMode get appMode => _appMode;
   String get downloadDir => _downloadDir;
   String get mountPath => _mountPath;
   bool get confirmDelete => _confirmDelete;
   int get atOnce => _atOnce;
-
-  /// Cache slider position → gigabytes (0.5–15 GB across 20 steps).
-  double get cacheGb => 0.5 + (_cache / 20) * 14.5;
 
   void _load() {
     _accent = _enumByName(Accent.values, _prefs.getString('accent'), Accent.green);
@@ -57,8 +50,6 @@ class SettingsController extends ChangeNotifier {
     _dark = _prefs.getBool('dark') ?? true;
     _mode = _enumByName(ViewMode.values, _prefs.getString('mode'), ViewMode.text);
     _trove = _prefs.getBool('trove') ?? false;
-    _notify = _prefs.getBool('notify') ?? true;
-    _cache = _prefs.getInt('cache') ?? 10;
     _appMode =
         _enumByName(AppMode.values, _prefs.getString('appMode'), AppMode.client);
     _downloadDir = _prefs.getString('downloadDir') ?? '~/Downloads';
@@ -80,8 +71,6 @@ class SettingsController extends ChangeNotifier {
   set dark(bool v) => _set('dark', () => _dark = v, () => _prefs.setBool('dark', v));
   set mode(ViewMode v) => _set('mode', () => _mode = v, () => _prefs.setString('mode', v.name));
   set trove(bool v) => _set('trove', () => _trove = v, () => _prefs.setBool('trove', v));
-  set notify(bool v) => _set('notify', () => _notify = v, () => _prefs.setBool('notify', v));
-  set cache(int v) => _set('cache', () => _cache = v.clamp(1, 20), () => _prefs.setInt('cache', _cache));
   set appMode(AppMode v) => _set('appMode', () => _appMode = v, () => _prefs.setString('appMode', v.name));
   set downloadDir(String v) => _set('downloadDir', () => _downloadDir = v, () => _prefs.setString('downloadDir', v));
   set mountPath(String v) => _set('mountPath', () => _mountPath = v, () => _prefs.setString('mountPath', v));

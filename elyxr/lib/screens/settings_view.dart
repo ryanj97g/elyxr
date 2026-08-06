@@ -75,11 +75,9 @@ class SettingsView extends StatelessWidget {
                 const SizedBox(height: 13),
                 _section(p, '03', 'TUBE', _TubePicker(palette: p)),
                 const SizedBox(height: 13),
-                _section(p, '04', 'CACHE', _CacheMeter(palette: p)),
+                _section(p, '04', 'THIS DEVICE', _DeviceRows(palette: p)),
                 const SizedBox(height: 13),
-                _section(p, '05', 'THIS DEVICE', _DeviceRows(palette: p)),
-                const SizedBox(height: 13),
-                _section(p, '06', 'PARTS', _Parts(palette: p)),
+                _section(p, '05', 'PARTS', _Parts(palette: p)),
                 const SizedBox(height: 16),
               ],
             ),
@@ -356,51 +354,6 @@ class _TubePicker extends StatelessWidget {
   }
 }
 
-class _CacheMeter extends StatelessWidget {
-  final Palette palette;
-  const _CacheMeter({required this.palette});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = palette;
-    final settings = context.watch<SettingsController>();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          height: 14,
-          child: Row(
-            children: List.generate(20, (i) {
-              final lit = i < settings.cache;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => settings.cache = i + 1,
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 1),
-                    color: lit ? p.a : p.dim,
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-        const SizedBox(height: 5),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text('500 MB', style: chassis(10, p.mid, spacing: 0.1)),
-            Text('${settings.cacheGb.toStringAsFixed(1)} GB',
-                style: glass(27, p.bright)),
-            Text('15 GB', style: chassis(10, p.mid, spacing: 0.1)),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 /// The three programs the system is made of, each with its mark. It quietly
 /// says what elyxr *is* — an app, a service, and a mount — rather than leaving
 /// it abstract.
@@ -450,14 +403,6 @@ class _DeviceRows extends StatelessWidget {
           ),
         );
 
-    Widget check(bool on, VoidCallback onTap) => GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Text(on ? '▣' : '▢',
-              style: glass(22, on ? p.bright : p.foot).copyWith(
-                  shadows: on ? [Shadow(color: p.aAlpha(0.8), blurRadius: 9)] : null)),
-        );
-
     return Column(
       children: [
         row(
@@ -476,20 +421,21 @@ class _DeviceRows extends StatelessWidget {
                 style: glass(14, p.foot)),
           ),
         row('DOWNLOADS', Text(settings.downloadDir, style: glass(20, p.bright))),
-        row(
-          'MOUNT AT',
-          GestureDetector(
-            onTap: () async {
-              final v = await _editMountPath(context, p, settings.mountPath);
-              if (v != null && v.trim().isNotEmpty) settings.mountPath = v.trim();
-            },
-            behavior: HitTestBehavior.opaque,
-            child: Text('${settings.mountPath}  ✎', style: glass(20, p.a)),
+        // The mount path only matters where the gate can run (a Linux client);
+        // in server mode there's no mount, so it isn't shown.
+        if (settings.appMode == AppMode.client && Platform.isLinux)
+          row(
+            'MOUNT AT',
+            GestureDetector(
+              onTap: () async {
+                final v = await _editMountPath(context, p, settings.mountPath);
+                if (v != null && v.trim().isNotEmpty) settings.mountPath = v.trim();
+              },
+              behavior: HitTestBehavior.opaque,
+              child: Text('${settings.mountPath}  ✎', style: glass(20, p.a)),
+            ),
           ),
-        ),
         row('AT ONCE', Text('${settings.atOnce} transfers', style: glass(20, p.bright))),
-        row('NOTIFY ON FINISH', check(settings.notify, () => settings.notify = !settings.notify)),
-        row('TROVE FOLDER', check(settings.trove, () => settings.trove = !settings.trove)),
         if (session.serverName != null)
           Padding(
             padding: const EdgeInsets.only(top: 6),
