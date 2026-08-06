@@ -86,6 +86,12 @@ class SessionController extends ChangeNotifier {
 
   String _baseUrl(String address) => 'http://$address';
 
+  /// A paired client talks to its *own* lymnal, which proxies to the trove with
+  /// limbo in front — never across the tailnet directly, and never holding a
+  /// token itself (local lymnal injects it). Discovery and pairing still use the
+  /// remote address, since that's how a device is found and approved.
+  static const _localProxy = 'http://127.0.0.1:7749';
+
   /// Load the saved pairing and confirm the server answers. Call once at start.
   Future<void> boot() async {
     await _importPendingBind();
@@ -98,7 +104,7 @@ class SessionController extends ChangeNotifier {
       _setStatus(LinkStatus.firstRun);
       return;
     }
-    _client = _factory(_baseUrl(_serverAddress!), token: _token);
+    _client = _factory(_localProxy, token: _token);
     await refresh();
     await _syncLink();
     _startPolling();
@@ -254,9 +260,11 @@ class SessionController extends ChangeNotifier {
     await _tokens.write(result.token);
     await _prefs.setString('serverAddress', address);
     await _prefs.setString('serverName', _serverName!);
-    _client = _factory(_baseUrl(address), token: _token);
+    _client = _factory(_localProxy, token: _token);
+    // Write link.json first so lymnal restarts as this device's local proxy,
+    // then refresh — which retries until the proxy is answering.
+    await _syncLink();
     await refresh();
-    await _syncLink(); // let the lymnal service start keeping this device updated
   }
 
   /// Forget this server: delete the token, drop the pairing, and return to
@@ -294,7 +302,7 @@ class SessionController extends ChangeNotifier {
   /// mode), rebuilding the client from the saved pairing.
   void useRemote() {
     if (_serverAddress != null) {
-      _client = _factory(_baseUrl(_serverAddress!), token: _token);
+      _client = _factory(_localProxy, token: _token);
       refresh();
     }
   }
