@@ -46,8 +46,9 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
   bounded so it can never become a full mirror.
 - **The client routes through its own lymnal.** The app (and the gate) talk to
   `127.0.0.1:7749`, the local proxy, which forwards to the remote trove with limbo
-  in front. The **server** reads its own disk directly — routing it through its
-  own lymnal would be a loop with no purpose.
+  in front. The **server** works its own disk directly — browsing, opening, adding,
+  and editing all land straight on the local folder, with no token and no limbo;
+  routing the server through its own lymnal would be a loop with no purpose.
 
 ## limbo, editing, and sync
 
