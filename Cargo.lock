@@ -648,6 +648,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gate"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "fuser",
+ "libc",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "ureq",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2075,20 +2089,6 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
-]
-
-[[package]]
-name = "trove"
-version = "1.0.0"
-dependencies = [
- "anyhow",
- "fuser",
- "libc",
- "serde",
- "serde_json",
- "tempfile",
- "tracing",
- "ureq",
 ]
 
 [[package]]

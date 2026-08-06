@@ -52,10 +52,8 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomRail: BottomRail(
         palette: p,
         mode: settings.mode,
-        trove: settings.trove,
         status: session.status,
         onMode: (m) => settings.mode = m,
-        onToggleTrove: () => settings.trove = !settings.trove,
       ),
     );
   }

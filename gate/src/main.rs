@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use trove::{Cache, Lymnal, TroveFs};
+use gate::{Cache, Lymnal, TroveFs};
 use fuser::MountOption;
 
 fn main() -> anyhow::Result<()> {

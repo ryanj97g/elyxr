@@ -1,15 +1,15 @@
 [package]
-name = "trove"
+name = "gate"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "trove"
+name = "gate"
 path = "src/main.rs"
 
 [lib]
-name = "trove"
+name = "gate"
 path = "src/lib.rs"
 
 [dependencies]

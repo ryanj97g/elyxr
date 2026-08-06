@@ -7,7 +7,7 @@
 #   ./elyxr.sh
 #
 # Installs the whole stack on this device: lymnal (the service that can serve a
-# folder over your tailnet), trove (the client-side mount), and the elyxr app
+# folder over your tailnet), gate (the optional client-side folder mount), and the elyxr app
 # (the UI). Every device gets all three — the app's Server/Client toggle decides
 # what this device actually does. Running it again is an update: pull, rebuild
 # only what changed, re-install a binary only if it differs, and restart the
@@ -286,8 +286,8 @@ phase "building lymnal"
 sh_ cargo build --release -p lymnal
 done_
 
-phase "building trove"
-sh_ cargo build --release -p trove
+phase "building gate"
+sh_ cargo build --release -p gate
 done_
 
 if [ "$APP" = 1 ]; then
@@ -317,7 +317,8 @@ install_if_changed() {  # $1 built, $2 dest — returns 0 if it (re)installed
 }
 LYMNAL_CHANGED=0
 if install_if_changed target/release/lymnal "$BIN_DIR/lymnal"; then LYMNAL_CHANGED=1; fi
-if install_if_changed target/release/trove  "$BIN_DIR/trove";  then :; fi
+if install_if_changed target/release/gate   "$BIN_DIR/gate";   then :; fi
+rm -f "$BIN_DIR/trove"  # old name for the mount, now 'gate'
 # Ensure ~/.local/bin is on PATH now and in future login shells.
 case ":$PATH:" in *":$BIN_DIR:"*) ;; *) export PATH="$BIN_DIR:$PATH" ;; esac
 for rc in "$HOME/.profile" "$HOME/.bashrc"; do
