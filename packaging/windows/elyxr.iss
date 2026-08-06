@@ -73,11 +73,41 @@ begin
   Result := '';
 end;
 
+// Is the Tailscale CLI already present? It installs to Program Files.
+function TailscaleInstalled(): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{commonpf}\Tailscale\tailscale.exe')) or
+            FileExists(ExpandConstant('{sd}\Program Files\Tailscale\tailscale.exe'));
+end;
+
+// elyxr reaches your other devices over Tailscale, so a device with elyxr needs
+// it — exactly like elyxr.sh installs it on Linux. Install it through winget
+// (present on current Windows; it knows the current version and prompts for the
+// one elevation Tailscale needs). If winget isn't available, open the official
+// download page so it can be finished by hand rather than failing silently.
+// Signing in is the one step no installer can do for you, on either OS.
+procedure EnsureTailscale();
+var
+  rc: Integer;
+begin
+  if TailscaleInstalled() then
+    exit;
+  if Exec(ExpandConstant('{cmd}'),
+       '/c winget install --id tailscale.tailscale -e --silent ' +
+       '--accept-source-agreements --accept-package-agreements',
+       '', SW_SHOW, ewWaitUntilTerminated, rc) and (rc = 0) then
+    exit;
+  ShellExec('open', 'https://tailscale.com/download/windows', '', '', SW_SHOW,
+    ewNoWait, rc);
+end;
+
 // After install, seed the lymnal config from the template if the user has none
 // yet — the same first-run copy elyxr.sh does on Linux — so this device can act
 // as a server (serve mode reads a config; a client just ignores it). Left alone
 // on later updates so a customised config is never clobbered. The path matches
-// lymnal's home_dir (%USERPROFILE% on Windows).
+// lymnal's home_dir (%USERPROFILE% on Windows). Then make sure Tailscale is
+// present. Both are skipped on a silent auto-update — that's an existing install,
+// already set up.
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   cfgDir, cfg, tmpl: String;
@@ -90,5 +120,7 @@ begin
       tmpl := ExpandConstant('{app}\config.example.toml');
       FileCopy(tmpl, cfg, True);
     end;
+    if not WizardSilent() then
+      EnsureTailscale();
   end;
 end;
