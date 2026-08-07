@@ -171,8 +171,9 @@ class _Sweep extends StatefulWidget {
 }
 
 class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
-  // A thin bright line with a small halo — a scanner line, not a wide wash.
-  static const double _band = 44;
+  // A thin bright line — a scanner line that lights only a hairline as it
+  // passes, so it can't drag a lit band across the static phosphor texture.
+  static const double _band = 6;
   // Fraction of the cycle spent sweeping; the rest is a brief rest, so the
   // line reads as a periodic sonar pass, not constant motion.
   static const double _sweepPart = 0.7;
@@ -210,15 +211,14 @@ class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      // A faint halo, then a bright thin core, then halo again.
+                      // A clean bright line — a hair of feather so it isn't
+                      // aliased, no glow-bar spread.
                       colors: [
                         p.aAlpha(0),
-                        p.aAlpha(0.05),
-                        p.aAlpha(0.60),
-                        p.aAlpha(0.05),
+                        p.aAlpha(0.65),
                         p.aAlpha(0),
                       ],
-                      stops: const [0.0, 0.44, 0.5, 0.56, 1.0],
+                      stops: const [0.2, 0.5, 0.8],
                     ),
                   ),
                 ),
