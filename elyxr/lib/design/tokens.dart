@@ -22,19 +22,21 @@ class Fonts {
   static const mono = 'IBM Plex Mono';
 }
 
-/// The switchable phosphor accents. `mono` is the white phosphor (its intensity
-/// is a lightness, not a saturation).
-enum Accent { green, amber, cyan, violet, pink, mono }
+/// The switchable phosphor accents, in spectrum order. `mono` is the white
+/// phosphor (its intensity is a lightness, not a saturation).
+enum Accent { red, amber, green, cyan, blue, purple, pink, mono }
 
 /// The three list densities (row padding + font size only).
 enum Density { tight, mid, roomy }
 
 extension AccentLabel on Accent {
   String get label => switch (this) {
-        Accent.green => 'GREEN',
+        Accent.red => 'RED',
         Accent.amber => 'AMBER',
+        Accent.green => 'GREEN',
         Accent.cyan => 'CYAN',
-        Accent.violet => 'VIOLET',
+        Accent.blue => 'BLUE',
+        Accent.purple => 'PURPLE',
         Accent.pink => 'PINK',
         Accent.mono => 'MONO',
       };
@@ -77,10 +79,12 @@ class AccentSpec {
 // First-guess hues, seeded from a tuned source palette. baseL is the accent
 // swatch's lightness; chromaMul + maxCeil set how far the hue saturates.
 final Map<Accent, AccentSpec> _specs = {
-  Accent.green: const AccentSpec(145, 1.00, 0.220, 0.56),
+  Accent.red: const AccentSpec(27, 1.00, 0.200, 0.56),
   Accent.amber: const AccentSpec(82, 1.00, 0.190, 0.70),
+  Accent.green: const AccentSpec(145, 1.00, 0.220, 0.56),
   Accent.cyan: const AccentSpec(195, 0.95, 0.150, 0.62),
-  Accent.violet: const AccentSpec(290, 1.10, 0.235, 0.58),
+  Accent.blue: const AccentSpec(255, 1.00, 0.190, 0.56),
+  Accent.purple: const AccentSpec(307, 1.10, 0.235, 0.58),
   Accent.pink: const AccentSpec(352, 0.95, 0.170, 0.70),
   Accent.mono: const AccentSpec(0, 0, 0, 0.72, mono: true),
 };

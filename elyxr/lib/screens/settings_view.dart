@@ -192,7 +192,7 @@ class _AccentPicker extends StatelessWidget {
         for (final accent in Accent.values)
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(right: 9),
+              padding: const EdgeInsets.only(right: 4),
               child: GestureDetector(
                 onTap: () => settings.accent = accent,
                 behavior: HitTestBehavior.opaque,
@@ -247,7 +247,13 @@ class _AccentPicker extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Text(accent.label, style: chassis(10, on ? base.bright : base.mid, spacing: 0.1)),
+        // Shrink the label to fit its narrower column (8 accents now) rather
+        // than overflow — a smart squish, not a clip.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(accent.label,
+              style: chassis(10, on ? base.bright : base.mid, spacing: 0.1)),
+        ),
       ],
     );
   }
