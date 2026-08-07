@@ -3,6 +3,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
@@ -58,6 +59,14 @@ Future<void> main() async {
 
   await session.boot();
   await transfers.load();
+
+  // Start the audio engine once, with visualization on so the music player can
+  // read the live FFT. Guarded: a headless machine with no audio device just
+  // runs silent.
+  try {
+    await SoLoud.instance.init();
+    SoLoud.instance.setVisualizationEnabled(true);
+  } catch (_) {}
 
   runApp(ShakeToClose(
     child: ElyxrApp(
