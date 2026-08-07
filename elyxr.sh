@@ -138,7 +138,11 @@ BIN_DIR="$HOME/.local/bin"
 # go on first, before the Tailscale step. The heavier build tools follow it.
 BASE_PKGS=(curl ca-certificates)
 BUILD_PKGS=(build-essential pkg-config git fuse3 libfuse3-dev)
-[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev)
+# The app needs GTK + a few libs to build; the last three GStreamer packages are
+# for the audioplayers plugin (Nostalgia Mode sounds and music) — dev headers to
+# build against, base+good plugins for Ogg/Vorbis playback at runtime.
+[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev \
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-good)
 BASE_NEED=(); BUILD_NEED=()
 if command -v dpkg >/dev/null 2>&1; then
   for p in "${BASE_PKGS[@]}";  do dpkg -s "$p" >/dev/null 2>&1 || BASE_NEED+=("$p"); done

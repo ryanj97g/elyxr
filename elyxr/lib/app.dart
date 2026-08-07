@@ -9,6 +9,7 @@ import 'api/admin_client.dart';
 import 'api/lymnal_client.dart';
 import 'state/actions.dart';
 import 'state/browse.dart';
+import 'state/music.dart';
 import 'state/server.dart';
 import 'state/session.dart';
 import 'state/settings.dart';
@@ -47,6 +48,7 @@ class ElyxrApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => UpdateController(transfers)),
         Provider.value(value: FileActions(browse, transfers, settings)),
         Provider(create: (_) => SoundController(settings)),
+        ChangeNotifierProvider(create: (_) => MusicController()),
       ],
       child: MaterialApp(
         title: 'elyxr',
