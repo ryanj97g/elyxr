@@ -308,13 +308,33 @@ fn update(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> 
     // away from the server and still update everything from your own device.
     if let Some(dir) = config_path.parent() {
         if let Some(link) = crate::agent::load_link(dir) {
-            request_fleet_update(&link)?;
-            println!("Asked {} to update every device.", link.server);
-            // Exit 10 — "requested": unlike the server path (exit 0, build done,
-            // relaunch now), the install here runs in the background via this
-            // device's agent, which restarts the app when the new build is ready.
-            // The app uses this code to wait rather than relaunch onto the old
-            // binary early.
+            // A client press. Every device connects to the server, not to each
+            // other, so the server is how the *other* devices hear about it: ask
+            // it to broadcast the update (it also rebuilds itself). When the
+            // server is reachable, that broadcast comes straight back to this
+            // device and our own agent applies the update — so we don't also
+            // self-trigger here, which would race a second installer.
+            //
+            // When the server is NOT reachable, a press must still never be a
+            // no-op: update THIS device from source right now, detached in its
+            // own systemd scope so it outlives the app/service restart the
+            // installer performs. The other devices catch up on their own the
+            // next time the fleet build moves — no device waits on the server's
+            // version or its being online to update itself.
+            match request_fleet_update(&link) {
+                Ok(()) => println!("Asked {} to update every device.", link.server),
+                Err(e) => {
+                    eprintln!(
+                        "couldn't reach {} to update the fleet ({e}); updating this device on its own.",
+                        link.server
+                    );
+                    crate::agent::trigger_local_update(config_path.to_path_buf());
+                }
+            }
+            // Exit 10 — "requested": either way this device updates in the
+            // background (a detached installer restarts the app when the build is
+            // ready), so the app waits rather than relaunching onto the old binary
+            // now.
             std::process::exit(10);
         }
     }
