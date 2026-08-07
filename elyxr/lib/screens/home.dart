@@ -11,6 +11,7 @@ import '../design/chassis.dart';
 import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../widgets/nostalgia/cursor_trail.dart';
 import '../widgets/nostalgia/matrix_rain.dart';
 import '../widgets/rails.dart';
 import 'files_view.dart';
@@ -33,6 +34,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _idle = false;
   Timer? _idleTimer;
 
+  // The live pointer position, fed to the cursor trail (Nostalgia Mode).
+  final ValueNotifier<Offset?> _cursor = ValueNotifier(null);
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _idleTimer?.cancel();
+    _cursor.dispose();
     super.dispose();
   }
 
@@ -87,13 +92,24 @@ class _HomeScreenState extends State<HomeScreen> {
       child: tubeChild,
     );
 
-    return Listener(
-      // Wakes the screensaver and resets the idle countdown on any input. It's
-      // an ancestor of the whole tree, so it sees the event even when the
+    // Nostalgia Mode turns the pointer into a crosshair over the file browser.
+    if (settings.nostalgia && !_inSettings) {
+      tubeChild = MouseRegion(cursor: SystemMouseCursors.precise, child: tubeChild);
+    }
+
+    final app = Listener(
+      // Wakes the screensaver, resets the idle countdown, and feeds the cursor
+      // trail. An ancestor of the whole tree, so it sees the event even when the
       // screensaver overlay absorbs the tap that dismisses it.
       onPointerDown: (_) => _bump(),
-      onPointerMove: (_) => _bump(),
-      onPointerHover: (_) => _bump(),
+      onPointerMove: (e) {
+        _cursor.value = e.localPosition;
+        _bump();
+      },
+      onPointerHover: (e) {
+        _cursor.value = e.localPosition;
+        _bump();
+      },
       onPointerSignal: (_) => _bump(),
       child: Chassis(
         palette: p,
@@ -123,6 +139,19 @@ class _HomeScreenState extends State<HomeScreen> {
           inSettings: _inSettings,
         ),
       ),
+    );
+
+    if (!settings.nostalgia) return app;
+    // The cursor trail floats above everything, non-interactive.
+    return Stack(
+      children: [
+        app,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: CursorTrail(cursor: _cursor, palette: p),
+          ),
+        ),
+      ],
     );
   }
 }
