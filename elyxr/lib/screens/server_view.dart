@@ -11,7 +11,6 @@ import '../api/admin_client.dart';
 import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/server.dart';
-import '../state/updater.dart';
 import '../util/format.dart';
 import '../widgets/update_sheet.dart';
 
@@ -106,16 +105,12 @@ class _ServerControlsState extends State<ServerControls> {
   Widget _service(Palette p, ServerController s) {
     final st = s.status;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Row(children: [
-          Image.asset('assets/branding/lymnal.png', width: 22, height: 22),
-          const SizedBox(width: 7),
-          Text('SERVICE', style: chassis(12, p.bright, spacing: 0.16)),
-        ]),
-        GestureDetector(
-          onTap: () => context.read<UpdateController>().updateNow(),
-          child: Text('UPDATE NOW', style: chassis(11, p.a, spacing: 0.1)),
-        ),
+      // Update lives in Settings › THIS DEVICE now (one control, every mode), so
+      // the SERVICE panel just reports state — no button of its own.
+      Row(children: [
+        Image.asset('assets/branding/lymnal.png', width: 22, height: 22),
+        const SizedBox(width: 7),
+        Text('SERVICE', style: chassis(12, p.bright, spacing: 0.16)),
       ]),
       const SizedBox(height: 6),
       _row(p, 'STATE', st == null ? '—' : (st.running ? 'RUNNING' : 'STOPPED')),

@@ -479,18 +479,29 @@ fi
 # If the elyxr window was open when this ran (for example the client agent
 # triggered the update in the background), restart it onto the fresh build so an
 # open window doesn't linger on the old version. Skipped when nothing's running.
+# We record whether we did it so the closing summary can say so plainly — a
+# silent restart is why an update always felt like a guess.
+APP_RESTARTED=0
 if [ "$APP" = 1 ] && [ -n "${APP_BIN:-}" ] && pgrep -f "$APP_BIN" >/dev/null 2>&1; then
   pkill -f "$APP_BIN" 2>/dev/null || true
   sleep 1
   ( setsid "$APP_BIN" >/dev/null 2>&1 & ) 2>/dev/null || true
+  APP_RESTARTED=1
 fi
 
-notify "Done — elyxr is up to date."
+notify "Done — elyxr is up to date (build $ELYXR_BUILD)."
 splash
 echo
-echo "${GRN}elyxr is ready.${RST}"
+# State the build this run actually built and installed. This number is the
+# truth about what's running now — it matches the app's Settings footer, so an
+# update that "didn't take" is visible instead of a mystery.
+echo "${GRN}elyxr is ready.${RST}  build ${ELYXR_BUILD} · ${ELYXR_COMMIT}"
 echo
 if [ "$APP" = 1 ]; then
-  echo "  Open it from your apps menu — search \"elyxr\"."
+  if [ "$APP_RESTARTED" = 1 ]; then
+    echo "  The open app was restarted onto build ${ELYXR_BUILD}."
+  else
+    echo "  Open it from your apps menu — search \"elyxr\"."
+  fi
 fi
 echo "  Update anytime:  lymnal update"
