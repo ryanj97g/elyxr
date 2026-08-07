@@ -21,6 +21,7 @@ import '../state/settings.dart';
 import '../util/drag_out.dart';
 import '../util/format.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/tactile.dart';
 import '../widgets/transfer_panel.dart';
 import 'preview.dart';
 
@@ -579,7 +580,10 @@ class _Row extends StatelessWidget {
               DragOut.begin(path, entry.name);
             },
       onLongPress: () => _renameEntry(context, browse, p, entry.name),
-      child: Container(
+      // Hover on desktop / press on touch lights the row the same way.
+      child: Tactile(
+        accent: p.a,
+        child: Container(
         padding: EdgeInsets.symmetric(horizontal: 6, vertical: density.pad),
         decoration: BoxDecoration(
           color: selected ? p.aAlpha(0.15) : band,
@@ -623,6 +627,7 @@ class _Row extends StatelessWidget {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
