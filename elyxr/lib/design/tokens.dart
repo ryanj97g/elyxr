@@ -79,7 +79,7 @@ class AccentSpec {
 // First-guess hues, seeded from a tuned source palette. baseL is the accent
 // swatch's lightness; chromaMul + maxCeil set how far the hue saturates.
 final Map<Accent, AccentSpec> _specs = {
-  Accent.red: const AccentSpec(27, 1.00, 0.200, 0.56),
+  Accent.red: const AccentSpec(18, 1.00, 0.200, 0.56),
   Accent.amber: const AccentSpec(82, 1.00, 0.190, 0.70),
   Accent.green: const AccentSpec(145, 1.00, 0.220, 0.56),
   Accent.cyan: const AccentSpec(195, 0.95, 0.150, 0.62),
