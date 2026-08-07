@@ -10,7 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 
 /// Loop nothing, the whole list, or the one track.
-enum RepeatMode { off, all, one }
+enum MusicRepeat { off, all, one }
 
 class MusicController extends ChangeNotifier {
   final AudioPlayer _player = AudioPlayer();
@@ -20,7 +20,7 @@ class MusicController extends ChangeNotifier {
   int _index = 0;
   bool _playing = false;
   bool _shuffle = false;
-  RepeatMode _repeat = RepeatMode.off;
+  MusicRepeat _repeat = MusicRepeat.off;
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
 
@@ -43,7 +43,7 @@ class MusicController extends ChangeNotifier {
   int get count => _tracks.length;
   bool get playing => _playing;
   bool get shuffle => _shuffle;
-  RepeatMode get repeat => _repeat;
+  MusicRepeat get repeat => _repeat;
   Duration get position => _pos;
   Duration get duration => _dur;
   String get title => hasTracks ? _pretty(_tracks[_index]) : 'no tracks';
@@ -116,7 +116,7 @@ class MusicController extends ChangeNotifier {
   }
 
   void cycleRepeat() {
-    _repeat = RepeatMode.values[(_repeat.index + 1) % RepeatMode.values.length];
+    _repeat = MusicRepeat.values[(_repeat.index + 1) % MusicRepeat.values.length];
     notifyListeners();
   }
 
@@ -145,9 +145,9 @@ class MusicController extends ChangeNotifier {
 
   // A track ended on its own: honour repeat/shuffle.
   void _onComplete() {
-    if (_repeat == RepeatMode.one) {
+    if (_repeat == MusicRepeat.one) {
       playIndex(_index);
-    } else if (_shuffle || _repeat == RepeatMode.all) {
+    } else if (_shuffle || _repeat == MusicRepeat.all) {
       next();
     } else if (_index < _tracks.length - 1) {
       next();
