@@ -785,7 +785,7 @@ dependencies = [
 
 [[package]]
 name = "gate"
-version = "1.0.0"
+version = "2.0.5"
 dependencies = [
  "anyhow",
  "fuser",
@@ -1484,7 +1484,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "lymnal"
-version = "1.0.0"
+version = "2.0.5"
 dependencies = [
  "anyhow",
  "argon2",
