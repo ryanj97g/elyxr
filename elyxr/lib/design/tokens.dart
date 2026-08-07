@@ -1,15 +1,14 @@
-// The visual language of elyxr, from DESIGN.md: a tinted metal chassis with a
-// phosphor CRT tube. Five accents, each casting the metal a different way; the
-// phosphor colours are computed from the accent so a new colour needs no new
-// constants. This file is the single source of those tokens.
+// The visual language of elyxr: a tinted metal chassis with a phosphor CRT tube.
+// Named phosphor accents, each just a hue + chroma budget; every colour — the
+// glowing tube in dark, the paper terminal in light, and the metal — is derived
+// from that hue by the OKLCH engine (oklch.dart), gamut-true so a whole screen
+// sits in one phosphor colour and stays that colour. A new accent is one row.
 
 import 'package:flutter/painting.dart';
 
-/// Parse `#rrggbb` into a fully opaque [Color].
-Color _hex(String h) {
-  final v = int.parse(h.substring(1), radix: 16);
-  return Color(0xFF000000 | v);
-}
+import 'oklch.dart';
+
+Color _c(int argb) => Color(argb);
 
 /// The three typefaces, one job each (DESIGN.md · Type).
 class Fonts {
@@ -23,19 +22,21 @@ class Fonts {
   static const mono = 'IBM Plex Mono';
 }
 
-/// The five switchable accents.
-enum Accent { mono, cyan, amber, green, violet }
+/// The switchable phosphor accents. `mono` is the white phosphor (its intensity
+/// is a lightness, not a saturation).
+enum Accent { green, amber, cyan, violet, pink, mono }
 
 /// The three list densities (row padding + font size only).
 enum Density { tight, mid, roomy }
 
 extension AccentLabel on Accent {
   String get label => switch (this) {
-        Accent.mono => 'MONO',
-        Accent.cyan => 'CYAN',
-        Accent.amber => 'AMBER',
         Accent.green => 'GREEN',
+        Accent.amber => 'AMBER',
+        Accent.cyan => 'CYAN',
         Accent.violet => 'VIOLET',
+        Accent.pink => 'PINK',
+        Accent.mono => 'MONO',
       };
 }
 
@@ -59,86 +60,109 @@ extension DensityLabel on Density {
       };
 }
 
-/// The fixed per-accent data: the accent colour, the ink that sits on it, and
-/// the nine tinted metal shades. Everything else is computed.
+/// One accent as a hue and a chroma budget — no baked colours. `mono` is
+/// achromatic; its `baseL` is the default lightness of the white phosphor.
 class AccentSpec {
-  final Color a; // accent
-  final Color ink; // text sitting on the accent
-  // Metal, in order: chassis top / mid / bottom, border, highlight,
-  // muted text, bright text, recess, vent stripe.
-  final Color m1, m2, m3, mb, mh, mt, ml, mv1, mv2;
+  final double hue;
+  final double chromaMul;
+  final double maxCeil;
+  final double baseL;
+  final bool mono;
+  const AccentSpec(this.hue, this.chromaMul, this.maxCeil, this.baseL,
+      {this.mono = false});
 
-  const AccentSpec._(this.a, this.ink, this.m1, this.m2, this.m3, this.mb,
-      this.mh, this.mt, this.ml, this.mv1, this.mv2);
-
-  static AccentSpec of(Accent accent) => _specs[accent]!;
+  static AccentSpec of(Accent a) => _specs[a]!;
 }
 
+// First-guess hues, seeded from a tuned source palette. baseL is the accent
+// swatch's lightness; chromaMul + maxCeil set how far the hue saturates.
 final Map<Accent, AccentSpec> _specs = {
-  Accent.mono: AccentSpec._(_hex('#c9ced6'), _hex('#0d0f12'), _hex('#3a3d40'),
-      _hex('#26282b'), _hex('#202225'), _hex('#4a4e52'), _hex('#5d6165'),
-      _hex('#82868a'), _hex('#d4d8dc'), _hex('#16181a'), _hex('#2e3134')),
-  Accent.cyan: AccentSpec._(_hex('#4cc2d6'), _hex('#04131a'), _hex('#303a3d'),
-      _hex('#1f2729'), _hex('#1a2123'), _hex('#3f4c50'), _hex('#525f63'),
-      _hex('#77848a'), _hex('#c8d6da'), _hex('#131b1d'), _hex('#283336')),
-  Accent.amber: AccentSpec._(_hex('#f5b942'), _hex('#1a1204'), _hex('#3b3830'),
-      _hex('#27241d'), _hex('#201e18'), _hex('#4d4940'), _hex('#605b50'),
-      _hex('#847e70'), _hex('#d9d3c4'), _hex('#191712'), _hex('#332f27')),
-  Accent.green: AccentSpec._(_hex('#5fd18a'), _hex('#04120a'), _hex('#333b36'),
-      _hex('#212823'), _hex('#1b211d'), _hex('#434d46'), _hex('#565f58'),
-      _hex('#787e7a'), _hex('#cfd9d2'), _hex('#151a17'), _hex('#2b332d')),
-  Accent.violet: AccentSpec._(_hex('#b98ae8'), _hex('#120a1a'), _hex('#35323a'),
-      _hex('#232128'), _hex('#1d1b22'), _hex('#474350'), _hex('#5a5566'),
-      _hex('#7e7887'), _hex('#d4cfda'), _hex('#17151a'), _hex('#2f2c35')),
+  Accent.green: const AccentSpec(145, 1.00, 0.220, 0.56),
+  Accent.amber: const AccentSpec(82, 1.00, 0.190, 0.70),
+  Accent.cyan: const AccentSpec(195, 0.95, 0.150, 0.62),
+  Accent.violet: const AccentSpec(290, 1.10, 0.235, 0.58),
+  Accent.pink: const AccentSpec(352, 0.95, 0.170, 0.70),
+  Accent.mono: const AccentSpec(0, 0, 0, 0.72, mono: true),
 };
 
-Color _mix(Color c, double amt) => Color.fromARGB(
-      255,
-      (c.r * 255 + (255 - c.r * 255) * amt).round(),
-      (c.g * 255 + (255 - c.g * 255) * amt).round(),
-      (c.b * 255 + (255 - c.b * 255) * amt).round(),
-    );
-
-Color _darken(Color c, double amt) => Color.fromARGB(
-      255,
-      (c.r * 255 * (1 - amt)).round(),
-      (c.g * 255 * (1 - amt)).round(),
-      (c.b * 255 * (1 - amt)).round(),
-    );
-
-/// A fully resolved palette for one (accent, dark/light) pairing: the accent,
-/// the tinted metal, and the six computed phosphor roles plus the tube colour.
-/// Widgets read from this and never compute colour themselves.
+/// A fully resolved palette for one (accent, light/dark) pairing, plus the two
+/// drag axes: `sat` (0.4–2.6) pushes a colour accent's saturation *and* glow;
+/// `monoL` (0.12–0.99) sets the white phosphor's lightness. Every colour is
+/// computed once here; widgets read and never compute colour themselves.
 class Palette {
   final Accent accent;
   final bool dark;
+  final double sat;
+  final double monoL;
   final AccentSpec _s;
 
-  Palette(this.accent, this.dark) : _s = AccentSpec.of(accent);
+  Palette(this.accent, this.dark, {this.sat = 1.0, double? monoL})
+      : _s = AccentSpec.of(accent),
+        monoL = monoL ?? AccentSpec.of(accent).baseL {
+    _build();
+  }
 
-  Color get a => _s.a;
-  Color get ink => _s.ink;
+  // ---- accent ----
+  late final Color a;
+  late final Color ink;
 
-  // Metal.
-  Color get m1 => _s.m1;
-  Color get m2 => _s.m2;
-  Color get m3 => _s.m3;
-  Color get mb => _s.mb;
-  Color get mh => _s.mh;
-  Color get mt => _s.mt;
-  Color get ml => _s.ml;
-  Color get mv1 => _s.mv1;
-  Color get mv2 => _s.mv2;
+  // ---- metal (neutral, a whisper of the hue; same in light and dark) ----
+  late final Color m1, m2, m3, mb, mh, mt, ml, mv1, mv2;
 
-  // Phosphor — computed from the accent (DESIGN.md · Phosphor).
-  Color get bright => dark ? _mix(a, 0.55) : _hex('#0d1a12');
-  Color get soft => dark ? _mix(a, 0.15) : _hex('#1d3326');
-  Color get mid => dark ? _darken(a, 0.46) : _hex('#4a6b57');
-  Color get dim => dark ? _darken(a, 0.78) : _hex('#c3d4c8');
-  Color get foot => dark ? _darken(a, 0.66) : _hex('#7c9186');
-  Color get glow => dark ? _darken(a, 0.28) : _hex('#3c5c48');
+  // ---- phosphor / tube (hue-driven, both modes) ----
+  late final Color bright, soft, mid, dim, foot, glow, tubeBg;
 
-  Color get tubeBg => dark ? _hex('#040705') : _hex('#e8efe9');
+  void _build() {
+    final h = _s.mono ? 0.0 : _s.hue;
+    final maxC = _s.maxCeil;
+    // The accent swatch itself.
+    if (_s.mono) {
+      a = _c(oklchArgb(monoL, 0, 0));
+    } else {
+      a = _c(oklchArgb(_s.baseL, accentChroma(_s.chromaMul, maxC, sat), h));
+    }
+    // Text that sits on the accent fill: dark ink on a light accent, else white.
+    final accL = _s.mono ? monoL : _s.baseL;
+    ink = accL > 0.70 ? _c(oklchArgb(0.24, 0, 0)) : const Color(0xFFFFFFFF);
+
+    // Metal: a neutral chassis with only a whisper of the hue (mono = pure grey).
+    final mc = _s.mono ? 0.0 : 1.0; // whisper on/off
+    m1 = _c(trueArgb(0.240, h, 0.012 * mc));
+    m2 = _c(trueArgb(0.160, h, 0.010 * mc));
+    m3 = _c(trueArgb(0.130, h, 0.010 * mc));
+    mb = _c(trueArgb(0.300, h, 0.014 * mc));
+    mh = _c(trueArgb(0.400, h, 0.016 * mc));
+    mt = _c(trueArgb(0.550, h, 0.010 * mc));
+    ml = _c(trueArgb(0.860, h, 0.008 * mc));
+    mv1 = _c(trueArgb(0.100, h, 0.008 * mc));
+    mv2 = _c(trueArgb(0.210, h, 0.012 * mc));
+
+    // Phosphor. Dark = a glowing tube (light text on near-black); light = a
+    // paper terminal (dark ink on paper). The glow grows with saturation.
+    final wc = _s.mono ? 0.0 : 1.0; // hue chroma on/off for the tube
+    if (dark) {
+      final glowBoost = sat < 1.5 ? sat : 1.5;
+      bright = _s.mono
+          ? _c(oklchArgb(0.90, 0, 0))
+          : _c(trueArgb(0.88, h, maxC * 0.9 * glowBoost));
+      soft = _c(trueArgb(0.34, h, maxC * 0.55 * wc));
+      mid = _c(trueArgb(0.66, h, maxC * wc));
+      dim = _c(trueArgb(0.44, h, maxC * 0.85 * wc));
+      foot = _c(trueArgb(0.52, h, maxC * 0.70 * wc));
+      glow = _c(trueArgb(0.60, h, maxC * wc));
+      tubeBg = _c(trueArgb(0.085, h, 0.020 * wc));
+    } else {
+      bright = _s.mono
+          ? _c(oklchArgb(0.24, 0, 0))
+          : _c(trueArgb(0.28, h, maxC * wc));
+      soft = _c(trueArgb(0.42, h, maxC * 0.80 * wc));
+      mid = _c(trueArgb(0.50, h, maxC * 0.80 * wc));
+      dim = _c(trueArgb(0.80, h, maxC * 0.40 * wc));
+      foot = _c(trueArgb(0.62, h, maxC * 0.60 * wc));
+      glow = _c(trueArgb(0.55, h, maxC * wc));
+      tubeBg = _c(trueArgb(0.940, h, 0.018 * wc));
+    }
+  }
 
   /// Accent at a given alpha fraction (for the faint bands and glows).
   Color aAlpha(double f) => a.withValues(alpha: f);
