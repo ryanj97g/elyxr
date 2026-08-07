@@ -13,6 +13,7 @@ import '../state/session.dart';
 import '../state/settings.dart';
 import '../state/sound.dart';
 import '../util/device.dart';
+import '../widgets/nostalgia/music_player.dart';
 import 'server_view.dart';
 
 class SettingsView extends StatelessWidget {
@@ -67,6 +68,11 @@ class SettingsView extends StatelessWidget {
                 // above everything numbered, so it reads as the mode gate it is.
                 _NostalgiaRow(palette: p),
                 const SizedBox(height: 13),
+                // The music deck, only in Nostalgia Mode.
+                if (settings.nostalgia) ...[
+                  _section(p, '♪', 'MUSIC', MusicPlayerPanel(palette: p)),
+                  const SizedBox(height: 13),
+                ],
                 // On the server device, its controls (pairing, limits, recent
                 // problems) live here in Settings, since the tube now shows the
                 // trove's files like every other device.
