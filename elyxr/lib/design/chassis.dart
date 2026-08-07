@@ -171,10 +171,14 @@ class _Sweep extends StatefulWidget {
 }
 
 class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
-  static const double _band = 160; // full height of the soft glow bar
+  // A thin bright line with a small halo — a scanner line, not a wide wash.
+  static const double _band = 44;
+  // Fraction of the cycle spent sweeping; the rest is a brief rest, so the
+  // line reads as a periodic sonar pass, not constant motion.
+  static const double _sweepPart = 0.7;
 
   late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 8))
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 3200))
         ..repeat();
 
   @override
@@ -193,9 +197,11 @@ class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
           return AnimatedBuilder(
             animation: _c,
             builder: (context, _) {
-              // The scan position runs from the very top (y=0) to the bottom
-              // (y=h); the glow bar is centred on it, brightest at the middle.
-              final y = h * _c.value;
+              final t = _c.value;
+              if (t > _sweepPart) return const SizedBox.shrink(); // resting
+              // A single line crosses the whole tube: its centre runs from the
+              // very top (y=0) to the bottom (y=h) during the sweep window.
+              final y = h * (t / _sweepPart);
               return Transform.translate(
                 offset: Offset(0, y - _band / 2),
                 child: Container(
@@ -204,12 +210,15 @@ class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
+                      // A faint halo, then a bright thin core, then halo again.
                       colors: [
                         p.aAlpha(0),
-                        p.aAlpha(0.11),
+                        p.aAlpha(0.05),
+                        p.aAlpha(0.60),
+                        p.aAlpha(0.05),
                         p.aAlpha(0),
                       ],
-                      stops: const [0, 0.5, 1],
+                      stops: const [0.0, 0.44, 0.5, 0.56, 1.0],
                     ),
                   ),
                 ),
