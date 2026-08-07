@@ -156,20 +156,20 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    if (!settings.nostalgia) return app;
-    // Nostalgia overlays: the transfer HUD near the top of the tube, and the
-    // cursor trail floating over everything (non-interactive).
     return Stack(
       children: [
         app,
-        if (!_inSettings)
+        // Transfer HUD — Nostalgia Mode only.
+        if (settings.nostalgia && !_inSettings)
           Positioned(
             top: 60,
             left: 14,
             right: 14,
             child: TransferHud(palette: p),
           ),
-        // The mini music bar rides at the bottom of the tube, above the rail.
+        // The mini music bar rides at the bottom of the tube whenever a track is
+        // active — any mode, since streaming a trove file isn't a nostalgia-only
+        // feature. It self-hides when nothing's playing.
         if (!_inSettings)
           Positioned(
             left: 14,
@@ -177,11 +177,13 @@ class _HomeScreenState extends State<HomeScreen> {
             bottom: 62,
             child: MiniMusicBar(palette: p),
           ),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: CursorTrail(cursor: _cursor, palette: p),
+        // Cursor trail — Nostalgia Mode only.
+        if (settings.nostalgia)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CursorTrail(cursor: _cursor, palette: p),
+            ),
           ),
-        ),
       ],
     );
   }
