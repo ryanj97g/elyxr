@@ -87,13 +87,13 @@ class AccentSpec {
 // First-guess hues, seeded from a tuned source palette. baseL is the accent
 // swatch's lightness; chromaMul + maxCeil set how far the hue saturates.
 final Map<Accent, AccentSpec> _specs = {
-  Accent.red: const AccentSpec(18, 1.00, 0.200, 0.56),
-  Accent.amber: const AccentSpec(82, 1.00, 0.190, 0.70),
-  Accent.green: const AccentSpec(145, 1.00, 0.220, 0.56),
-  Accent.cyan: const AccentSpec(195, 0.95, 0.150, 0.62),
-  Accent.blue: const AccentSpec(255, 1.00, 0.190, 0.56),
-  Accent.purple: const AccentSpec(307, 1.10, 0.235, 0.58),
-  Accent.pink: const AccentSpec(352, 0.95, 0.170, 0.70),
+  Accent.red: const AccentSpec(18, 1.00, 0.223, 0.56),
+  Accent.amber: const AccentSpec(82, 1.00, 0.207, 0.70),
+  Accent.green: const AccentSpec(145, 1.00, 0.244, 0.56),
+  Accent.cyan: const AccentSpec(195, 0.95, 0.168, 0.62),
+  Accent.blue: const AccentSpec(255, 1.00, 0.212, 0.56),
+  Accent.purple: const AccentSpec(307, 1.10, 0.258, 0.58),
+  Accent.pink: const AccentSpec(352, 0.95, 0.190, 0.70),
   Accent.mono: const AccentSpec(0, 0, 0, 0.72, mono: true),
 };
 
@@ -127,11 +127,13 @@ class Palette {
   void _build() {
     final h = _s.mono ? 0.0 : _s.hue;
     final maxC = _s.maxCeil;
-    // The accent swatch itself.
+    // The accent swatch itself. trueArgb clamps the requested chroma to the
+    // hue's in-gamut ceiling *holding the hue*, so a punchy max-saturation drag
+    // reaches the richest true colour instead of drifting when it would clip.
     if (_s.mono) {
       a = _c(oklchArgb(monoL, 0, 0));
     } else {
-      a = _c(oklchArgb(_s.baseL, accentChroma(_s.chromaMul, maxC, sat), h));
+      a = _c(trueArgb(_s.baseL, h, accentChroma(_s.chromaMul, maxC, sat)));
     }
     // Text that sits on the accent fill: dark ink on a light accent, else white.
     final accL = _s.mono ? monoL : _s.baseL;

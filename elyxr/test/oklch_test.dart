@@ -16,10 +16,10 @@ void _expectArgb(int got, int want, {int tol = 2}) {
 }
 
 void main() {
-  test('accent chroma formula (base 0.13, floored 0.075, clamped to ceiling)', () {
+  test('accent chroma formula (base 0.13, floored 0.045, clamped to ceiling)', () {
     expect(accentChroma(1.00, 0.22, 1.0), closeTo(0.1300, 1e-9));
     expect(accentChroma(0.95, 0.17, 1.0), closeTo(0.1235, 1e-9));
-    expect(accentChroma(1.00, 0.19, 0.4), closeTo(0.0750, 1e-9)); // floor
+    expect(accentChroma(1.00, 0.19, 0.2), closeTo(0.0450, 1e-9)); // floor
     expect(accentChroma(1.00, 0.15, 2.6), closeTo(0.1500, 1e-9)); // ceiling
   });
 

@@ -33,7 +33,7 @@ class SettingsController extends ChangeNotifier {
   int _atOnce = 3;
   // The two accent drag axes: saturation for a colour phosphor (pushes chroma
   // AND glow), lightness for the mono/white phosphor.
-  double _accentSat = 1.0; // 0.4–2.6
+  double _accentSat = 1.0; // 0.25–3.2 (wider: deeper muting, punchier max)
   double _monoL = 0.72; // 0.12–0.99
 
   Accent get accent => _accent;
@@ -84,7 +84,7 @@ class SettingsController extends ChangeNotifier {
         _prefs.setDouble('accentSat', _accentSat);
       });
   set accentSat(double v) => _set('accentSat',
-      () => _accentSat = v.clamp(0.4, 2.6).toDouble(),
+      () => _accentSat = v.clamp(0.25, 3.2).toDouble(),
       () => _prefs.setDouble('accentSat', _accentSat));
   set monoL(double v) => _set('monoL',
       () => _monoL = v.clamp(0.12, 0.99).toDouble(),
