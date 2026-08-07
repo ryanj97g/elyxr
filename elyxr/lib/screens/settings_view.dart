@@ -62,6 +62,10 @@ class SettingsView extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(15, 13, 15, 0),
               children: [
+                // The master switch for all the retro whimsy. Pinned at the top,
+                // above everything numbered, so it reads as the mode gate it is.
+                _NostalgiaRow(palette: p),
+                const SizedBox(height: 13),
                 // On the server device, its controls (pairing, limits, recent
                 // problems) live here in Settings, since the tube now shows the
                 // trove's files like every other device.
@@ -132,6 +136,93 @@ class SettingsView extends StatelessWidget {
           body,
         ],
       );
+}
+
+/// The Nostalgia Mode master switch (and, once it's on, the sound sub-switch).
+/// It gates every retro feature — the screensaver, cursor trail, minigame,
+/// sounds. Pinned at the top of settings.
+class _NostalgiaRow extends StatelessWidget {
+  final Palette palette;
+  const _NostalgiaRow({required this.palette});
+
+  Widget _toggle(Palette p, bool on) => Container(
+        width: 34,
+        height: 18,
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: p.mv1,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Container(
+          width: 13,
+          height: 13,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: on ? p.a : p.mb,
+            boxShadow: on ? [BoxShadow(color: p.a, blurRadius: 6)] : null,
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<SettingsController>();
+    final p = palette;
+    final on = s.nostalgia;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GestureDetector(
+          onTap: () => s.nostalgia = !on,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Text('◈', style: glass(20, on ? p.a : p.foot)),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('NOSTALGIA MODE',
+                          style: chassis(13, on ? p.bright : p.mid, spacing: 0.16)),
+                      Text(
+                          on
+                              ? 'the retro toys are awake'
+                              : 'off — the plain instrument',
+                          style: glass(14, p.foot)),
+                    ],
+                  ),
+                ),
+                _toggle(p, on),
+              ],
+            ),
+          ),
+        ),
+        // Sound is on by default within nostalgia, but silence-able on its own.
+        if (on)
+          GestureDetector(
+            onTap: () => s.sound = !s.sound,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 29, top: 2, bottom: 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(s.sound ? 'Sound on' : 'Sound off',
+                        style: glass(15, p.mid)),
+                  ),
+                  _toggle(p, s.sound),
+                ],
+              ),
+            ),
+          ),
+        Container(height: 1, color: p.dim),
+      ],
+    );
+  }
 }
 
 /// The "Use System File Browser" switch: turns the optional gate mount on and

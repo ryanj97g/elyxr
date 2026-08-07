@@ -37,6 +37,13 @@ class SettingsController extends ChangeNotifier {
   double _monoL = 0.72; // 0.12–0.99
   // The chosen terminal (glass) font family — one of kTermFaces' families.
   String _termFont = 'VT323';
+  // Nostalgia Mode: the master switch for all the retro whimsy (the matrix
+  // screensaver, cursor trail, minigame, sounds…). Off by default — the plain
+  // experience is the premium instrument; this opts into the fun.
+  bool _nostalgia = false;
+  // Sounds, gated under nostalgia. Its own switch so the retro SFX can be
+  // silenced without leaving nostalgia mode.
+  bool _sound = true;
 
   Accent get accent => _accent;
   Density get density => _density;
@@ -51,6 +58,8 @@ class SettingsController extends ChangeNotifier {
   double get accentSat => _accentSat;
   double get monoL => _monoL;
   String get termFont => _termFont;
+  bool get nostalgia => _nostalgia;
+  bool get sound => _sound;
 
   void _load() {
     _accent = _enumByName(Accent.values, _prefs.getString('accent'), Accent.green);
@@ -68,6 +77,8 @@ class SettingsController extends ChangeNotifier {
     _accentSat = _prefs.getDouble('accentSat') ?? 1.0;
     _monoL = _prefs.getDouble('monoL') ?? 0.72;
     _termFont = _prefs.getString('termFont') ?? 'VT323';
+    _nostalgia = _prefs.getBool('nostalgia') ?? false;
+    _sound = _prefs.getBool('sound') ?? true;
     // Apply the chosen terminal face before the first frame builds. It governs
     // everything on the glass — the body text and the ticker/readouts alike —
     // since the ticker is part of the screen, not a separate face. Only the
@@ -107,6 +118,8 @@ class SettingsController extends ChangeNotifier {
         Fonts.glass = v;
         Fonts.mono = v;
       }, () => _prefs.setString('termFont', v));
+  set nostalgia(bool v) => _set('nostalgia', () => _nostalgia = v, () => _prefs.setBool('nostalgia', v));
+  set sound(bool v) => _set('sound', () => _sound = v, () => _prefs.setBool('sound', v));
   set density(Density v) => _set('density', () => _density = v, () => _prefs.setString('density', v.name));
   set dark(bool v) => _set('dark', () => _dark = v, () => _prefs.setBool('dark', v));
   set mode(ViewMode v) => _set('mode', () => _mode = v, () => _prefs.setString('mode', v.name));

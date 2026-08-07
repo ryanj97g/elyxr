@@ -70,8 +70,12 @@ class Chassis extends StatelessWidget {
 class Tube extends StatelessWidget {
   final Palette palette;
   final Widget child;
+  /// An optional top layer over the whole glass (the Matrix screensaver). When
+  /// present it sits above everything, clipped to the tube.
+  final Widget? overlay;
 
-  const Tube({super.key, required this.palette, required this.child});
+  const Tube(
+      {super.key, required this.palette, required this.child, this.overlay});
 
   @override
   Widget build(BuildContext context) {
@@ -138,6 +142,16 @@ class Tube extends StatelessWidget {
               ),
             ),
           ),
+          // The screensaver (or any full-glass overlay), clipped to the tube and
+          // above the scanlines — it's its own screen state. (It fades itself
+          // in.)
+          if (overlay != null)
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: overlay,
+              ),
+            ),
         ],
       ),
     );
