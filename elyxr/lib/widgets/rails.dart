@@ -11,6 +11,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import 'nostalgia/nonsense_button.dart';
 
 /// The top rail: screw · ELYXR · hold-bar · vent · v2.0.5 · screw.
 ///
@@ -211,6 +212,8 @@ class BottomRail extends StatelessWidget {
   // The TEXT/GRID rocker only controls the file list, so it's hidden while the
   // settings screen is showing — where it did nothing.
   final bool inSettings;
+  // In Nostalgia Mode a small unmarked nonsense button appears on the metal.
+  final bool nostalgia;
 
   const BottomRail({
     super.key,
@@ -219,6 +222,7 @@ class BottomRail extends StatelessWidget {
     required this.status,
     required this.onMode,
     this.inSettings = false,
+    this.nostalgia = false,
   });
 
   @override
@@ -245,6 +249,10 @@ class BottomRail extends StatelessWidget {
               ),
             ),
           const Spacer(),
+          if (nostalgia) ...[
+            NonsenseButton(palette: p),
+            const SizedBox(width: 8),
+          ],
           _led(p),
         ],
       ),
