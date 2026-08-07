@@ -80,10 +80,20 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
 
 ## Updates
 
-- You update once, on the server. lymnal announces "update now" to every
-  connected client over a live event stream, and each client then **pulls its own
-  code from this repository** and rebuilds. The server never sends code — it only
-  says when.
+- You update from **any device**. Only the server can reach every device, so a
+  client's update simply asks the server to update the fleet: the server
+  announces "update now" to every connected client over a live event stream *and*
+  updates itself. Each device then **pulls its own code from this repository** and
+  applies it — the server never sends code, it only says when.
+- A device that was offline for the announcement still catches up: lymnal also
+  polls the server's build number about once a minute and updates itself the
+  moment the server is ahead. The build number is the git commit count, handed in
+  by the installer so it advances on every change — including a change that only
+  touches the app.
+- **Windows applies an update by fetching, not rebuilding.** There's no compiler
+  on the device, so instead of a source rebuild it downloads the published
+  installer and runs it silently — the same end state, reached the way any Windows
+  app updates itself. On Linux, "apply" is a source rebuild via the installer.
 - The installer (`elyxr.sh`) is also the updater: it rebuilds only what changed,
   re-installs a binary only when it differs, and restarts the service only when
   its binary changed.
@@ -97,9 +107,11 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
 
 - lymnal registers a **StatusNotifierItem** over D-Bus. The lymnal mark is
   embedded in the binary (and also installed into the icon theme), and the
-  icon's menu opens elyxr or starts an update. Showing it needs a tray host:
-  KDE has one by default; GNOME and Zorin provide one through the "AppIndicator
-  and KStatusNotifierItem Support" extension.
+  icon's menu opens elyxr, starts an update, or refreshes the connection
+  (restarting the service to re-establish the link at a click). Showing it needs
+  a tray host: KDE has one by default; GNOME and Zorin provide one through the
+  "AppIndicator and KStatusNotifierItem Support" extension. The Windows build
+  shows an equivalent tray with the same actions.
 - Update progress shows as two desktop notifications — one at the start, one when
   it's done — sent through libnotify to the desktop's notification daemon. A
   headless server with no daemon simply shows none.
