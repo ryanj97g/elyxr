@@ -150,6 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
           status: session.status,
           onMode: (m) => settings.mode = m,
           inSettings: _inSettings,
+          nostalgia: settings.nostalgia,
         ),
       ),
     );
