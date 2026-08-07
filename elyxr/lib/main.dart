@@ -35,6 +35,10 @@ Future<void> main() async {
     opts,
     () async {
       await windowManager.setAsFrameless();
+      // The window is a fixed size, so it must never maximize — otherwise a
+      // double-click on the rail (e.g. tapping the wordmark) snaps it fullscreen.
+      await windowManager.setResizable(false);
+      await windowManager.setMaximizable(false);
       await windowManager.show();
       await windowManager.focus();
     },

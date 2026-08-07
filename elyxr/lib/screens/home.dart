@@ -29,10 +29,10 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _inSettings = false;
 
-  // Nostalgia Mode screensaver: after ~2 minutes with no interaction, the tube
-  // falls to the Matrix rain. Any pointer input wakes it. The timer only runs in
-  // Nostalgia Mode; otherwise it's inert.
-  static const _idleAfter = Duration(seconds: 120);
+  // Nostalgia Mode screensaver: after 30s with no interaction, the tube falls to
+  // the Matrix rain. Once it's up, only a click dismisses it — moving the mouse
+  // doesn't. The timer only runs in Nostalgia Mode; otherwise it's inert.
+  static const _idleAfter = Duration(seconds: 30);
   bool _idle = false;
   Timer? _idleTimer;
   // The hidden Snake minigame (wordmark ×7 in Nostalgia Mode).
@@ -64,10 +64,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Any interaction wakes the screen and restarts the idle countdown.
-  void _bump() {
+  // A click wakes the screensaver and restarts the idle countdown.
+  void _wake() {
     if (_idle) setState(() => _idle = false);
     _armIdle();
+  }
+
+  // Movement/scroll restarts the countdown while the app is in use, but does not
+  // dismiss the screensaver once it's up — only a click does that.
+  void _activity() {
+    if (!_idle) _armIdle();
   }
 
   @override
@@ -96,25 +102,20 @@ class _HomeScreenState extends State<HomeScreen> {
       child: tubeChild,
     );
 
-    // Nostalgia Mode turns the pointer into a crosshair over the file browser.
-    if (settings.nostalgia && !_inSettings) {
-      tubeChild = MouseRegion(cursor: SystemMouseCursors.precise, child: tubeChild);
-    }
-
     final app = Listener(
-      // Wakes the screensaver, resets the idle countdown, and feeds the cursor
-      // trail. An ancestor of the whole tree, so it sees the event even when the
-      // screensaver overlay absorbs the tap that dismisses it.
-      onPointerDown: (_) => _bump(),
+      // A click wakes the screensaver; movement only resets the idle countdown
+      // and feeds the cursor trail. An ancestor of the whole tree, so it sees
+      // the event even when the screensaver overlay absorbs the waking click.
+      onPointerDown: (_) => _wake(),
       onPointerMove: (e) {
         _cursor.value = e.localPosition;
-        _bump();
+        _activity();
       },
       onPointerHover: (e) {
         _cursor.value = e.localPosition;
-        _bump();
+        _activity();
       },
-      onPointerSignal: (_) => _bump(),
+      onPointerSignal: (_) => _activity(),
       child: Chassis(
         palette: p,
         topRail: TopRail(
@@ -134,11 +135,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 )
               : showSaver
                   ? GestureDetector(
-                      // Absorb the waking tap so it doesn't also click a file;
-                      // the ancestor Listener still registers it and dismisses
-                      // the saver.
+                      // A click dismisses the screensaver and is absorbed here so
+                      // it doesn't also click a file underneath.
                       behavior: HitTestBehavior.opaque,
-                      onTap: () {},
+                      onTap: _wake,
                       child: MatrixRain(palette: p),
                     )
                   : null,

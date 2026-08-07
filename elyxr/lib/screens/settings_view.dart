@@ -206,13 +206,28 @@ class _NostalgiaRow extends StatelessWidget {
             ),
           ),
         ),
-        // Sound is on by default within nostalgia, but silence-able on its own.
-        if (on)
+        // When on, list what it turns on — names only. The list disappears with
+        // the toggle.
+        if (on) ...[
+          const SizedBox(height: 3),
+          for (final name in const [
+            'Matrix screensaver',
+            'Cursor trail',
+            'Transfer log',
+            'Snake',
+            'Nonsense button',
+            'Music player',
+          ])
+            Padding(
+              padding: const EdgeInsets.only(left: 29, top: 1, bottom: 1),
+              child: Text('· $name', style: glass(14, p.foot)),
+            ),
+          // Sound is on by default within nostalgia, but silence-able on its own.
           GestureDetector(
             onTap: () => s.sound = !s.sound,
             behavior: HitTestBehavior.opaque,
             child: Padding(
-              padding: const EdgeInsets.only(left: 29, top: 2, bottom: 2),
+              padding: const EdgeInsets.only(left: 29, top: 3, bottom: 2),
               child: Row(
                 children: [
                   Expanded(
@@ -224,6 +239,7 @@ class _NostalgiaRow extends StatelessWidget {
               ),
             ),
           ),
+        ],
         Container(height: 1, color: p.dim),
       ],
     );

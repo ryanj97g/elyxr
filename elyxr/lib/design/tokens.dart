@@ -154,6 +154,9 @@ class Palette {
 
   // ---- phosphor / tube (hue-driven, both modes) ----
   late final Color bright, soft, mid, dim, foot, glow, tubeBg;
+  // How hard the tube blooms — grows as the saturation drag reaches its top, so
+  // maxing the colour also brightens the glow overall. Read by the chassis.
+  late final double bloom;
 
   void _build() {
     final h = _s.mono ? 0.0 : _s.hue;
@@ -185,17 +188,22 @@ class Palette {
     // Phosphor. Dark = a glowing tube (light text on near-black); light = a
     // paper terminal (dark ink on paper). The glow grows with saturation.
     final wc = _s.mono ? 0.0 : 1.0; // hue chroma on/off for the tube
+    // 0 at neutral saturation, 1 as the drag reaches its top (~3.2). Past a
+    // colour's chroma ceiling the drag stops adding saturation, so from there it
+    // drives the glow instead: brighter key text, a hotter glow, a bigger bloom.
+    final glowT = _s.mono ? 0.0 : ((sat - 1.0) / 2.2).clamp(0.0, 1.0).toDouble();
     if (dark) {
-      final glowBoost = sat < 1.5 ? sat : 1.5;
+      final glowBoost = sat < 1.8 ? sat : 1.8;
       bright = _s.mono
           ? _c(oklchArgb(0.90, 0, 0))
-          : _c(trueArgb(0.88, h, maxC * 0.9 * glowBoost));
+          : _c(trueArgb(0.88 + 0.06 * glowT, h, maxC * 0.9 * glowBoost));
       soft = _c(trueArgb(0.34, h, maxC * 0.55 * wc));
       mid = _c(trueArgb(0.66, h, maxC * wc));
       dim = _c(trueArgb(0.44, h, maxC * 0.85 * wc));
       foot = _c(trueArgb(0.52, h, maxC * 0.70 * wc));
-      glow = _c(trueArgb(0.60, h, maxC * wc));
+      glow = _c(trueArgb(0.60 + 0.07 * glowT, h, maxC * wc));
       tubeBg = _c(trueArgb(0.085, h, 0.020 * wc));
+      bloom = 0.07 + 0.13 * glowT;
     } else {
       bright = _s.mono
           ? _c(oklchArgb(0.24, 0, 0))
@@ -206,6 +214,7 @@ class Palette {
       foot = _c(trueArgb(0.62, h, maxC * 0.60 * wc));
       glow = _c(trueArgb(0.55, h, maxC * wc));
       tubeBg = _c(trueArgb(0.940, h, 0.018 * wc));
+      bloom = 0.04 * glowT;
     }
   }
 

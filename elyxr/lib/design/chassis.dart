@@ -117,8 +117,9 @@ class Tube extends StatelessWidget {
                     radius: 1.2,
                     colors: [
                       // A soft phosphor bloom at the centre, falling to a gentle
-                      // dark ring at the edges (legible corners, not a black frame).
-                      p.aAlpha(p.dark ? 0.07 : 0.0),
+                      // dark ring at the edges (legible corners, not a black
+                      // frame). The bloom grows as the accent saturation maxes.
+                      p.aAlpha(p.bloom),
                       Colors.black.withValues(alpha: p.dark ? 0.42 : 0.12),
                     ],
                     stops: const [0.6, 1.0],
