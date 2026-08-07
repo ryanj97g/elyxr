@@ -208,22 +208,9 @@ fn dir_size(root: &Path) -> u64 {
     total
 }
 
-/// Free bytes on the filesystem holding `path`, via statvfs.
+/// Free bytes on the filesystem holding `path` (cross-platform, via fs2).
 fn drive_free(path: &Path) -> u64 {
-    use std::os::unix::ffi::OsStrExt;
-    let c = match std::ffi::CString::new(path.as_os_str().as_bytes()) {
-        Ok(c) => c,
-        Err(_) => return 0,
-    };
-    // SAFETY: `stat` is zeroed and only read on a successful (0) return.
-    unsafe {
-        let mut stat: libc::statvfs = std::mem::zeroed();
-        if libc::statvfs(c.as_ptr(), &mut stat) == 0 {
-            (stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64)
-        } else {
-            0
-        }
-    }
+    fs2::available_space(path).unwrap_or(0)
 }
 
 /// One-decimal GB, for the refusal wording ("149.1 GB").

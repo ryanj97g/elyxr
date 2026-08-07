@@ -28,11 +28,25 @@ class OpenExternal {
       await client.downloadTo(remotePath, sink);
       await sink.flush();
       await sink.close();
-      await Process.run('xdg-open', [local.path]);
+      await _openInDefaultApp(local.path);
       _watch(client, remotePath, local);
       return null;
     } catch (e) {
       return 'Could not open the file: $e';
+    }
+  }
+
+  /// Hand a file to the OS "open with the default program", the platform way:
+  /// `xdg-open` on Linux, `start` on Windows, `open` on macOS.
+  static Future<void> _openInDefaultApp(String path) async {
+    if (Platform.isWindows) {
+      // `start` is a cmd builtin; the empty "" is its title argument, so a
+      // quoted path isn't mistaken for the window title.
+      await Process.run('cmd', ['/c', 'start', '', path]);
+    } else if (Platform.isMacOS) {
+      await Process.run('open', [path]);
+    } else {
+      await Process.run('xdg-open', [path]);
     }
   }
 

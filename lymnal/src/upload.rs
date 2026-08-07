@@ -343,32 +343,24 @@ fn hash_eq(a: &str, b: &str) -> bool {
 }
 
 fn set_mtime(path: &std::path::Path, mtime: i64) {
-    use std::os::unix::ffi::OsStrExt;
     if mtime <= 0 {
         return;
     }
-    if let Ok(c) = std::ffi::CString::new(path.as_os_str().as_bytes()) {
-        let times = [
-            libc::timespec {
-                tv_sec: mtime as libc::time_t,
-                tv_nsec: 0,
-            },
-            libc::timespec {
-                tv_sec: mtime as libc::time_t,
-                tv_nsec: 0,
-            },
-        ];
-        // SAFETY: valid CString and a 2-element timespec array, as utimensat wants.
-        unsafe {
-            libc::utimensat(libc::AT_FDCWD, c.as_ptr(), times.as_ptr(), 0);
-        }
-    }
+    // Cross-platform mtime (utimensat on Unix, SetFileTime on Windows).
+    let ft = filetime::FileTime::from_unix_time(mtime, 0);
+    let _ = filetime::set_file_mtime(path, ft);
 }
 
+/// Make a committed file world-readable (0644). Unix-only; on other platforms
+/// files don't carry a Unix mode, so this is a no-op.
+#[cfg(unix)]
 fn set_mode_0644(path: &std::path::Path) {
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644));
 }
+
+#[cfg(not(unix))]
+fn set_mode_0644(_path: &std::path::Path) {}
 
 #[cfg(test)]
 mod tests {

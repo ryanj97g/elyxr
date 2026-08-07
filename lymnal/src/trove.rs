@@ -272,6 +272,7 @@ mod tests {
         assert!(t.normalise(&name).is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn refuses_symlink_pointing_at_etc() {
         let (dir, t) = trove();
@@ -281,6 +282,7 @@ mod tests {
         assert!(t.resolve("escape/passwd").is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn refuses_symlink_pointing_at_parent() {
         let (dir, t) = trove();

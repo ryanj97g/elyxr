@@ -1,0 +1,96 @@
+name: windows-build
+
+# Builds the Windows binaries on a runner that already has the C++ toolchain, so
+# no one needs Visual Studio on their own machine. Produces two downloads:
+#   - elyxr-setup.exe   the one-click installer (also what the auto-updater fetches)
+#   - elyxr-windows.zip  the raw app bundle + lymnal.exe, to run without installing
+# On main it also publishes elyxr-setup.exe as the "latest" release, which is
+# where a Windows client's self-update pulls the new build from.
+
+on:
+  push:
+    branches: [windows-client, main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to publish the release on main
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the build number is `git rev-list --count HEAD`
+          # (see lymnal/build.rs and the app's ELYXR_BUILD), which a shallow
+          # clone would report as 1.
+          fetch-depth: 0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build lymnal
+        run: cargo build --release -p lymnal
+
+      - name: Build the elyxr app
+        working-directory: elyxr
+        shell: pwsh
+        run: |
+          $build = (git rev-list --count HEAD).Trim()
+          $commit = (git rev-parse --short HEAD).Trim()
+          flutter config --enable-windows-desktop
+          # The repo only carries the Linux runner; scaffold the Windows one.
+          flutter create --platforms=windows .
+          flutter pub get
+          flutter build windows --release `
+            --dart-define=ELYXR_BUILD=$build `
+            --dart-define=ELYXR_COMMIT=$commit
+
+      - name: Stage the build
+        shell: pwsh
+        run: |
+          $stage = "packaging\windows\stage"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          # The app: elyxr.exe plus its DLLs and data\ folder — the whole bundle
+          # has to stay together.
+          Copy-Item -Recurse -Force elyxr\build\windows\x64\runner\Release\* $stage\
+          # lymnal alongside it (a standalone binary).
+          Copy-Item -Force target\release\lymnal.exe $stage\
+          # A zip of exactly that, for running without installing.
+          Compress-Archive -Path "$stage\*" -DestinationPath elyxr-windows.zip -Force
+
+      - name: Compile the installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $build = (git rev-list --count HEAD).Trim()
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "/DAppVer=$build" packaging\windows\elyxr.iss
+          # ISCC writes to the script's OutputDir (.), i.e. packaging\windows\.
+          Copy-Item -Force packaging\windows\elyxr-setup.exe .\elyxr-setup.exe
+
+      - name: Upload the builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: elyxr-windows
+          path: |
+            elyxr-setup.exe
+            elyxr-windows.zip
+          if-no-files-found: error
+
+      # On main, publish elyxr-setup.exe as the "latest" release — the source a
+      # Windows client's self-update fetches. Not run on the windows-client
+      # branch (download the installer from the run's artifacts there instead).
+      - name: Publish the release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: win-${{ github.run_number }}
+          name: Windows build ${{ github.run_number }}
+          files: elyxr-setup.exe
+          make_latest: true

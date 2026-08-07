@@ -589,15 +589,7 @@ async fn put_chunk(h: &Harness, id: &str, offset: u64, bytes: &[u8]) {
 }
 
 fn set_mtime(path: &std::path::Path, secs: i64) {
-    use std::os::unix::ffi::OsStrExt;
-    let c = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
-    let times = [
-        libc::timespec { tv_sec: secs as libc::time_t, tv_nsec: 0 },
-        libc::timespec { tv_sec: secs as libc::time_t, tv_nsec: 0 },
-    ];
-    unsafe {
-        libc::utimensat(libc::AT_FDCWD, c.as_ptr(), times.as_ptr(), 0);
-    }
+    let _ = filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(secs, 0));
 }
 
 /// Minimal percent-encoding for query values in test URIs.
