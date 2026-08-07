@@ -69,9 +69,12 @@ notify() {  # $1 body
 if [ "$UPDATE" = 1 ] && [ -z "${ELYXR_REEXEC:-}" ] \
    && command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   before="$(git rev-parse HEAD 2>/dev/null || true)"
-  # Building can regenerate Cargo.lock; discard that drift so an update can
-  # always fast-forward (the committed lockfile is the source of truth).
-  git checkout -- Cargo.lock 2>/dev/null || true
+  # Building regenerates tracked artifacts — Cargo.lock, but also Flutter's
+  # pubspec.lock and linux/windows generated_plugins.cmake — which dirties the
+  # tree and blocks a fast-forward, so updates silently rebuild stale code.
+  # Discard all tracked drift (the committed versions are the source of truth);
+  # untracked files, like dropped music/sounds, are left untouched.
+  git checkout -- . 2>/dev/null || true
   if git pull --ff-only >/dev/null 2>&1; then
     after="$(git rev-parse HEAD 2>/dev/null || true)"
     if [ "$before" != "$after" ]; then
