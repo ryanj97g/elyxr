@@ -1,32 +1,28 @@
 # Elyxr — visual design
 
-How the app *looks and feels*. Behaviour — the network, sync, updates — is in
-[SPECS.md](SPECS.md); this file is appearance and interaction only.
+The appearance and interaction specification. System behaviour — network, sync,
+updates — is in [SPECS.md](SPECS.md).
 
-Exact colours and sizes are **not** duplicated here — they live in the code, and
-this doc would only rot beside them. The source of truth is:
+Exact colours and sizes are defined in code, not duplicated here:
 
-- `elyxr/lib/design/oklch.dart` — the colour engine (the maths).
-- `elyxr/lib/design/tokens.dart` — every accent, the palette, densities, faces.
+- `elyxr/lib/design/oklch.dart` — the colour engine.
+- `elyxr/lib/design/tokens.dart` — accents, palette, densities, faces.
 - `elyxr/lib/design/text.dart` — the three type roles and their scales.
 
-What lives here instead are the **laws** (the things that must stay true), the
-**why** behind choices that look arbitrary, and the **interactions** — especially
-the hidden, gestural ones you can't find by reading the widget tree.
+This document defines the design rules, the invariants they must hold to, and
+the interaction model.
 
 ---
 
 ## The idea
 
-Elyxr looks like a **piece of hardware**: a tinted metal chassis with a phosphor
-CRT tube recessed into it.
+Elyxr presents as a piece of hardware: a tinted metal chassis with a phosphor CRT
+tube recessed into it.
 
-**Everything behind the glass is the terminal. Everything on the metal is a
-physical control.** That division holds everywhere and is the whole design. When
-in doubt about where something goes or what font it wears, ask which side of the
-glass it's on.
+Everything behind the glass is terminal. Everything on the metal is a physical
+control. This division governs placement and typography throughout.
 
-Fixed **440 × 884**, portrait, not resizable in v1.
+The window is a fixed 440 × 884, portrait, not resizable.
 
 ---
 
@@ -46,92 +42,77 @@ Fixed **440 × 884**, portrait, not resizable in v1.
 └────────────────────────────────┘
 ```
 
-The chassis is a near-vertical metal gradient with a **machined bevel**: a bright
+The chassis is a near-vertical metal gradient with a machined bevel: a bright
 highlight hairline along the top edge and a recessed dark hairline along the
-bottom, so the panel reads as raised, brushed metal rather than a flat slab. The
-tube is recessed with a bezel ring and a soft inner vignette.
+bottom. The tube is recessed behind a bezel ring and a soft inner vignette.
 
-Both rails are drag handles — grab the metal to move the window. The tube can't
-be one, or you couldn't scroll or click files. (The "Use System File Browser"
-toggle used to live on the bottom rail; it moved into Settings, since it's off by
-default and Linux-only.)
+Both rails are drag handles for moving the window. The tube is not — it scrolls
+and receives clicks.
 
 ---
 
-## Color — the theme system
+## Color
 
-This is the heart of the design and the part that changed most from the first
-draft. Colour is a **system, not a table**: every colour on screen — the glowing
-tube, the paper terminal in light mode, and the metal chassis — is *computed* from
-**one hue** by a perceptual (OKLCH) engine. Add an accent by writing one row of
-four numbers; everything else follows. The engine is `oklch.dart` (pure Dart, no
-Flutter, so the maths is unit-tested on its own against an oracle); `tokens.dart`
-turns its ints into the palette.
+Colour is a system, not a table. Every colour on screen — the glowing tube, the
+paper terminal in light mode, and the metal — is derived from a single hue by a
+perceptual (OKLCH) engine. A whole screen resolves to one phosphor colour and
+holds it. Adding an accent is one row of four numbers in `tokens.dart`.
 
-### The law
+### Invariants
 
-**Everything on a screen is one colour.** The accent hue drives the phosphor
-*and* the metal (which carries only a whisper of the hue — a tinted grey, never a
-coloured chassis). If a screen ever looks like two colours fighting, that's a bug,
-not a style choice.
+- A screen renders in a single colour. Two competing colours indicate a defect.
+- The accent hue drives the phosphor and the metal alike. The metal carries only
+  a whisper of the hue — a tinted grey, never a coloured chassis.
+- Hue is preserved under saturation. Requesting more chroma than sRGB can show
+  clamps the chroma; it never lets the hue drift.
 
-### Why OKLCH, and the one trick that matters
+### OKLCH
 
-A colour is asked for as **L** (perceptual lightness 0–1), **C** (chroma /
-colourfulness), and **h** (hue angle in degrees). OKLCH is perceptually uniform,
-so equal moves look equal across hues — unlike HSL, where "50% saturation" is a
-vivid blue but a muddy yellow.
+A colour is specified as **L** (perceptual lightness 0–1), **C** (chroma), and
+**h** (hue angle in degrees). OKLCH is perceptually uniform: equal numeric moves
+read as equal visual moves across hues.
 
-The trick that makes "one colour" hold: a hue can only be *so* colourful at a
-given lightness before it leaves the sRGB gamut. Naively rendering an
-out-of-gamut OKLCH value lets the display **gamut-map** it, which **drifts the
-hue** — a deep blue slides to teal, a deep orange to red. So instead of asking for
-a colour, you ask for a hue plus a chroma **budget**, and the engine returns *the
-richest colour that is still true to that hue*. That clamp — not "OKLCH instead of
-hex" — is the whole point.
+A hue can only reach a certain chroma at a given lightness before leaving the sRGB
+gamut. Rendering an out-of-gamut value lets the display gamut-map it, which shifts
+the hue (deep blue toward teal, deep orange toward red). The engine therefore
+takes a hue plus a chroma *budget* and returns the richest colour that remains
+true to the hue.
 
-### The engine (the maths)
+### Engine
 
-**OKLab → linear sRGB.** Convert L,C,h to OKLab (`a = C·cos h`, `b = C·sin h`),
-then the standard OKLab matrix: three linear combinations of L,a,b, each cubed,
-then a 3×3 to linear-light R,G,B. (Exact coefficients in `oklch.dart::_linear`.)
+`oklch.dart` is pure Dart (ARGB ints, no Flutter) and is unit-tested against an
+oracle.
 
-**In gamut?** The colour fits sRGB if every linear channel is within `[0,1]`
-(with a `0.001` slack).
+- **OKLab → linear sRGB.** L,C,h convert to OKLab (`a = C·cos h`, `b = C·sin h`),
+  then through the standard OKLab matrix to linear-light R,G,B. Coefficients in
+  `_linear`.
+- **Gamut test.** A colour fits sRGB when every linear channel is within `[0,1]`
+  (0.001 slack).
+- **`maxChroma(l, h)`** — the maximum in-gamut chroma for a lightness and hue, by
+  a 20-step binary search over `C ∈ [0, 0.4]`. The primitive the rest builds on.
+- **Encode.** Linear channel → 8-bit sRGB via gamma companding (`12.92·x` below
+  `0.0031308`, else `1.055·x^(1/2.4) − 0.055`), clamped 0–255.
+- **`oklchArgb(l, c, h)`** renders chroma as given; used only where chroma is
+  already gamut-safe (the achromatic mono/white).
+- **`trueArgb(l, h, reqC)`** = `oklchArgb(l, min(reqC, maxChroma(l, h)), h)` — the
+  gamut clamp. The default for hue-bearing colour.
+- **`accentChroma(chromaMul, maxCeil, sat)`** — the accent swatch's chroma:
 
-**`maxChroma(l, h)`** — the richest in-gamut chroma for a lightness+hue, by a
-**20-step binary search** over `C ∈ [0, 0.4]` (~20 gamut checks, cheap). This is
-the primitive everything leans on.
+  ```
+  c = 0.13 · chromaMul · sat
+  c = max(c, 0.045)     # floor — retains a trace of colour
+  c = min(c, maxCeil)   # ceiling — the hue's chroma budget
+  ```
 
-**Encode.** Linear channel → 8-bit sRGB via the sRGB gamma companding
-(`12.92·x` below `0.0031308`, else `1.055·x^(1/2.4) − 0.055`), clamped to 0–255.
+- **`lForC(h, targetC, hiL, loL)`** — the lightest (or darkest) lightness that can
+  hold a target chroma for a hue. Available for equalising chroma across hues; the
+  current palette pins lightness per role and does not use it.
 
-**Two ways to render:**
-- `oklchArgb(l, c, h)` — chroma used **as given** (may gamut-map/drift). Used only
-  where chroma is already known-safe (e.g. the achromatic mono/white).
-- `trueArgb(l, h, reqC)` = `oklchArgb(l, min(reqC, maxChroma(l, h)), h)` — the
-  **clamp**. Requested chroma capped to the in-gamut ceiling, hue held. This is
-  the default for everything hue-bearing.
+### Accents
 
-**`accentChroma(chromaMul, maxCeil, sat)`** — the accent swatch's own chroma:
-
-```
-c = 0.13 · chromaMul · sat
-c = max(c, 0.045)          # floor: never fully flat, but low enough to wash to grey
-c = min(c, maxCeil)        # ceiling: the hue's chosen budget
-```
-
-**`lForC(h, targetC, hiL, loL)`** — a further primitive from the source system: the
-lightest (or darkest) lightness that can still hold a target chroma for a hue —
-the way you'd *homogenise* saturation across hues (a narrow-gamut blue rides to
-whatever L lets it match a wide-gamut green). It's available in the engine but the
-current palette pins lightnesses per role instead (below); it's here for when a
-future role wants equal chroma across all accents.
-
-### The accents — eight, spectrum order
-
-Each is four numbers: `AccentSpec(hue, chromaMul, maxCeil, baseL)`. `mono` is the
-white phosphor — achromatic, its intensity a lightness. Green is default.
+Eight, in spectrum order. Each is `AccentSpec(hue, chromaMul, maxCeil, baseL)`.
+`mono` is the achromatic white phosphor; its intensity is a lightness. Green is
+the default.
 
 | Accent | hue° | chromaMul | maxCeil | baseL |
 |---|---|---|---|---|
@@ -144,151 +125,130 @@ white phosphor — achromatic, its intensity a lightness. Green is default.
 | pink | 352 | 0.95 | 0.190 | 0.70 |
 | mono | — | 0 | — | 0.72 |
 
-(`tokens.dart` is canonical — these will be tuned; the *structure* is the durable
-part.)
+`tokens.dart` is canonical for these values.
 
-### The palette recipe
+### Palette recipe
 
-From one hue `h` and the accent's `maxCeil`, every role is a fixed lightness with
-a chroma that's a fraction of the budget, rendered through `trueArgb` (so it's
-always in-gamut). `wc`/`mc` are 1 for a colour accent, 0 for mono.
+From a hue `h` and the accent's `maxCeil`, each role is a fixed lightness at a
+chroma that is a fraction of the budget, rendered through `trueArgb`. `wc`/`mc`
+are 1 for a colour accent, 0 for mono.
 
-**Accent swatch** `a` = `trueArgb(baseL, h, accentChroma(...))` (mono:
-`oklchArgb(monoL, 0, 0)`). **Ink** on the accent = dark (`L 0.24`) if the accent
-is light (`>0.70`), else white.
-
-**Metal** — hue at a *whisper* of chroma (`0.008–0.016`), same in both modes:
-`m1 L.240 · m2 .160 · m3 .130` (gradient), `mb .300` (border), `mh .400`
-(highlight), `mt .550` / `ml .860` (text), `mv1 .100` / `mv2 .210` (recess, vent).
-
-**Phosphor — dark** (glowing tube): `bright L.88 @ 0.9·budget · soft .34@.55 ·
-mid .66@1.0 · dim .44@.85 · foot .52@.70 · glow .60@1.0 · tube-bg L.085` (near
-black). `bright`'s chroma is boosted by the drag (capped at ×1.5) so a punchier
-accent also glows harder.
-
-**Phosphor — light** (paper terminal): `bright L.28 · soft .42@.80 · mid .50@.80 ·
-dim .80@.40 · foot .62@.60 · glow .55@1.0 · tube-bg L.940` (paper). Light mode is
-fully hue-derived — not a special-cased green.
-
-### The two drag axes
-
-The accent swatch is **tactile** (see Interactions). Dragging changes intensity,
-live, across the whole app:
-
-- A **colour** accent drags **saturation _and_ glow together** — one motion makes
-  the phosphor richer *and* brighter (`sat` feeds both `accentChroma` and the
-  bright-glow boost). Range `0.25 – 3.2`: wide on purpose, so it washes most of
-  the way to grey at the bottom and reaches the hue's true in-gamut peak at the
-  top (the clamp keeps it from drifting there).
-- **mono** drags **lightness** (`monoL`, `0.12 – 0.99`) — dim graphite to bright
+- **Accent swatch** `a` = `trueArgb(baseL, h, accentChroma(...))` (mono:
+  `oklchArgb(monoL, 0, 0)`).
+- **Ink** on the accent: dark (`L 0.24`) when the accent is light (`>0.70`), else
   white.
+- **Metal** — hue at a whisper of chroma (`0.008–0.016`), identical in both modes:
+  `m1 L.240 · m2 .160 · m3 .130` (gradient), `mb .300` (border), `mh .400`
+  (highlight), `mt .550` / `ml .860` (text), `mv1 .100` / `mv2 .210` (recess,
+  vent).
+- **Phosphor, dark** (glowing tube): `bright L.88 @ 0.9·budget · soft .34@.55 ·
+  mid .66@1.0 · dim .44@.85 · foot .52@.70 · glow .60@1.0 · tube-bg L.085`.
+  `bright`'s chroma scales with the saturation drag (capped ×1.5).
+- **Phosphor, light** (paper terminal): `bright L.28 · soft .42@.80 · mid .50@.80
+  · dim .80@.40 · foot .62@.60 · glow .55@1.0 · tube-bg L.940`.
 
-Selecting a different accent resets its intensity to neutral — the drag is
-per-accent, from a fresh phosphor.
+### Saturation drag
+
+The accent swatch responds to a vertical drag, live across the app.
+
+- A colour accent drags saturation and glow together — `sat` feeds both
+  `accentChroma` and the bright-glow scale. Range `0.25 – 3.2`: near-grey at the
+  bottom, the hue's in-gamut peak at the top.
+- `mono` drags lightness (`monoL`, `0.12 – 0.99`), graphite to white.
+
+Selecting a different accent resets its intensity to neutral.
 
 ### Tube overlays
 
-Three distinct things live over the glass; **keep them distinct.**
+Three separate elements render over the glass and remain distinct:
 
-- **Scanlines** — faint phosphor-tinted hairlines every 4px. The static "CRT
-  texture." It does **not** move. (Rasterised to a cached layer so scaling the
-  fixed chassis to the window resamples one texture instead of redrawing crisp
-  lines every frame, which shimmered.)
-- **Sweep** — a single thin scanner line crossing the whole tube top to bottom,
-  **one quick pass every ~11 seconds**, near-translucent with the faintest glow.
-  It is a *line that moves*, **not** a lit band dragged across the texture — that
-  distinction was hard-won; the sweep must never light the texture.
-- **Vignette + bloom** — a soft accent bloom at the centre falling to a gentle
-  dark ring at the edges. A falloff, not a heavy black frame; corners stay
-  legible.
+- **Scanlines** — phosphor-tinted hairlines every 4px. Static texture; it does not
+  move. Rasterised to a cached layer so scaling the fixed chassis resamples one
+  texture rather than redrawing hairlines each frame.
+- **Sweep** — a single thin scanner line crossing top to bottom, one pass every
+  ~11 seconds, near-translucent with a faint glow. A moving line, not a lit band
+  drawn across the texture.
+- **Vignette + bloom** — a soft accent bloom at the centre easing to a gentle dark
+  ring at the edges. A falloff, not a black frame; corners remain legible.
 
 ---
 
 ## Type
 
-Three faces, one job each — but the *terminal* face is now the user's to choose.
+Three roles, one face each. The terminal face is user-selectable.
 
-| Role (helper) | Job | Face |
+| Role | Applies to | Face |
 |---|---|---|
 | `chassis()` | Chassis labels, section markers, rail buttons | **Chakra Petch**, fixed |
-| `glass()` | Everything on the glass — rows, readouts, settings | the **terminal face** |
-| `mono()` | The ticker and readouts on the glass | the **terminal face** |
+| `glass()` | Everything on the glass — rows, readouts, settings | the terminal face |
+| `mono()` | The ticker and glass readouts | the terminal face |
 
-- **The terminal face is swappable** (Settings › TYPEFACE), from VT323 (default)
-  through a dozen bundled faces. It governs `glass()` **and** `mono()` — the whole
-  screen re-skins as one face. Add a face by dropping a TTF in `assets/fonts/`,
-  declaring it in `pubspec.yaml`, and adding one row to `kTermFaces`.
-- **The metal face (`chassis()`) never changes.** The `v2.0.5` badge on the rail
-  is metal, so it uses the chassis face and stays put when the screen face swaps.
-- **The ticker follows the terminal face.** The original design kept the ticker on
-  a separate mono face and said "do not unify this." That was **deliberately
-  overridden**: the ticker is part of the screen, so it wears the screen's face
-  like everything else on the glass. (VT323 is a bitmap face and softens in
-  motion; if you want a crisp monospace ticker, pick a monospace terminal face.)
+- The terminal face is selectable in Settings › TYPEFACE, from VT323 (default)
+  through the bundled faces. It governs `glass()` and `mono()` together: the whole
+  screen renders in one face. A face is added by placing a TTF in `assets/fonts/`,
+  declaring it in `pubspec.yaml`, and adding a row to `kTermFaces`.
+- The metal face (`chassis()`) is fixed. The `v2.0.5` badge on the rail is metal
+  and uses the chassis face, so it is unaffected by the terminal-face selection.
+- The ticker uses the terminal face, as part of the screen. A monospace terminal
+  face yields a monospace ticker.
 
-One knob per role in `text.dart` scales every call site at once.
+`text.dart` provides one scale knob per role.
 
 ---
 
 ## Interactions
 
-### Hold the wordmark — the settings screen
+### Wordmark hold — Settings
 
-The only way in. Nothing marks the wordmark as pressable, and nothing should.
+Holding the wordmark for ~250ms opens Settings; holding again returns to files.
+Releasing before the threshold does nothing. During the hold the wordmark tightens
+its tracking, lights to the accent with a glow, and a bar beside it fills. The
+wordmark stays lit while Settings is open.
 
-- **Press** — the wordmark tightens its tracking, lights to the accent with a
-  glow, and a small bar beside it fills.
-- **~250ms** — the tube swaps to settings. The wordmark stays lit the whole time
-  you're in there. **Hold again** to return to files.
-- **Release early** — reverts, nothing happens.
+There is no settings button, tooltip, or hint. This entry point is intentionally
+unmarked.
 
-No settings button, tooltip, or first-run hint anywhere. This is intentionally
-undiscoverable; the user was explicit about keeping it so.
+### Tactile feedback
 
-### Tactile — hover on desktop, press on touch
+Clickable surfaces light the same accent glow across devices: a mouse hover and a
+touch press resolve to one lit state, through the `Tactile` wrapper. It is passive
+and does not consume the underlying gesture.
 
-Clickable surfaces light the **same** phosphor glow on every device: a mouse
-*hovers* it, a finger *presses* it, both resolve to one lit state. Build touchable
-things through this one abstraction (`Tactile`) so desktop and touch feel the
-same; it's passive and never eats the underlying tap.
+### Accent swatches
 
-### The accent swatches
+Each swatch is a miniature tube in that colour, previewing the rendered surface
+rather than a flat sample. Tap to select; drag vertically to set intensity
+(saturation and glow for a colour, lightness for mono); double-tap to reset.
 
-Each swatch is a **miniature tube** in that colour — it previews the machine, not
-a paint chip. **Tap** to pick. **Drag** up/down to push intensity (saturation+glow
-for a colour, lightness for mono). **Double-tap** to reset. The whole app responds
-live as you drag.
+### Typeface picker
 
-### The typeface picker
-
-A grid of faces, each chip rendering **its own font** so you read the choice in
-the choice. Tap swaps the terminal face live.
+A grid of faces, each chip rendered in its own font. Tap to apply the terminal
+face live.
 
 ### Density
 
-TIGHT / MID / ROOMY. It is a **global text scale for the glass** (≈0.9 / 1.0 /
-1.15), not padding alone — the whole terminal grows or tightens together, while
-the metal rails keep their fixed physical size. Row padding still tracks density
-for breathing room.
+TIGHT / MID / ROOMY sets a global text scale for the glass (≈0.9 / 1.0 / 1.15).
+The whole terminal scales together; the metal rails keep their fixed size. Row
+padding also tracks density.
 
 ### TEXT / GRID
 
 A rocker on the bottom rail. TEXT is the dense phosphor list (default); GRID is
-3-across tiles. **Hidden while the settings screen is open** — it only drives the
-file list, so it doesn't belong there. Persists.
+3-across tiles. Hidden while Settings is open, as it controls only the file list.
+Persists.
 
 ### File rows
 
-- **Single click** selects (a folder can be selected too, to delete or move).
-- **Double-click** opens a folder, or previews a file.
-- **Drag a file sideways out** of the window and it downloads to wherever you
-  drop it; a vertical drag still scrolls.
-- **Long-press** renames.
+- Single click selects (files and folders alike).
+- Double-click opens a folder or previews a file.
+- Dragging a file sideways out of the window downloads it to the drop location; a
+  vertical drag scrolls.
+- Long-press renames.
 
-### The ticker
+### Ticker
 
 Scrolls right-to-left, pausing on hover, with a fixed `LOG` label anchoring the
-left edge. Runs at a brisk loop (faster than the first draft).
+left edge.
 
 ---
 
@@ -296,41 +256,39 @@ left edge. Runs at a brisk loop (faster than the first draft).
 
 Three columns: glyph (fixed width), name, size (right-aligned).
 
-Folders get a solid `█` in the accent; files a hollow `▫` in mid. Folder names
-sit at **bright**, file names at **soft**, sizes at **mid**. Rows alternate a
-faint accent band. Selection is an accent wash with a left accent border and the
-name in white with a glow.
-
-That hierarchy exists because an earlier version had every line the same weight
-and was unreadable at a glance. **Keep the separation.**
+Folders use a solid `█` in the accent; files a hollow `▫` in mid. Folder names
+render at bright, file names at soft, sizes at mid. Rows alternate a faint accent
+band. Selection is an accent wash with a left accent border and the name in white
+with a glow. The weight separation is load-bearing for scannability.
 
 ---
 
 ## Settings screen
 
-Replaces the files view inside the same tube — same scanlines, same sweep. It is
-deliberately in the **same restrained terminal vocabulary** as the files view, so
-the two don't feel like different apps.
+Replaces the files view inside the same tube, with the same scanlines and sweep,
+in the same terminal vocabulary.
 
-- **Header** — a phosphor `▸ SETTINGS` with an accent caret and a dim underline,
-  the device name in mono at the right. (Not the old inverted solid-accent band —
-  that read like a designed app pane dropped into a terminal.)
-- **Sections** — each a bracketed `[NN]` accent marker, a glass title, and a rule
-  trailing off:
-  1. **ACCENT** — the eight tactile swatches
-  2. **DENSITY** — three row-stack diagrams at their real spacings
-  3. **TYPEFACE** — the face grid
-  4. **TUBE** — dark / light
-  5. **THIS DEVICE** — mode, downloads, mount path, concurrent transfers, forget
-  6. **USE SYSTEM FILE BROWSER** — the optional gate mount *(Linux client only)*
+- **Header** — a phosphor `▸ SETTINGS` with an accent caret and a dim underline;
+  the device name in mono at the right.
+- **Sections** — each a bracketed `[NN]` accent marker, a glass title, and a
+  trailing rule:
+  1. ACCENT — the eight swatches
+  2. DENSITY — three row-stack diagrams at their real spacings
+  3. TYPEFACE — the face grid
+  4. TUBE — dark / light
+  5. THIS DEVICE — mode, downloads, mount path, concurrent transfers, forget
+  6. USE SYSTEM FILE BROWSER — the optional gate mount (Linux client only)
 - **Footer** — versions on the left, `HOLD ELYXR TO EXIT` on the right.
+
+Nostalgia Mode, when enabled, adds a master toggle above the numbered sections
+that gates the retro features; see [Nostalgia Mode](#nostalgia-mode).
 
 ---
 
 ## State
 
-Persisted with `shared_preferences`. The bearer token is **never** here — it
-lives in the keyring, never written in the clear, never shown on screen.
+Persisted with `shared_preferences`. The bearer token is not stored here — it
+lives in the keyring, never in the clear, never on screen.
 
 ```
 view       files | settings                          transient
@@ -348,6 +306,8 @@ dark       bool (tube: glow vs paper)                  persist
 appMode    client | server                             persist
 trove      bool — is the gate mount on                 persist
 downloadDir / mountPath / atOnce / confirmDelete       persist
+nostalgia  bool — Nostalgia Mode                        persist
+sound      bool — Nostalgia Mode sounds                 persist
 holding    bool, transient
 ```
 
@@ -355,22 +315,36 @@ holding    bool, transient
 
 ## Error display
 
-Show lymnal's `message` **word for word**, attached to the action that failed.
-Never reword, summarize, or swallow. `code` and `request_id` go behind a details
+lymnal's `message` renders verbatim, attached to the action that failed — never
+reworded, summarised, or dropped. `code` and `request_id` sit behind a details
 toggle with a copy button.
 
-Three failures lymnal cannot report, because the request never arrives:
+Three failures lymnal cannot report, because the request never arrives, have fixed
+messages:
 
-- **Timeout** — "Can't reach <server>. It may be asleep or off." Retry every few
-  seconds; resume everything waiting the moment it answers.
-- **No tailnet** — "Tailscale isn't connected on this device." A distinct message.
-- **401** — "This device is no longer approved." Offer to request access again.
+- **Timeout** — "Can't reach <server>. It may be asleep or off." Retries every few
+  seconds and resumes waiting work once it answers.
+- **No tailnet** — "Tailscale isn't connected on this device."
+- **401** — "This device is no longer approved." Offers to request access again.
 
 ---
 
-## Not yet built
+## Nostalgia Mode
 
-Specified, intended, not implemented:
+An optional mode, off by default, toggled at the top of Settings. It does not
+change what elyxr does; it adds retro presentation, gated entirely by the toggle.
+A separate Sound switch gates its sound effects.
 
-- **Ticker hold-to-read** — press and hold a ticker message to open it as a
-  wrapped, readable popup that stays open only while held.
+- **Matrix screensaver** — after ~120s idle, the tube fades to falling glyphs in
+  the accent colour; any input dismisses it.
+- **Cursor trail** — fading accent-coloured ghost arrows follow the pointer
+  (desktop).
+- **Crosshair** — the pointer becomes a crosshair over the file browser (desktop).
+- **Transfer HUD** — a terminal-log readout near the top of the tube narrating
+  real activity (link-up, uploads, downloads) with block progress bars.
+- **Snake** — tapping the wordmark seven times opens a Snake game on the tube,
+  steered by arrow keys / WASD or by swipe.
+- **Nonsense button** — a small unmarked control on the bottom rail that floats a
+  brief, purposeless message over the tube.
+- **Sounds** — retro effects on key events (connect, transfers, delete, pairing,
+  toggles), gated by the Sound switch.
