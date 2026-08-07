@@ -177,11 +177,12 @@ class _Sweep extends StatefulWidget {
 }
 
 class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
-  // One pass every 7 seconds. The sweep itself is quick; the rest of the cycle
+  // One pass every 11 seconds. The sweep itself is quick; the rest of the cycle
   // is quiet, so it reads as a periodic sonar pass, not constant motion.
-  static const _cycle = Duration(seconds: 7);
-  // Fraction of the cycle spent actually moving.
-  static const double _sweepPart = 0.24;
+  static const _cycle = Duration(seconds: 11);
+  // Fraction of the cycle spent actually moving. Kept short in absolute terms
+  // (~1.7s) so the pass stays quick as the cycle lengthens.
+  static const double _sweepPart = 0.155;
 
   late final AnimationController _c =
       AnimationController(vsync: this, duration: _cycle)..repeat();
@@ -223,21 +224,22 @@ class _SweepPainter extends CustomPainter {
     final p = progress;
     if (p == null) return;
     final y = size.height * p;
-    // A barely-there glow feathered a few px either side of the line.
+    // A soft glow feathered a few px either side of the line — a tad more
+    // present now, still gentle.
     final glow = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
           accent.withValues(alpha: 0),
-          accent.withValues(alpha: 0.05),
+          accent.withValues(alpha: 0.08),
           accent.withValues(alpha: 0),
         ],
-      ).createShader(Rect.fromLTWH(0, y - 6, size.width, 12));
-    canvas.drawRect(Rect.fromLTWH(0, y - 6, size.width, 12), glow);
-    // The crisp line itself — thin, and close to translucent.
+      ).createShader(Rect.fromLTWH(0, y - 7, size.width, 14));
+    canvas.drawRect(Rect.fromLTWH(0, y - 7, size.width, 14), glow);
+    // The crisp line itself — thin, a touch brighter.
     final line = Paint()
-      ..color = accent.withValues(alpha: 0.13)
+      ..color = accent.withValues(alpha: 0.2)
       ..strokeWidth = 1.2;
     canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
   }
