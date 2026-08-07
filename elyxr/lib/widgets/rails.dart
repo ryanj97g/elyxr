@@ -20,12 +20,16 @@ class TopRail extends StatefulWidget {
   final Palette palette;
   final bool inSettings;
   final VoidCallback onToggleSettings;
+  /// Tapping the wordmark seven times quickly fires this (the hidden minigame,
+  /// in Nostalgia Mode). Null disables it — a hold still opens settings.
+  final VoidCallback? onEasterEgg;
 
   const TopRail({
     super.key,
     required this.palette,
     required this.inSettings,
     required this.onToggleSettings,
+    this.onEasterEgg,
   });
 
   @override
@@ -35,6 +39,9 @@ class TopRail extends StatefulWidget {
 class _TopRailState extends State<TopRail> {
   bool _holding = false;
   Timer? _timer;
+  // A quick-tap counter, distinct from the hold — seven in a row is the egg.
+  int _taps = 0;
+  Timer? _tapReset;
 
   void _press() {
     setState(() => _holding = true);
@@ -49,9 +56,22 @@ class _TopRailState extends State<TopRail> {
     if (mounted) setState(() => _holding = false);
   }
 
+  void _tap() {
+    if (widget.onEasterEgg == null) return;
+    _tapReset?.cancel();
+    _taps++;
+    _tapReset = Timer(const Duration(milliseconds: 700), () => _taps = 0);
+    if (_taps >= 7) {
+      _taps = 0;
+      _tapReset?.cancel();
+      widget.onEasterEgg!.call();
+    }
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
+    _tapReset?.cancel();
     super.dispose();
   }
 
@@ -70,6 +90,7 @@ class _TopRailState extends State<TopRail> {
             onTapDown: (_) => _press(),
             onTapUp: (_) => _release(),
             onTapCancel: _release,
+            onTap: _tap,
             behavior: HitTestBehavior.opaque,
             child: AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
