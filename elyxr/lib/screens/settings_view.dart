@@ -186,7 +186,9 @@ class _AccentPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settings = context.read<SettingsController>();
+    // Watch so the tapped swatch's mini-tube (and the whole app) update live as
+    // it's dragged.
+    final settings = context.watch<SettingsController>();
     return Row(
       children: [
         for (final accent in Accent.values)
@@ -194,9 +196,27 @@ class _AccentPicker extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.only(right: 4),
               child: GestureDetector(
-                onTap: () => settings.accent = accent,
                 behavior: HitTestBehavior.opaque,
-                child: _swatch(accent, accent == settings.accent, palette),
+                // Press picks the phosphor; drag up/down pushes its intensity —
+                // saturation (and glow) for a colour, lightness for mono. Double-
+                // tap resets. The whole tube responds live.
+                onTapDown: (_) => settings.accent = accent,
+                onVerticalDragUpdate: (d) {
+                  final up = -(d.primaryDelta ?? 0);
+                  if (accent == Accent.mono) {
+                    settings.monoL = settings.monoL + up * 0.0026;
+                  } else {
+                    settings.accentSat = settings.accentSat + up * 0.006;
+                  }
+                },
+                onDoubleTap: () {
+                  if (accent == Accent.mono) {
+                    settings.monoL = 0.72;
+                  } else {
+                    settings.accentSat = 1.0;
+                  }
+                },
+                child: _swatch(accent, accent == settings.accent, palette, settings),
               ),
             ),
           ),
@@ -205,9 +225,12 @@ class _AccentPicker extends StatelessWidget {
   }
 
   /// Each swatch is a miniature tube in that colour, previewing the machine
-  /// rather than showing a paint chip.
-  Widget _swatch(Accent accent, bool on, Palette base) {
-    final sp = Palette(accent, base.dark);
+  /// rather than showing a paint chip. The selected one shows at the current
+  /// drag intensity; the rest sit at their neutral default.
+  Widget _swatch(Accent accent, bool on, Palette base, SettingsController s) {
+    final sp = Palette(accent, base.dark,
+        sat: on ? s.accentSat : 1.0,
+        monoL: accent == Accent.mono && on ? s.monoL : null);
     return Column(
       children: [
         Container(

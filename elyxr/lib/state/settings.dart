@@ -31,6 +31,10 @@ class SettingsController extends ChangeNotifier {
   String _mountPath = '~/Desktop/trove'; // where the trove mounts — a normal folder on the Desktop
   bool _confirmDelete = true; // show the "removes it for everyone" delete guard
   int _atOnce = 3;
+  // The two accent drag axes: saturation for a colour phosphor (pushes chroma
+  // AND glow), lightness for the mono/white phosphor.
+  double _accentSat = 1.0; // 0.4–2.6
+  double _monoL = 0.72; // 0.12–0.99
 
   Accent get accent => _accent;
   Density get density => _density;
@@ -42,6 +46,8 @@ class SettingsController extends ChangeNotifier {
   String get mountPath => _mountPath;
   bool get confirmDelete => _confirmDelete;
   int get atOnce => _atOnce;
+  double get accentSat => _accentSat;
+  double get monoL => _monoL;
 
   void _load() {
     _accent = _enumByName(Accent.values, _prefs.getString('accent'), Accent.green);
@@ -56,6 +62,8 @@ class SettingsController extends ChangeNotifier {
     _mountPath = _prefs.getString('mountPath') ?? '~/Desktop/trove';
     _confirmDelete = _prefs.getBool('confirmDelete') ?? true;
     _atOnce = _prefs.getInt('atOnce') ?? 3;
+    _accentSat = _prefs.getDouble('accentSat') ?? 1.0;
+    _monoL = _prefs.getDouble('monoL') ?? 0.72;
   }
 
   T _enumByName<T extends Enum>(List<T> values, String? name, T fallback) {
@@ -66,7 +74,21 @@ class SettingsController extends ChangeNotifier {
   }
 
   // Setters persist and notify.
-  set accent(Accent v) => _set('accent', () => _accent = v, () => _prefs.setString('accent', v.name));
+  // Selecting a different accent resets its saturation to 1 (a fresh phosphor),
+  // matching the source system — the drag is per-accent, from neutral.
+  set accent(Accent v) => _set('accent', () {
+        if (v != _accent) _accentSat = 1.0;
+        _accent = v;
+      }, () {
+        _prefs.setString('accent', v.name);
+        _prefs.setDouble('accentSat', _accentSat);
+      });
+  set accentSat(double v) => _set('accentSat',
+      () => _accentSat = v.clamp(0.4, 2.6).toDouble(),
+      () => _prefs.setDouble('accentSat', _accentSat));
+  set monoL(double v) => _set('monoL',
+      () => _monoL = v.clamp(0.12, 0.99).toDouble(),
+      () => _prefs.setDouble('monoL', _monoL));
   set density(Density v) => _set('density', () => _density = v, () => _prefs.setString('density', v.name));
   set dark(bool v) => _set('dark', () => _dark = v, () => _prefs.setBool('dark', v));
   set mode(ViewMode v) => _set('mode', () => _mode = v, () => _prefs.setString('mode', v.name));
@@ -83,6 +105,7 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The palette for the current accent and tube setting.
-  Palette get palette => Palette(_accent, _dark);
+  /// The palette for the current accent, tube setting, and drag intensity.
+  Palette get palette =>
+      Palette(_accent, _dark, sat: _accentSat, monoL: _monoL);
 }
