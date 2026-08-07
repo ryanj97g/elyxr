@@ -42,6 +42,15 @@ const List<TermFace> kTermFaces = [
   TermFace('VT323', 'VT323'),
   TermFace('Chakra Petch', 'CHAKRA'),
   TermFace('IBM Plex Mono', 'PLEX'),
+  TermFace('Orbitron', 'ORBITRON'),
+  TermFace('Silkscreen', 'SILKSCREEN'),
+  TermFace('Julius Sans One', 'JULIUS'),
+  TermFace('Redacted Script', 'REDACTED'),
+  TermFace('Flow Circular', 'FLOW'),
+  TermFace('Odisean Tech', 'ODISEAN'),
+  TermFace('Ordinary Love', 'ORDINARY'),
+  TermFace('Holo Edge Four', 'HOLO EDGE'),
+  TermFace('Digital Moneter', 'DIGITAL'),
 ];
 
 /// The switchable phosphor accents, in spectrum order. `mono` is the white

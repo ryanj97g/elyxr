@@ -94,7 +94,7 @@ class SettingsView extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('ELYXR 1.0.0 · lymnal 1.0.0', style: mono(10, p.foot)),
+                Text('ELYXR 2.0.5 · lymnal 2.0.5', style: mono(10, p.foot)),
                 Text('HOLD ELYXR TO EXIT', style: chassis(10, p.mid, spacing: 0.1)),
               ],
             ),
@@ -354,12 +354,19 @@ class _FacePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = palette;
     final settings = context.watch<SettingsController>();
-    return Row(
-      children: [
-        for (final face in kTermFaces)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(right: 8),
+    // Many faces now, so they flow into a grid rather than one cramped row.
+    // Three across, sized to the tube width; extra rows scroll with the list.
+    return LayoutBuilder(builder: (context, constraints) {
+      const cols = 3;
+      const gap = 8.0;
+      final w = (constraints.maxWidth - gap * (cols - 1)) / cols;
+      return Wrap(
+        spacing: gap,
+        runSpacing: 10,
+        children: [
+          for (final face in kTermFaces)
+            SizedBox(
+              width: w,
               child: GestureDetector(
                 onTap: () => settings.termFont = face.family,
                 behavior: HitTestBehavior.opaque,
@@ -368,7 +375,7 @@ class _FacePicker extends StatelessWidget {
                   return Column(
                     children: [
                       Container(
-                        height: 48,
+                        height: 44,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: p.dark ? const Color(0xFF030604) : const Color(0xFFf2f7f3),
@@ -379,25 +386,25 @@ class _FacePicker extends StatelessWidget {
                         child: Text('Aa',
                             style: TextStyle(
                               fontFamily: face.family,
-                              fontSize: 26,
+                              fontSize: 24,
                               color: on ? p.a : p.foot,
                               shadows: on ? [Shadow(color: p.a, blurRadius: 10)] : null,
                             )),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 5),
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(face.label,
-                            style: chassis(10, on ? p.bright : p.mid, spacing: 0.1)),
+                            style: chassis(9.5, on ? p.bright : p.mid, spacing: 0.08)),
                       ),
                     ],
                   );
                 }),
               ),
             ),
-          ),
-      ],
-    );
+        ],
+      );
+    });
   }
 }
 

@@ -12,7 +12,7 @@ import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
 
-/// The top rail: screw · ELYXR · hold-bar · vent · v1.0.0 · screw.
+/// The top rail: screw · ELYXR · hold-bar · vent · v2.0.5 · screw.
 ///
 /// Holding the wordmark for 250ms is the only way into settings. Nothing marks
 /// it as pressable, and nothing should (DESIGN.md · Interactions).
@@ -137,7 +137,7 @@ class _TopRailState extends State<TopRail> {
           const SizedBox(width: 9),
           // The version sits on the metal, so it uses the fixed chassis face —
           // it stays put when the terminal (screen) face is swapped.
-          Text('v1.0.0', style: chassis(9, p.mt)),
+          Text('v2.0.5', style: chassis(9, p.mt)),
           const SizedBox(width: 9),
           // Right screw quietly closes the window.
           _screw(p, onTap: () => windowManager.close(), tip: 'Close'),
