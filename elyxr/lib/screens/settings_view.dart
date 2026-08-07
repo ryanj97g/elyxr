@@ -11,6 +11,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../state/music.dart';
 import '../state/sound.dart';
 import '../util/device.dart';
 import '../widgets/nostalgia/music_player.dart';
@@ -68,8 +69,10 @@ class SettingsView extends StatelessWidget {
                 // above everything numbered, so it reads as the mode gate it is.
                 _NostalgiaRow(palette: p),
                 const SizedBox(height: 13),
-                // The music deck, only in Nostalgia Mode.
-                if (settings.nostalgia) ...[
+                // The music deck: in Nostalgia Mode, or whenever a track is
+                // playing (e.g. a trove file streamed from anywhere).
+                if (settings.nostalgia ||
+                    context.select<MusicController, bool>((m) => m.active)) ...[
                   _section(p, '♪', 'MUSIC', MusicPlayerPanel(palette: p)),
                   const SizedBox(height: 13),
                 ],

@@ -584,10 +584,9 @@ class _Row extends StatelessWidget {
               DragOut.begin(path, entry.name);
             },
       onLongPress: () {
-        // In Nostalgia Mode, long-pressing an audio file streams it from the
-        // trove into the music player instead of renaming.
-        final settings = context.read<SettingsController>();
-        if (!isDir && settings.nostalgia && isAudioName(entry.name)) {
+        // Long-pressing an audio file streams it from the trove into the music
+        // player (any mode). Non-audio files rename, as before.
+        if (!isDir && isAudioName(entry.name)) {
           final client = context.read<SessionController>().client;
           if (client != null) {
             final path = browse.path.isEmpty
