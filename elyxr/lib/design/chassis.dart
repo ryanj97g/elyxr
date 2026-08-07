@@ -107,7 +107,9 @@ class Tube extends StatelessWidget {
                   gradient: RadialGradient(
                     radius: 1.2,
                     colors: [
-                      p.aAlpha(p.dark ? 0.04 : 0.0),
+                      // A soft phosphor bloom at the centre, falling to a gentle
+                      // dark ring at the edges (legible corners, not a black frame).
+                      p.aAlpha(p.dark ? 0.07 : 0.0),
                       Colors.black.withValues(alpha: p.dark ? 0.42 : 0.12),
                     ],
                     stops: const [0.6, 1.0],
@@ -127,7 +129,7 @@ class Tube extends StatelessWidget {
           Positioned.fill(
             child: IgnorePointer(
               child: RepaintBoundary(
-                child: CustomPaint(painter: _ScanlinePainter()),
+                child: CustomPaint(painter: _ScanlinePainter(p.a)),
               ),
             ),
           ),
@@ -137,12 +139,16 @@ class Tube extends StatelessWidget {
   }
 }
 
-/// Hairline scanlines every 4px. Soft enough to read as texture, not stripes.
+/// Hairline scanlines every 4px — a faint *phosphor-tinted* line so the raster
+/// glows on the near-black tube instead of a dark line vanishing into it.
 class _ScanlinePainter extends CustomPainter {
+  final Color accent;
+  const _ScanlinePainter(this.accent);
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.22)
+      ..color = accent.withValues(alpha: 0.08)
       ..strokeWidth = 1;
     for (double y = 3; y < size.height; y += 4) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
@@ -150,13 +156,12 @@ class _ScanlinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _ScanlinePainter old) => old.accent != accent;
 }
 
-/// A soft scan beam that travels top to bottom over 8s, looping. Brightest at
-/// its leading (lower) edge, fading up like phosphor decay behind it, so it
-/// reads as a single beam sweeping down — starting right at the top — rather
-/// than a band that appears mid-screen.
+/// A soft glowing scan bar that sweeps top to bottom over 8s, looping. Its
+/// bright centre rides the scan position, so at the start of each pass it sits
+/// right at the top and moves smoothly down — a visible scan, not a thin edge.
 class _Sweep extends StatefulWidget {
   final Palette palette;
   const _Sweep({required this.palette});
@@ -166,7 +171,7 @@ class _Sweep extends StatefulWidget {
 }
 
 class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
-  static const double _trail = 90; // how far the glow trails above the beam
+  static const double _band = 160; // full height of the soft glow bar
 
   late final AnimationController _c =
       AnimationController(vsync: this, duration: const Duration(seconds: 8))
@@ -188,23 +193,23 @@ class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
           return AnimatedBuilder(
             animation: _c,
             builder: (context, _) {
-              // The beam's leading edge runs from the very top (y=0) to the
-              // bottom (y=h); its trailing glow sits in the band above it.
-              final beamY = h * _c.value;
+              // The scan position runs from the very top (y=0) to the bottom
+              // (y=h); the glow bar is centred on it, brightest at the middle.
+              final y = h * _c.value;
               return Transform.translate(
-                offset: Offset(0, beamY - _trail),
+                offset: Offset(0, y - _band / 2),
                 child: Container(
-                  height: _trail,
+                  height: _band,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
                         p.aAlpha(0),
-                        p.aAlpha(0.05),
-                        p.aAlpha(0.13),
+                        p.aAlpha(0.11),
+                        p.aAlpha(0),
                       ],
-                      stops: const [0, 0.75, 1],
+                      stops: const [0, 0.5, 1],
                     ),
                   ),
                 ),
