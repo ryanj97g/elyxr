@@ -44,7 +44,9 @@ class Chassis extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Inner highlight (inset 0 1px 0 mh): a hairline at the very top.
+          // A machined-metal bevel: a bright highlight hairline catches the
+          // light at the top edge, and a dark recessed hairline sits in shadow
+          // at the bottom — together the panel reads as raised, brushed metal.
           Container(height: 1, color: p.mh),
           // Both rails are drag handles — grab the metal to move the window.
           // (The tube can't be one, or you couldn't scroll or click files.)
@@ -53,6 +55,9 @@ class Chassis extends StatelessWidget {
           Expanded(child: tube),
           const SizedBox(height: 8),
           DragToMoveArea(child: bottomRail),
+          const SizedBox(height: 2),
+          // The recessed bottom hairline — the shadowed underside of the bevel.
+          Container(height: 1, color: p.mv1),
         ],
       ),
     );
