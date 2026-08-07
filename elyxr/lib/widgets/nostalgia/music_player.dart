@@ -127,8 +127,8 @@ class _MusicPlayerPanelState extends State<MusicPlayerPanel>
             _btn(p, Icons.skip_next, m.next),
             _iconToggle(
                 p,
-                m.repeat == RepeatMode.one ? Icons.repeat_one : Icons.repeat,
-                m.repeat != RepeatMode.off,
+                m.repeat == MusicRepeat.one ? Icons.repeat_one : Icons.repeat,
+                m.repeat != MusicRepeat.off,
                 m.cycleRepeat),
           ],
         ),
