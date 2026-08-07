@@ -280,8 +280,7 @@ in the same terminal vocabulary.
   6. USE SYSTEM FILE BROWSER — the optional gate mount (Linux client only)
 - **Footer** — versions on the left, `HOLD ELYXR TO EXIT` on the right.
 
-Nostalgia Mode, when enabled, adds a master toggle above the numbered sections
-that gates the retro features; see [Nostalgia Mode](#nostalgia-mode).
+A NOSTALGIA MODE toggle sits above the numbered sections.
 
 ---
 
@@ -306,8 +305,8 @@ dark       bool (tube: glow vs paper)                  persist
 appMode    client | server                             persist
 trove      bool — is the gate mount on                 persist
 downloadDir / mountPath / atOnce / confirmDelete       persist
-nostalgia  bool — Nostalgia Mode                        persist
-sound      bool — Nostalgia Mode sounds                 persist
+nostalgia  bool                                         persist
+sound      bool                                         persist
 holding    bool, transient
 ```
 
@@ -326,25 +325,3 @@ messages:
   seconds and resumes waiting work once it answers.
 - **No tailnet** — "Tailscale isn't connected on this device."
 - **401** — "This device is no longer approved." Offers to request access again.
-
----
-
-## Nostalgia Mode
-
-An optional mode, off by default, toggled at the top of Settings. It does not
-change what elyxr does; it adds retro presentation, gated entirely by the toggle.
-A separate Sound switch gates its sound effects.
-
-- **Matrix screensaver** — after ~120s idle, the tube fades to falling glyphs in
-  the accent colour; any input dismisses it.
-- **Cursor trail** — fading accent-coloured ghost arrows follow the pointer
-  (desktop).
-- **Crosshair** — the pointer becomes a crosshair over the file browser (desktop).
-- **Transfer HUD** — a terminal-log readout near the top of the tube narrating
-  real activity (link-up, uploads, downloads) with block progress bars.
-- **Snake** — tapping the wordmark seven times opens a Snake game on the tube,
-  steered by arrow keys / WASD or by swipe.
-- **Nonsense button** — a small unmarked control on the bottom rail that floats a
-  brief, purposeless message over the tube.
-- **Sounds** — retro effects on key events (connect, transfers, delete, pairing,
-  toggles), gated by the Sound switch.
