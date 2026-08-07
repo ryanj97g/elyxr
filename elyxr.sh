@@ -476,30 +476,46 @@ UNITEOF
   done_
 fi
 
-# If the elyxr window was open when this ran (for example the client agent
-# triggered the update in the background), restart it onto the fresh build so an
-# open window doesn't linger on the old version. Skipped when nothing's running.
-# We record whether we did it so the closing summary can say so plainly — a
-# silent restart is why an update always felt like a guess.
+# If the elyxr window was open when this ran, restart it onto the fresh build so
+# an open window never lingers on the old version. This is the step that makes an
+# update actually visible: without it the new binary sits on disk while the old
+# window keeps running.
+#
+# The tricky case is a background update — the client's service agent runs this
+# script, and a systemd --user service has no graphical session of its own (no
+# DISPLAY / WAYLAND_DISPLAY / DBUS). Relaunching from there would kill the old
+# window and fail to bring a new one up. So we lift those variables straight out
+# of the running window's own environment (/proc/<pid>/environ) and hand them to
+# the relaunch — the new window then appears on the user's screen no matter who
+# triggered the update.
 APP_RESTARTED=0
-if [ "$APP" = 1 ] && [ -n "${APP_BIN:-}" ] && pgrep -f "$APP_BIN" >/dev/null 2>&1; then
-  pkill -f "$APP_BIN" 2>/dev/null || true
-  sleep 1
-  ( setsid "$APP_BIN" >/dev/null 2>&1 & ) 2>/dev/null || true
-  APP_RESTARTED=1
+if [ "$APP" = 1 ] && [ -n "${APP_BIN:-}" ]; then
+  app_pid="$(pgrep -f "$APP_BIN" | head -n1 || true)"
+  if [ -n "$app_pid" ]; then
+    app_env=()
+    if [ -r "/proc/$app_pid/environ" ]; then
+      while IFS= read -r -d '' kv; do
+        case "$kv" in
+          DISPLAY=*|WAYLAND_DISPLAY=*|XAUTHORITY=*|DBUS_SESSION_BUS_ADDRESS=*|XDG_RUNTIME_DIR=*)
+            app_env+=("$kv") ;;
+        esac
+      done < "/proc/$app_pid/environ"
+    fi
+    pkill -f "$APP_BIN" 2>/dev/null || true
+    sleep 1
+    ( setsid env "${app_env[@]}" "$APP_BIN" >/dev/null 2>&1 & ) 2>/dev/null || true
+    APP_RESTARTED=1
+  fi
 fi
 
-notify "Done — elyxr is up to date (build $ELYXR_BUILD)."
+notify "Done — elyxr is up to date."
 splash
 echo
-# State the build this run actually built and installed. This number is the
-# truth about what's running now — it matches the app's Settings footer, so an
-# update that "didn't take" is visible instead of a mystery.
-echo "${GRN}elyxr is ready.${RST}  build ${ELYXR_BUILD} · ${ELYXR_COMMIT}"
+echo "${GRN}elyxr is ready.${RST}"
 echo
 if [ "$APP" = 1 ]; then
   if [ "$APP_RESTARTED" = 1 ]; then
-    echo "  The open app was restarted onto build ${ELYXR_BUILD}."
+    echo "  The open app was restarted onto the latest build."
   else
     echo "  Open it from your apps menu — search \"elyxr\"."
   fi
