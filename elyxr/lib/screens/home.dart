@@ -54,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
         mode: settings.mode,
         status: session.status,
         onMode: (m) => settings.mode = m,
+        inSettings: _inSettings,
       ),
     );
   }

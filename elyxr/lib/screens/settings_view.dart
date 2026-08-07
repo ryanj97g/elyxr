@@ -62,13 +62,6 @@ class SettingsView extends StatelessWidget {
                   ServerControls(palette: p),
                   const SizedBox(height: 16),
                 ],
-                // A client can also surface the trove as a real folder in its
-                // file manager (the optional gate mount) — Linux only, since the
-                // gate is FUSE. Hidden where it can't run. Off by default.
-                if (settings.appMode == AppMode.client && Platform.isLinux) ...[
-                  _section(p, 'FS', 'USE SYSTEM FILE BROWSER', _GateRow(palette: p)),
-                  const SizedBox(height: 13),
-                ],
                 _section(p, '01', 'ACCENT', _AccentPicker(palette: p)),
                 const SizedBox(height: 13),
                 _section(p, '02', 'DENSITY', _DensityPicker(palette: p)),
@@ -76,8 +69,12 @@ class SettingsView extends StatelessWidget {
                 _section(p, '03', 'TUBE', _TubePicker(palette: p)),
                 const SizedBox(height: 13),
                 _section(p, '04', 'THIS DEVICE', _DeviceRows(palette: p)),
-                const SizedBox(height: 13),
-                _section(p, '05', 'PARTS', _Parts(palette: p)),
+                // A client can surface the trove as a real folder (the optional
+                // gate mount) — Linux only, off by default. Kept last.
+                if (settings.appMode == AppMode.client && Platform.isLinux) ...[
+                  const SizedBox(height: 13),
+                  _section(p, '05', 'USE SYSTEM FILE BROWSER', _GateRow(palette: p)),
+                ],
                 const SizedBox(height: 16),
               ],
             ),
@@ -378,37 +375,6 @@ class _TubePicker extends StatelessWidget {
       children: [
         half('DARK', '●', settings.dark, () => settings.dark = true),
         half('LIGHT', '○', !settings.dark, () => settings.dark = false),
-      ],
-    );
-  }
-}
-
-/// The three programs the system is made of, each with its mark. It quietly
-/// says what elyxr *is* — an app, a service, and a mount — rather than leaving
-/// it abstract.
-class _Parts extends StatelessWidget {
-  final Palette palette;
-  const _Parts({required this.palette});
-
-  @override
-  Widget build(BuildContext context) {
-    final p = palette;
-    Widget part(String icon, String name, String role) => Expanded(
-          child: Column(
-            children: [
-              Image.asset('assets/branding/$icon.png', width: 40, height: 40),
-              const SizedBox(height: 6),
-              Text(name, style: chassis(12, p.bright, spacing: 0.12)),
-              Text(role, style: glass(13, p.foot)),
-            ],
-          ),
-        );
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        part('elyxr', 'elyxr', 'this app'),
-        part('lymnal', 'lymnal', 'the service'),
-        part('trove', 'trove', 'the mount'),
       ],
     );
   }
