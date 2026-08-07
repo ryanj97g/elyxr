@@ -55,10 +55,18 @@ extension DensityLabel on Density {
         Density.roomy => 15,
       };
 
-  double get font => switch (this) {
-        Density.tight => 15.5,
-        Density.mid => 16.5,
-        Density.roomy => 18,
+  /// The base glass font. Density's size change is applied globally through the
+  /// tube's text scaler (see [scale]) so every readout scales together, not just
+  /// file rows — this stays a single base size.
+  double get font => 16.5;
+
+  /// The global text scale for everything on the glass. The metal chassis is
+  /// unaffected — physical controls keep their fixed size. Containers that hold
+  /// scalable text grow with it; fixed slots ellipsis or fit rather than clip.
+  double get scale => switch (this) {
+        Density.tight => 0.9,
+        Density.mid => 1.0,
+        Density.roomy => 1.15,
       };
 }
 
