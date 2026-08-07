@@ -13,6 +13,8 @@ import '../state/session.dart';
 import '../state/settings.dart';
 import '../state/music.dart';
 import '../state/sound.dart';
+import '../state/updater.dart';
+import '../util/build_info.dart';
 import '../util/device.dart';
 import '../widgets/nostalgia/music_player.dart';
 import 'server_view.dart';
@@ -108,7 +110,10 @@ class SettingsView extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('ELYXR 2.0.5 · lymnal 2.0.5', style: mono(10, p.foot)),
+                Text(
+                    'ELYXR 2.0.5 · build ${appBuild == 0 ? '—' : appBuild}'
+                    '${appCommit == 'unknown' ? '' : ' · $appCommit'}',
+                    style: mono(10, p.foot)),
                 Text('HOLD ELYXR TO EXIT', style: chassis(10, p.mid, spacing: 0.1)),
               ],
             ),
@@ -587,6 +592,7 @@ class _DeviceRows extends StatelessWidget {
     final p = palette;
     final settings = context.watch<SettingsController>();
     final session = context.watch<SessionController>();
+    final update = context.watch<UpdateController>();
 
     Widget row(String label, Widget value) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 3),
@@ -612,6 +618,17 @@ class _DeviceRows extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Text('Server controls are on the main screen (exit settings).',
                 style: glass(14, p.foot)),
+          ),
+        // The in-app updater — on every device, not just the server. Shows the
+        // build this app is actually running (so a stale binary is obvious) and,
+        // on tap, runs the same update `lymnal update` does: rebuild and relaunch
+        // on a server, ask the fleet and wait for the background restart on a
+        // client.
+        row('BUILD', _updateAction(context, p, update)),
+        if (update.stage == UpdateStage.failed && update.error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 2),
+            child: Text(update.error!, style: glass(14, const Color(0xFFf5b942))),
           ),
         row('DOWNLOADS', Text(settings.downloadDir, style: glass(20, p.bright))),
         // The mount path only matters where the gate can run (a Linux client);
@@ -642,6 +659,39 @@ class _DeviceRows extends StatelessWidget {
               ),
             ),
           ),
+      ],
+    );
+  }
+
+  /// The build number this app is running, next to a tappable update action
+  /// that reflects the updater's state (UPDATE / UPDATING… / RETRY).
+  Widget _updateAction(BuildContext context, Palette p, UpdateController u) {
+    final label = switch (u.stage) {
+      UpdateStage.idle => 'UPDATE NOW',
+      UpdateStage.updating => 'UPDATING…',
+      UpdateStage.waitingForUpload => 'FINISHING UPLOAD…',
+      UpdateStage.failed => 'RETRY',
+    };
+    final color = switch (u.stage) {
+      UpdateStage.failed => const Color(0xFFf5b942),
+      UpdateStage.idle => p.a,
+      _ => p.mid,
+    };
+    final VoidCallback? onTap = switch (u.stage) {
+      UpdateStage.idle => () => context.read<UpdateController>().updateNow(),
+      UpdateStage.failed => () => context.read<UpdateController>().retry(),
+      _ => null,
+    };
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(appBuild == 0 ? '—' : '$appBuild', style: glass(20, p.bright)),
+        const SizedBox(width: 12),
+        GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Text(label, style: chassis(11, color, spacing: 0.1)),
+        ),
       ],
     );
   }
