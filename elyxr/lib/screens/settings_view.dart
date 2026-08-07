@@ -184,7 +184,10 @@ class _NostalgiaRow extends StatelessWidget {
           onTap: () {
             final now = !on;
             s.nostalgia = now;
-            context.read<SoundController>().toggle(now);
+            final sound = context.read<SoundController>();
+            sound.toggle(now);
+            // A laugh every time it switches on — always, stacking.
+            if (now) sound.laugh();
           },
           behavior: HitTestBehavior.opaque,
           child: Padding(

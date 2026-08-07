@@ -29,8 +29,9 @@ class MusicPlayerPanel extends StatelessWidget {
     final p = palette;
     final m = context.watch<MusicController>();
 
-    if (!m.hasTracks) {
-      return Text('Drop tracks in assets/music/ to fill the deck.',
+    if (!m.hasTracks && !m.active) {
+      return Text(
+          'Drop tracks in assets/music/, or long-press an audio file to stream it.',
           style: glass(15, p.foot));
     }
 
@@ -58,12 +59,14 @@ class MusicPlayerPanel extends StatelessWidget {
               child: Icon(Icons.queue_music, color: p.mid, size: 18),
             ),
             const SizedBox(width: 8),
-            Text('${m.index + 1}/${m.count}', style: mono(11, p.mid)),
+            Text(m.isStream ? 'TROVE' : '${m.index + 1}/${m.count}',
+                style: mono(11, p.mid)),
           ],
         ),
         const SizedBox(height: 6),
-        // Real spectrum — live FFT off the audio engine.
-        SizedBox(height: 26, child: _Visualizer(palette: p)),
+        // Real spectrum — live FFT off the audio engine, only while music plays
+        // (so one-off sounds like the toggle laugh don't drive it).
+        SizedBox(height: 26, child: _Visualizer(palette: p, playing: m.playing)),
         const SizedBox(height: 6),
         // Seek bar — tap or drag to scrub.
         LayoutBuilder(builder: (context, c) {
@@ -204,7 +207,8 @@ class MusicPlayerPanel extends StatelessWidget {
 /// audio data — nothing animates unless sound is actually playing.
 class _Visualizer extends StatefulWidget {
   final Palette palette;
-  const _Visualizer({required this.palette});
+  final bool playing;
+  const _Visualizer({required this.palette, required this.playing});
 
   @override
   State<_Visualizer> createState() => _VisualizerState();
@@ -246,7 +250,7 @@ class _VisualizerState extends State<_Visualizer>
     return RepaintBoundary(
       child: CustomPaint(
         size: Size.infinite,
-        painter: _FftPainter(_audio, _tick, widget.palette.a),
+        painter: _FftPainter(_audio, _tick, widget.palette.a, widget.playing),
       ),
     );
   }
@@ -255,12 +259,14 @@ class _VisualizerState extends State<_Visualizer>
 class _FftPainter extends CustomPainter {
   final AudioData? audio;
   final Color a;
-  _FftPainter(this.audio, Listenable repaint, this.a) : super(repaint: repaint);
+  final bool playing;
+  _FftPainter(this.audio, Listenable repaint, this.a, this.playing)
+      : super(repaint: repaint);
 
   @override
   void paint(Canvas canvas, Size size) {
     final ad = audio;
-    if (ad == null) return;
+    if (ad == null || !playing) return;
     List<double> data;
     try {
       data = ad.getAudioData();
