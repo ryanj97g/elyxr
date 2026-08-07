@@ -13,6 +13,7 @@ import '../state/session.dart';
 import '../state/settings.dart';
 import '../widgets/nostalgia/cursor_trail.dart';
 import '../widgets/nostalgia/matrix_rain.dart';
+import '../widgets/nostalgia/transfer_hud.dart';
 import '../widgets/rails.dart';
 import 'files_view.dart';
 import 'settings_view.dart';
@@ -142,10 +143,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (!settings.nostalgia) return app;
-    // The cursor trail floats above everything, non-interactive.
+    // Nostalgia overlays: the transfer HUD near the top of the tube, and the
+    // cursor trail floating over everything (non-interactive).
     return Stack(
       children: [
         app,
+        if (!_inSettings)
+          Positioned(
+            top: 60,
+            left: 14,
+            right: 14,
+            child: TransferHud(palette: p),
+          ),
         Positioned.fill(
           child: IgnorePointer(
             child: CursorTrail(cursor: _cursor, palette: p),
