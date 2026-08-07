@@ -200,7 +200,7 @@ class _Ticker extends StatefulWidget {
 
 class _TickerState extends State<_Ticker> with SingleTickerProviderStateMixin {
   late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 62))
+      AnimationController(vsync: this, duration: const Duration(seconds: 38))
         ..repeat();
   bool _hover = false;
 

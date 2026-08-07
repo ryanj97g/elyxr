@@ -14,7 +14,7 @@ import '../state/settings.dart';
 
 /// The top rail: screw · ELYXR · hold-bar · vent · v1.0.0 · screw.
 ///
-/// Holding the wordmark for 400ms is the only way into settings. Nothing marks
+/// Holding the wordmark for 250ms is the only way into settings. Nothing marks
 /// it as pressable, and nothing should (DESIGN.md · Interactions).
 class TopRail extends StatefulWidget {
   final Palette palette;
@@ -38,7 +38,7 @@ class _TopRailState extends State<TopRail> {
 
   void _press() {
     setState(() => _holding = true);
-    _timer = Timer(const Duration(milliseconds: 400), () {
+    _timer = Timer(const Duration(milliseconds: 250), () {
       widget.onToggleSettings();
       if (mounted) setState(() => _holding = false);
     });
@@ -103,7 +103,7 @@ class _TopRailState extends State<TopRail> {
               ),
               child: TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0, end: _holding ? 1 : 0),
-                duration: Duration(milliseconds: _holding ? 400 : 0),
+                duration: Duration(milliseconds: _holding ? 250 : 0),
                 builder: (context, v, _) => FractionallySizedBox(
                   alignment: Alignment.centerLeft,
                   widthFactor: v,
