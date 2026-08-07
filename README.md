@@ -101,11 +101,29 @@ is unreachable waits on this device and lands the moment it's back.
 
 ## Updates
 
-Update **once, on the server** — the button in the app, or `lymnal update` — and
-every connected device updates itself in step. It happens in the background
-while you keep working: a popup when it starts, a popup when it's done, and the
-app closes and reopens on its own when it's ready. No password, no confirmation.
-The only thing that waits is a file mid-upload.
+Update from **any device** — the button in the app, or `lymnal update` — and
+every other device updates itself in step, whichever one you started from. It
+happens in the background while you keep working: a popup when it starts, a popup
+when it's done, and the app closes and reopens on its own when it's ready. No
+password, no confirmation. The only thing that waits is a file mid-upload.
+
+## Make it yours
+
+Hold the wordmark to open settings. None of this changes what elyxr *does* —
+it's just how it looks and feels on this device:
+
+- **Accent** — eight phosphor colours; drag a swatch to push its glow (or the
+  white one's brightness).
+- **Tube** — dark glow, or light paper.
+- **Density** — how large the text sits.
+- **Typeface** — the terminal font, from VT323 to a dozen others.
+
+And a few practical ones, in the same place:
+
+- Where downloads land, and how many transfer at once.
+- Whether deleting asks first.
+- *(Linux)* whether the trove also shows up as a folder in your file manager,
+  and where it mounts.
 
 ## Terminal
 
