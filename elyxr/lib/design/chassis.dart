@@ -49,17 +49,39 @@ class Chassis extends StatelessWidget {
           // at the bottom — together the panel reads as raised, brushed metal.
           Container(height: 1, color: p.mh),
           // Both rails are drag handles — grab the metal to move the window.
-          // (The tube can't be one, or you couldn't scroll or click files.)
-          DragToMoveArea(child: topRail),
+          // (The tube can't be one, or you couldn't scroll or click files.) We
+          // use our own drag area rather than DragToMoveArea because that widget
+          // maximizes on double-click, which the fixed-size window must never do
+          // — and it stole double-clicks from the wordmark and nonsense button.
+          _DragArea(child: topRail),
           const SizedBox(height: 8),
           Expanded(child: tube),
           const SizedBox(height: 8),
-          DragToMoveArea(child: bottomRail),
+          _DragArea(child: bottomRail),
           const SizedBox(height: 2),
           // The recessed bottom hairline — the shadowed underside of the bevel.
           Container(height: 1, color: p.mv1),
         ],
       ),
+    );
+  }
+}
+
+/// A window drag handle: moves the window on a drag, and — unlike
+/// `DragToMoveArea` — does nothing on a double-click, so the fixed-size window
+/// can never maximize and rapid clicks reach the controls beneath (the wordmark
+/// count, the nonsense button). A tap falls through to the child; only actual
+/// dragging moves the window.
+class _DragArea extends StatelessWidget {
+  final Widget child;
+  const _DragArea({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onPanStart: (_) => windowManager.startDragging(),
+      child: child,
     );
   }
 }
