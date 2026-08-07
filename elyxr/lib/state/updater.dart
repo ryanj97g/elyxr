@@ -1,7 +1,9 @@
 // Runs `lymnal update` from inside the app, then closes and reopens the app on
-// its own once the rebuild is done — no button, no confirmation. Each device
-// updates itself from the repository (`lymnal update` → git), never from another
-// device; the server only tells a client to start.
+// its own once the rebuild is done — no button, no confirmation. Updates are
+// bidirectional: pressing update on any owner device updates the whole fleet.
+// On the server that means rebuild-then-announce; on a client it asks the server
+// to update everyone (the server broadcasts and updates itself), and this
+// device's own agent applies the update in the background and restarts the app.
 //
 // The rebuild replaces the app's own files, so it can't happen in place — the
 // running app keeps its old copy while the new one lands beside it, and the
@@ -10,6 +12,7 @@
 // to finish first (the server keeps upload state in memory, so restarting
 // mid-upload would lose it), then relaunches the instant it's done.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -25,6 +28,9 @@ class UpdateController extends ChangeNotifier {
   UpdateStage stage = UpdateStage.idle;
   String? error;
   int _actingOnBuild = 0;
+  // Guards the "updating" spinner on the client fleet-request path, where the
+  // background agent (not this process) applies the update and restarts the app.
+  Timer? _fleetTimeout;
 
   bool get busy => stage == UpdateStage.updating || stage == UpdateStage.waitingForUpload;
 
@@ -65,7 +71,24 @@ class UpdateController extends ChangeNotifier {
       proc.stderr.listen((_) {});
       final code = await proc.exitCode;
       if (code == 0) {
+        // Server path: the build finished synchronously — relaunch onto it now.
         await _relaunchWhenClear();
+      } else if (code == 10) {
+        // Client path: we asked the server to update the fleet. This device's
+        // own update runs in the background via its agent, which restarts the
+        // app when the new build is ready — so stay on "updating" and let that
+        // restart happen, rather than relaunching onto the old binary now.
+        stage = UpdateStage.updating;
+        notifyListeners();
+        // Safety net: if the restart never comes (the update failed upstream),
+        // don't sit on the spinner forever.
+        _fleetTimeout?.cancel();
+        _fleetTimeout = Timer(const Duration(minutes: 5), () {
+          if (stage == UpdateStage.updating) {
+            stage = UpdateStage.idle;
+            notifyListeners();
+          }
+        });
       } else {
         stage = UpdateStage.failed;
         error = 'The update didn\'t finish (exit $code).';

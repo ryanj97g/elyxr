@@ -147,6 +147,30 @@ mod linux_tray {
                     .into(),
                 );
             }
+            // Reconnect at a click — restart the service, which re-establishes
+            // the link to the server (client) or the bind (server). Run in its
+            // own scope so the restart, which kills this process, doesn't take
+            // the restarter down with it.
+            items.push(
+                StandardItem {
+                    label: "Refresh connection".into(),
+                    activate: Box::new(move |_| {
+                        let _ = std::process::Command::new("systemd-run")
+                            .args([
+                                "--user", "--scope", "--quiet",
+                                "systemctl", "--user", "restart", "lymnal.service",
+                            ])
+                            .spawn()
+                            .or_else(|_| {
+                                std::process::Command::new("systemctl")
+                                    .args(["--user", "restart", "lymnal.service"])
+                                    .spawn()
+                            });
+                    }),
+                    ..Default::default()
+                }
+                .into(),
+            );
             items
         }
     }
@@ -221,9 +245,12 @@ mod windows_tray {
         menu.append(&open_item)?;
         let update_item = MenuItem::new("Update now", true, None);
         menu.append(&update_item)?;
+        let refresh_item = MenuItem::new("Refresh connection", true, None);
+        menu.append(&refresh_item)?;
 
         let open_id: MenuId = open_item.id().clone();
         let update_id: MenuId = update_item.id().clone();
+        let refresh_id: MenuId = refresh_item.id().clone();
 
         // The tray icon must outlive the message loop, so keep it in scope here.
         let _tray = TrayIconBuilder::new()
@@ -242,10 +269,38 @@ mod windows_tray {
                 } else if ev.id == update_id {
                     // Same update the agent runs — a prebuilt fetch on Windows.
                     crate::agent::update_now(std::path::Path::new(""));
+                } else if ev.id == refresh_id {
+                    refresh_connection();
                 }
             }
         });
         Ok(())
+    }
+
+    /// Reconnect at a click: relaunch lymnal after this process exits (so the
+    /// proxy port is free for the fresh one), then quit. Uses the hidden VBS
+    /// launcher the installer placed next to us so no console window flashes.
+    fn refresh_connection() {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(dir) = exe.parent() {
+                let vbs = dir.join("lymnal-launch.vbs");
+                let launch = if vbs.exists() {
+                    format!("wscript \"{}\"", vbs.display())
+                } else {
+                    format!("start \"\" \"{}\"", exe.display())
+                };
+                // A brief wait lets this process exit and release the port before
+                // the replacement binds it.
+                let cmd = format!("ping -n 2 127.0.0.1 >nul & {launch}");
+                let _ = std::process::Command::new("cmd")
+                    .args(["/C", &cmd])
+                    .creation_flags(CREATE_NO_WINDOW)
+                    .spawn();
+            }
+        }
+        std::process::exit(0);
     }
 
     /// A minimal Win32 message loop. tray-icon posts its click and menu messages

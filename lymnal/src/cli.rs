@@ -300,6 +300,26 @@ fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
 /// changed, and restarts the service if its binary changed. Extra args (e.g.
 /// --verbose) are forwarded to the installer.
 fn update(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
+    // If this device is linked to a server (a client), ask the server to update
+    // the whole fleet instead of only itself. The server broadcasts to every
+    // connected device — including this one, whose agent then runs the installer
+    // — and updates itself, so an update from a client reaches the server and
+    // every sibling. This is what makes the experience bidirectional: you can be
+    // away from the server and still update everything from your own device.
+    if let Some(dir) = config_path.parent() {
+        if let Some(link) = crate::agent::load_link(dir) {
+            request_fleet_update(&link)?;
+            println!("Asked {} to update every device.", link.server);
+            // Exit 10 — "requested": unlike the server path (exit 0, build done,
+            // relaunch now), the install here runs in the background via this
+            // device's agent, which restarts the app when the new build is ready.
+            // The app uses this code to wait rather than relaunch onto the old
+            // binary early.
+            std::process::exit(10);
+        }
+    }
+
+    // Otherwise this is the server: announce to connected clients, then install.
     let repo = find_repo(config_path)?;
     let script = repo.join("elyxr.sh");
     if !script.exists() {
@@ -346,6 +366,19 @@ fn drain(config_path: &std::path::Path) -> anyhow::Result<()> {
         println!("waiting for {n} upload(s) to finish before restarting…");
         std::thread::sleep(std::time::Duration::from_secs(2));
     }
+    Ok(())
+}
+
+/// Ask the paired server to update the whole fleet (client side of `lymnal
+/// update`). The server broadcasts to every connected device and updates itself,
+/// so the update reaches the server and every sibling — not just this device.
+fn request_fleet_update(link: &crate::agent::Link) -> anyhow::Result<()> {
+    let url = format!("http://{}/v1/update", link.server);
+    ureq::post(&url)
+        .set("Authorization", &format!("Bearer {}", link.token))
+        .timeout(std::time::Duration::from_secs(20))
+        .call()
+        .map_err(|e| anyhow::anyhow!("couldn't reach the server to update: {e}"))?;
     Ok(())
 }
 
