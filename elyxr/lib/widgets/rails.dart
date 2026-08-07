@@ -135,7 +135,9 @@ class _TopRailState extends State<TopRail> {
             ),
           ),
           const SizedBox(width: 9),
-          Text('v1.0.0', style: mono(9, p.mt, spacing: 0.1)),
+          // The version sits on the metal, so it uses the fixed chassis face —
+          // it stays put when the terminal (screen) face is swapped.
+          Text('v1.0.0', style: chassis(9, p.mt)),
           const SizedBox(width: 9),
           // Right screw quietly closes the window.
           _screw(p, onTap: () => windowManager.close(), tip: 'Close'),

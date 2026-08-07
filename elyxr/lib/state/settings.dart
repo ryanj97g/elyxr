@@ -68,8 +68,12 @@ class SettingsController extends ChangeNotifier {
     _accentSat = _prefs.getDouble('accentSat') ?? 1.0;
     _monoL = _prefs.getDouble('monoL') ?? 0.72;
     _termFont = _prefs.getString('termFont') ?? 'VT323';
-    // Apply the chosen terminal face before the first frame builds.
+    // Apply the chosen terminal face before the first frame builds. It governs
+    // everything on the glass — the body text and the ticker/readouts alike —
+    // since the ticker is part of the screen, not a separate face. Only the
+    // metal chassis font stays fixed.
     Fonts.glass = _termFont;
+    Fonts.mono = _termFont;
   }
 
   T _enumByName<T extends Enum>(List<T> values, String? name, T fallback) {
@@ -95,11 +99,13 @@ class SettingsController extends ChangeNotifier {
   set monoL(double v) => _set('monoL',
       () => _monoL = v.clamp(0.12, 0.99).toDouble(),
       () => _prefs.setDouble('monoL', _monoL));
-  // Swapping the terminal face updates the live font family behind every glass()
-  // call, so the whole terminal re-skins on the next rebuild.
+  // Swapping the terminal face updates the live font behind every glass() and
+  // mono() call — the whole screen, ticker included, re-skins on the next
+  // rebuild. The chassis (metal) face is untouched.
   set termFont(String v) => _set('termFont', () {
         _termFont = v;
         Fonts.glass = v;
+        Fonts.mono = v;
       }, () => _prefs.setString('termFont', v));
   set density(Density v) => _set('density', () => _density = v, () => _prefs.setString('density', v.name));
   set dark(bool v) => _set('dark', () => _dark = v, () => _prefs.setBool('dark', v));
