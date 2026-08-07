@@ -185,6 +185,9 @@ class BottomRail extends StatelessWidget {
   final ViewMode mode;
   final LinkStatus status;
   final ValueChanged<ViewMode> onMode;
+  // The TEXT/GRID rocker only controls the file list, so it's hidden while the
+  // settings screen is showing — where it did nothing.
+  final bool inSettings;
 
   const BottomRail({
     super.key,
@@ -192,6 +195,7 @@ class BottomRail extends StatelessWidget {
     required this.mode,
     required this.status,
     required this.onMode,
+    this.inSettings = false,
   });
 
   @override
@@ -201,21 +205,22 @@ class BottomRail extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(3, 1, 3, 2),
       child: Row(
         children: [
-          // TEXT / GRID rocker.
-          Container(
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: p.mv1,
-              borderRadius: BorderRadius.circular(3),
+          // TEXT / GRID rocker — only meaningful on the file list.
+          if (!inSettings)
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                color: p.mv1,
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Row(
+                children: [
+                  _rocker('TEXT', mode == ViewMode.text, () => onMode(ViewMode.text)),
+                  const SizedBox(width: 2),
+                  _rocker('GRID', mode == ViewMode.grid, () => onMode(ViewMode.grid)),
+                ],
+              ),
             ),
-            child: Row(
-              children: [
-                _rocker('TEXT', mode == ViewMode.text, () => onMode(ViewMode.text)),
-                const SizedBox(width: 2),
-                _rocker('GRID', mode == ViewMode.grid, () => onMode(ViewMode.grid)),
-              ],
-            ),
-          ),
           const Spacer(),
           _led(p),
         ],
