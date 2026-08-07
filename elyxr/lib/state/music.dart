@@ -5,11 +5,26 @@
 // missing file or absent audio device never affects the app.
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 import 'package:flutter_soloud/flutter_soloud.dart';
+import 'package:path_provider/path_provider.dart';
+
+import '../api/lymnal_client.dart';
+
+/// Audio extensions the player accepts — common formats plus tracker modules
+/// (demoscene/keygen fare). Module playback depends on the engine's decoders;
+/// where a module can't be decoded, that track simply won't play.
+const kAudioExts = {
+  'ogg', 'mp3', 'wav', 'flac', 'm4a', 'aac', 'opus',
+  'xm', 'mod', 's3m', 'it',
+};
+
+bool isAudioName(String name) =>
+    kAudioExts.contains(name.split('.').last.toLowerCase());
 
 /// Loop nothing, the whole list, or the one track.
 enum MusicRepeat { off, all, one }
@@ -28,6 +43,9 @@ class MusicController extends ChangeNotifier {
   AudioSource? _source;
   SoundHandle? _handle;
   Timer? _poll;
+  // Set when playing a one-off file streamed from the trove (not the asset
+  // playlist); overrides the shown title and hides the playlist index.
+  String? _override;
 
   MusicController() {
     _load();
@@ -45,18 +63,18 @@ class MusicController extends ChangeNotifier {
   MusicRepeat get repeat => _repeat;
   Duration get position => _pos;
   Duration get duration => _dur;
-  String get title => hasTracks ? _pretty(_tracks[_index]) : 'no tracks';
+  String get title =>
+      _override ?? (hasTracks ? _pretty(_tracks[_index]) : 'no tracks');
   String titleAt(int i) => _pretty(_tracks[i]);
-  bool get active => hasTracks && (_playing || _pos > Duration.zero);
+  bool get isStream => _override != null;
+  bool get active => _source != null && (_playing || _pos > Duration.zero);
 
   Future<void> _load() async {
     try {
       final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
       _tracks = manifest
           .listAssets()
-          .where((a) =>
-              a.startsWith('assets/music/') &&
-              (a.endsWith('.ogg') || a.endsWith('.mp3') || a.endsWith('.wav')))
+          .where((a) => a.startsWith('assets/music/') && isAudioName(a))
           .toList()
         ..sort();
     } catch (_) {
@@ -76,11 +94,38 @@ class MusicController extends ChangeNotifier {
     if (_tracks.isEmpty || !_ready) return;
     _index = i % _tracks.length;
     if (_index < 0) _index += _tracks.length;
+    _override = null;
     _pos = Duration.zero;
     try {
       if (_handle != null) await _sl.stop(_handle!);
       _source = await _sl.loadAsset(_tracks[_index]);
       _dur = _sl.getLength(_source!);
+      _handle = _sl.play(_source!, volume: 0.9);
+      _playing = true;
+      _startPoll();
+    } catch (_) {
+      _playing = false;
+    }
+    notifyListeners();
+  }
+
+  /// Stream and play one audio file from the trove (long-press on a client file
+  /// row). Downloads it through the local proxy to a temp file, then plays it.
+  Future<void> playTroveFile(
+      LymnalClient client, String path, String name) async {
+    if (!_ready) return;
+    try {
+      final bytes = await client.downloadBytes(path);
+      final dir = await getTemporaryDirectory();
+      final dot = path.lastIndexOf('.');
+      final ext = dot >= 0 ? path.substring(dot) : '';
+      final f = File('${dir.path}/elyxr_stream$ext');
+      await f.writeAsBytes(bytes, flush: true);
+      if (_handle != null) await _sl.stop(_handle!);
+      _source = await _sl.loadFile(f.path);
+      _dur = _sl.getLength(_source!);
+      _override = _pretty(name);
+      _pos = Duration.zero;
       _handle = _sl.play(_source!, volume: 0.9);
       _playing = true;
       _startPoll();

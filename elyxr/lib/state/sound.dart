@@ -11,10 +11,24 @@ import 'settings.dart';
 class SoundController {
   final SettingsController settings;
   final Map<String, AudioSource> _cache = {};
+  AudioSource? _laugh;
 
   SoundController(this.settings);
 
   bool get _on => settings.nostalgia && settings.sound;
+
+  /// The laugh that fires every time Nostalgia Mode is switched on. It is *not*
+  /// part of the gated sound-effects set — it plays regardless of the Sound
+  /// switch — and each call starts a new voice, so rapid toggles stack rather
+  /// than cut each other off.
+  Future<void> laugh() async {
+    final soloud = SoLoud.instance;
+    if (!soloud.isInitialized) return;
+    try {
+      _laugh ??= await soloud.loadAsset('assets/sounds/laugh.mp3');
+      soloud.play(_laugh!, volume: 0.9);
+    } catch (_) {}
+  }
 
   Future<void> _play(String name) async {
     if (!_on) return;

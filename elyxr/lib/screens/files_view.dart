@@ -16,6 +16,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/actions.dart';
 import '../state/browse.dart';
+import '../state/music.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
 import '../util/drag_out.dart';
@@ -582,7 +583,24 @@ class _Row extends StatelessWidget {
                   : '${browse.path}/${entry.name}';
               DragOut.begin(path, entry.name);
             },
-      onLongPress: () => _renameEntry(context, browse, p, entry.name),
+      onLongPress: () {
+        // In Nostalgia Mode, long-pressing an audio file streams it from the
+        // trove into the music player instead of renaming.
+        final settings = context.read<SettingsController>();
+        if (!isDir && settings.nostalgia && isAudioName(entry.name)) {
+          final client = context.read<SessionController>().client;
+          if (client != null) {
+            final path = browse.path.isEmpty
+                ? entry.name
+                : '${browse.path}/${entry.name}';
+            context
+                .read<MusicController>()
+                .playTroveFile(client, path, entry.name);
+            return;
+          }
+        }
+        _renameEntry(context, browse, p, entry.name);
+      },
       // Hover on desktop / press on touch lights the row the same way.
       child: Tactile(
         accent: p.a,
