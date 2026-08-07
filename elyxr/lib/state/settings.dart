@@ -35,6 +35,8 @@ class SettingsController extends ChangeNotifier {
   // AND glow), lightness for the mono/white phosphor.
   double _accentSat = 1.0; // 0.25–3.2 (wider: deeper muting, punchier max)
   double _monoL = 0.72; // 0.12–0.99
+  // The chosen terminal (glass) font family — one of kTermFaces' families.
+  String _termFont = 'VT323';
 
   Accent get accent => _accent;
   Density get density => _density;
@@ -48,6 +50,7 @@ class SettingsController extends ChangeNotifier {
   int get atOnce => _atOnce;
   double get accentSat => _accentSat;
   double get monoL => _monoL;
+  String get termFont => _termFont;
 
   void _load() {
     _accent = _enumByName(Accent.values, _prefs.getString('accent'), Accent.green);
@@ -64,6 +67,9 @@ class SettingsController extends ChangeNotifier {
     _atOnce = _prefs.getInt('atOnce') ?? 3;
     _accentSat = _prefs.getDouble('accentSat') ?? 1.0;
     _monoL = _prefs.getDouble('monoL') ?? 0.72;
+    _termFont = _prefs.getString('termFont') ?? 'VT323';
+    // Apply the chosen terminal face before the first frame builds.
+    Fonts.glass = _termFont;
   }
 
   T _enumByName<T extends Enum>(List<T> values, String? name, T fallback) {
@@ -89,6 +95,12 @@ class SettingsController extends ChangeNotifier {
   set monoL(double v) => _set('monoL',
       () => _monoL = v.clamp(0.12, 0.99).toDouble(),
       () => _prefs.setDouble('monoL', _monoL));
+  // Swapping the terminal face updates the live font family behind every glass()
+  // call, so the whole terminal re-skins on the next rebuild.
+  set termFont(String v) => _set('termFont', () {
+        _termFont = v;
+        Fonts.glass = v;
+      }, () => _prefs.setString('termFont', v));
   set density(Density v) => _set('density', () => _density = v, () => _prefs.setString('density', v.name));
   set dark(bool v) => _set('dark', () => _dark = v, () => _prefs.setBool('dark', v));
   set mode(ViewMode v) => _set('mode', () => _mode = v, () => _prefs.setString('mode', v.name));
