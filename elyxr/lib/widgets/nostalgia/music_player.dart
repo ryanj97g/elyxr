@@ -3,7 +3,11 @@
 // element reflects real playback state (no decorative fakery). Reads whatever's
 // in assets/music/ (see MusicController).
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
+import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:provider/provider.dart';
 
 import '../../design/text.dart';
@@ -57,7 +61,10 @@ class MusicPlayerPanel extends StatelessWidget {
             Text('${m.index + 1}/${m.count}', style: mono(11, p.mid)),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
+        // Real spectrum — live FFT off the audio engine.
+        SizedBox(height: 26, child: _Visualizer(palette: p)),
+        const SizedBox(height: 6),
         // Seek bar — tap or drag to scrub.
         LayoutBuilder(builder: (context, c) {
           void seekTo(double dx) {
@@ -191,6 +198,95 @@ class MusicPlayerPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A live spectrum: reads the audio engine's FFT each frame and draws bars. Real
+/// audio data — nothing animates unless sound is actually playing.
+class _Visualizer extends StatefulWidget {
+  final Palette palette;
+  const _Visualizer({required this.palette});
+
+  @override
+  State<_Visualizer> createState() => _VisualizerState();
+}
+
+class _VisualizerState extends State<_Visualizer>
+    with SingleTickerProviderStateMixin {
+  AudioData? _audio;
+  final ValueNotifier<int> _tick = ValueNotifier(0);
+  late final Ticker _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _audio = AudioData(GetSamplesKind.linear);
+    } catch (_) {}
+    _ticker = createTicker((_) {
+      final ad = _audio;
+      if (ad != null) {
+        try {
+          ad.updateSamples();
+        } catch (_) {}
+      }
+      _tick.value++;
+    })..start();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    _audio?.dispose();
+    _tick.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: _FftPainter(_audio, _tick, widget.palette.a),
+      ),
+    );
+  }
+}
+
+class _FftPainter extends CustomPainter {
+  final AudioData? audio;
+  final Color a;
+  _FftPainter(this.audio, Listenable repaint, this.a) : super(repaint: repaint);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final ad = audio;
+    if (ad == null) return;
+    List<double> data;
+    try {
+      data = ad.getAudioData();
+    } catch (_) {
+      return;
+    }
+    if (data.isEmpty) return;
+    const bars = 28;
+    final bw = size.width / bars;
+    final paint = Paint()..color = a.withValues(alpha: 0.9);
+    for (var i = 0; i < bars; i++) {
+      // The first 256 values are FFT bins; music energy sits in the low-mid, so
+      // sample the lower bins (skipping DC).
+      final bin = 2 + i * 2;
+      final v = (bin < 256 && bin < data.length) ? data[bin].abs() : 0.0;
+      final mag = math.sqrt((v * 3.5).clamp(0.0, 1.0));
+      final h = (size.height * mag).clamp(1.0, size.height);
+      canvas.drawRect(
+        Rect.fromLTWH(i * bw + bw * 0.18, size.height - h, bw * 0.64, h),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FftPainter old) => true;
 }
 
 class _SeekPainter extends CustomPainter {

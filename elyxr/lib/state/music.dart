@@ -1,22 +1,23 @@
-// The Nostalgia Mode music player: a playlist of whatever's in assets/music/,
-// with play/pause, seek, and skip — driven by audioplayers. Track names are the
-// filenames, tidied. All playback is guarded so a missing file or absent audio
-// device never affects the app.
+// The Nostalgia Mode music player, on the SoLoud engine. A playlist of whatever
+// is in assets/music/ (.ogg/.mp3/.wav), with play/pause, seek, skip, shuffle and
+// repeat. Position is polled (SoLoud has no position stream); a track ending is
+// detected by its voice handle going invalid. All playback is guarded so a
+// missing file or absent audio device never affects the app.
 
+import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show AssetManifest, rootBundle;
+import 'package:flutter_soloud/flutter_soloud.dart';
 
 /// Loop nothing, the whole list, or the one track.
 enum MusicRepeat { off, all, one }
 
 class MusicController extends ChangeNotifier {
-  final AudioPlayer _player = AudioPlayer();
   final _rnd = math.Random();
 
-  List<String> _tracks = []; // asset paths under assets/music/
+  List<String> _tracks = []; // asset keys under assets/music/
   int _index = 0;
   bool _playing = false;
   bool _shuffle = false;
@@ -24,18 +25,16 @@ class MusicController extends ChangeNotifier {
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
 
+  AudioSource? _source;
+  SoundHandle? _handle;
+  Timer? _poll;
+
   MusicController() {
-    _player.onPositionChanged.listen((p) {
-      _pos = p;
-      notifyListeners();
-    });
-    _player.onDurationChanged.listen((d) {
-      _dur = d;
-      notifyListeners();
-    });
-    _player.onPlayerComplete.listen((_) => _onComplete());
     _load();
   }
+
+  SoLoud get _sl => SoLoud.instance;
+  bool get _ready => _sl.isInitialized;
 
   List<String> get tracks => _tracks;
   bool get hasTracks => _tracks.isNotEmpty;
@@ -48,8 +47,6 @@ class MusicController extends ChangeNotifier {
   Duration get duration => _dur;
   String get title => hasTracks ? _pretty(_tracks[_index]) : 'no tracks';
   String titleAt(int i) => _pretty(_tracks[i]);
-  // A track is "active" (worth showing the mini-player for) once one is playing
-  // or paused mid-track.
   bool get active => hasTracks && (_playing || _pos > Duration.zero);
 
   Future<void> _load() async {
@@ -75,37 +72,45 @@ class MusicController extends ChangeNotifier {
     return n.replaceAll(RegExp(r'[_-]+'), ' ').trim();
   }
 
-  // audioplayers' AssetSource path is relative to assets/, so drop the prefix.
-  String _src(String asset) => asset.replaceFirst('assets/', '');
-
   Future<void> playIndex(int i) async {
-    if (_tracks.isEmpty) return;
+    if (_tracks.isEmpty || !_ready) return;
     _index = i % _tracks.length;
     if (_index < 0) _index += _tracks.length;
     _pos = Duration.zero;
     try {
-      await _player.stop();
-      await _player.play(AssetSource(_src(_tracks[_index])), volume: 0.9);
+      if (_handle != null) await _sl.stop(_handle!);
+      _source = await _sl.loadAsset(_tracks[_index]);
+      _dur = _sl.getLength(_source!);
+      _handle = _sl.play(_source!, volume: 0.9);
       _playing = true;
+      _startPoll();
     } catch (_) {
       _playing = false;
     }
     notifyListeners();
   }
 
-  Future<void> toggle() async {
-    if (_tracks.isEmpty) return;
-    try {
-      if (_playing) {
-        await _player.pause();
-        _playing = false;
-      } else if (_dur > Duration.zero) {
-        await _player.resume();
-        _playing = true;
-      } else {
-        await playIndex(_index);
+  void _startPoll() {
+    _poll?.cancel();
+    _poll = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      final h = _handle;
+      if (h == null) return;
+      if (!_sl.getIsValidVoiceHandle(h)) {
+        _onComplete();
         return;
       }
+      _pos = _sl.getPosition(h);
+      if (_dur == Duration.zero && _source != null) _dur = _sl.getLength(_source!);
+      notifyListeners();
+    });
+  }
+
+  Future<void> toggle() async {
+    if (_tracks.isEmpty || !_ready) return;
+    if (_handle == null) return playIndex(_index);
+    try {
+      _playing = !_playing;
+      _sl.setPause(_handle!, !_playing);
     } catch (_) {}
     notifyListeners();
   }
@@ -131,19 +136,16 @@ class MusicController extends ChangeNotifier {
     return (_index + 1) % _tracks.length;
   }
 
-  // Manual skip: always advances (or wraps).
   Future<void> next() =>
       _tracks.isEmpty ? Future<void>.value() : playIndex(_pickNext());
 
-  // Manual previous: restart the current track if we're a few seconds in
-  // (the usual player behaviour), otherwise step back.
   Future<void> prev() {
     if (_tracks.isEmpty) return Future<void>.value();
     if (_pos.inSeconds > 3) return seek(Duration.zero);
     return playIndex(_shuffle && _tracks.length > 1 ? _pickNext() : _index - 1);
   }
 
-  // A track ended on its own: honour repeat/shuffle.
+  // A track ended on its own (handle went invalid): honour repeat/shuffle.
   void _onComplete() {
     if (_repeat == MusicRepeat.one) {
       playIndex(_index);
@@ -152,6 +154,8 @@ class MusicController extends ChangeNotifier {
     } else if (_index < _tracks.length - 1) {
       next();
     } else {
+      _poll?.cancel();
+      _handle = null;
       _playing = false;
       _pos = Duration.zero;
       notifyListeners();
@@ -159,8 +163,9 @@ class MusicController extends ChangeNotifier {
   }
 
   Future<void> seek(Duration to) async {
+    if (_handle == null || !_ready) return;
     try {
-      await _player.seek(to);
+      _sl.seek(_handle!, to);
       _pos = to;
       notifyListeners();
     } catch (_) {}
@@ -168,7 +173,13 @@ class MusicController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _player.dispose();
+    _poll?.cancel();
+    final h = _handle;
+    if (h != null && _ready) {
+      try {
+        _sl.stop(h);
+      } catch (_) {}
+    }
     super.dispose();
   }
 }
