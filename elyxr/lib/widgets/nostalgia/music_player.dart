@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../../design/text.dart';
 import '../../design/tokens.dart';
 import '../../state/music.dart';
+import 'marquee.dart';
 
 class MusicPlayerPanel extends StatefulWidget {
   final Palette palette;
@@ -52,16 +53,23 @@ class _MusicPlayerPanelState extends State<MusicPlayerPanel>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Now playing.
+        // Now playing — marquee title, tracklist button, index.
         Row(
           children: [
             Text('♪ ', style: glass(16, p.a)),
             Expanded(
-              child: Text(m.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: glass(17, p.bright)),
+              child: SizedBox(
+                height: 22,
+                child: Marquee(text: m.title, style: glass(17, p.bright)),
+              ),
             ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => _showTracklist(context, m, p),
+              behavior: HitTestBehavior.opaque,
+              child: Icon(Icons.queue_music, color: p.mid, size: 18),
+            ),
+            const SizedBox(width: 8),
             Text('${m.index + 1}/${m.count}', style: mono(11, p.mid)),
           ],
         ),
@@ -108,19 +116,90 @@ class _MusicPlayerPanelState extends State<MusicPlayerPanel>
           ],
         ),
         const SizedBox(height: 4),
-        // Transport.
+        // Transport — shuffle · prev · play/pause · next · repeat.
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
+            _iconToggle(p, Icons.shuffle, m.shuffle, m.toggleShuffle),
             _btn(p, Icons.skip_previous, m.prev),
-            const SizedBox(width: 10),
             _btn(p, m.playing ? Icons.pause : Icons.play_arrow, m.toggle,
                 big: true),
-            const SizedBox(width: 10),
             _btn(p, Icons.skip_next, m.next),
+            _iconToggle(
+                p,
+                m.repeat == RepeatMode.one ? Icons.repeat_one : Icons.repeat,
+                m.repeat != RepeatMode.off,
+                m.cycleRepeat),
           ],
         ),
       ],
+    );
+  }
+
+  Widget _iconToggle(
+          Palette p, IconData icon, bool active, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, color: active ? p.a : p.foot, size: 18),
+        ),
+      );
+
+  void _showTracklist(BuildContext context, MusicController m, Palette p) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 340, maxHeight: 430),
+          decoration: BoxDecoration(
+            color: p.tubeBg,
+            border: Border.all(color: p.a.withValues(alpha: 0.5)),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('▸ TRACKS', style: mono(10, p.mid, spacing: 0.16)),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: m.count,
+                  itemBuilder: (c, i) {
+                    final cur = i == m.index;
+                    return GestureDetector(
+                      onTap: () {
+                        m.playIndex(i);
+                        Navigator.of(ctx).pop();
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 5),
+                        child: Row(
+                          children: [
+                            Text(cur ? '▶ ' : '   ', style: glass(15, p.a)),
+                            Expanded(
+                              child: Text(m.titleAt(i),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: glass(16, cur ? p.bright : p.soft)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
