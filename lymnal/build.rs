@@ -21,11 +21,24 @@ fn git(args: &[&str]) -> Option<String> {
 }
 
 fn main() {
-    let build = git(&["rev-list", "--count", "HEAD"]).unwrap_or_else(|| "0".into());
-    let commit = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".into());
+    // The installer (elyxr.sh) passes the stamp in as ELYXR_BUILD/ELYXR_COMMIT,
+    // computed once from git for the whole stack. Prefer that: it guarantees the
+    // stamp advances on every update, even a Dart-only one, without depending on
+    // cargo noticing a moved git ref. Fall back to reading git directly (a plain
+    // `cargo build`, or a CI release build with no env set).
+    let env_nonempty = |k: &str| std::env::var(k).ok().filter(|s| !s.is_empty());
+    let build = env_nonempty("ELYXR_BUILD")
+        .or_else(|| git(&["rev-list", "--count", "HEAD"]))
+        .unwrap_or_else(|| "0".into());
+    let commit = env_nonempty("ELYXR_COMMIT")
+        .or_else(|| git(&["rev-parse", "--short", "HEAD"]))
+        .unwrap_or_else(|| "unknown".into());
     println!("cargo:rustc-env=ELYXR_BUILD={build}");
     println!("cargo:rustc-env=ELYXR_COMMIT={commit}");
-    // Rebuild the stamp when HEAD moves, so an update always re-stamps.
+    // Re-stamp when the installer hands us a new number (the reliable trigger),
+    // and still re-run if HEAD moves for a plain `cargo build`.
+    println!("cargo:rerun-if-env-changed=ELYXR_BUILD");
+    println!("cargo:rerun-if-env-changed=ELYXR_COMMIT");
     println!("cargo:rerun-if-changed=../.git/HEAD");
     println!("cargo:rerun-if-changed=../.git/refs/heads");
 }

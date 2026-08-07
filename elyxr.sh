@@ -284,6 +284,15 @@ if [ "$APP" = 1 ]; then
 fi
 
 # --- build ------------------------------------------------------------------
+# The build stamp (git commit count) is computed here, once, and handed to both
+# lymnal (as an env var build.rs reads) and the app (as a dart-define). Passing
+# it in — rather than letting build.rs rediscover it from git — guarantees the
+# stamp advances on every update, even a docs- or Dart-only one, so a client's
+# "am I behind the server?" check is reliable and doesn't depend on cargo
+# noticing a moved git ref.
+export ELYXR_BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+export ELYXR_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
 phase "building lymnal"
 sh_ cargo build --release -p lymnal
 done_
@@ -302,14 +311,12 @@ fi
 
 if [ "$APP" = 1 ]; then
   phase "building the app"
-  # Stamp the app with the same build number lymnal carries (git commit count),
-  # so a client can tell when it's behind the server and offer to update.
-  APP_BUILD="$(git rev-list --count HEAD 2>/dev/null || echo 0)"
-  APP_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  # The app carries the same build number lymnal does (computed once above), so a
+  # client can tell when it's behind the server and offer to update.
   ( cd elyxr && sh_ flutter config --enable-linux-desktop && sh_ flutter pub get \
       && sh_ flutter build linux --release \
-           --dart-define=ELYXR_BUILD="$APP_BUILD" \
-           --dart-define=ELYXR_COMMIT="$APP_COMMIT" )
+           --dart-define=ELYXR_BUILD="$ELYXR_BUILD" \
+           --dart-define=ELYXR_COMMIT="$ELYXR_COMMIT" )
   done_
 fi
 

@@ -39,7 +39,7 @@ pub fn load_link(config_dir: &Path) -> Option<Link> {
 pub fn run(link: Link, config_path: PathBuf) -> ! {
     tracing::info!(server = %link.server, "client agent: watching for updates");
     // A fallback next to the live event: poll the server's build number, so an
-    // "update" event missed while reconnecting still lands within a few minutes.
+    // "update" event missed while reconnecting still lands within a minute.
     {
         let plink = Link { server: link.server.clone(), token: link.token.clone() };
         let pcfg = config_path.clone();
@@ -59,7 +59,7 @@ pub fn run(link: Link, config_path: PathBuf) -> ! {
 fn poll_build(link: &Link, config_path: &Path) -> ! {
     let local: u64 = env!("ELYXR_BUILD").parse().unwrap_or(0);
     loop {
-        std::thread::sleep(Duration::from_secs(180));
+        std::thread::sleep(Duration::from_secs(60));
         let resp = ureq::get(&format!("http://{}/v1/health", link.server))
             .set("Authorization", &format!("Bearer {}", link.token))
             .call();
