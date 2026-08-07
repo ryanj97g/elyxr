@@ -12,6 +12,7 @@ import 'state/browse.dart';
 import 'state/server.dart';
 import 'state/session.dart';
 import 'state/settings.dart';
+import 'state/sound.dart';
 import 'state/transfers.dart';
 import 'state/trove_mount.dart';
 import 'state/updater.dart';
@@ -45,6 +46,7 @@ class ElyxrApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TroveMountController()),
         ChangeNotifierProvider(create: (_) => UpdateController(transfers)),
         Provider.value(value: FileActions(browse, transfers, settings)),
+        Provider(create: (_) => SoundController(settings)),
       ],
       child: MaterialApp(
         title: 'elyxr',
@@ -73,6 +75,7 @@ class _RootState extends State<_Root> {
   bool _serverTried = false;
   bool _troveCleaned = false;
   LymnalClient? _dragClient;
+  LinkStatus? _prevStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +83,14 @@ class _RootState extends State<_Root> {
     final settings = context.watch<SettingsController>();
     final browse = context.read<BrowseController>();
     final server = context.read<ServerController>();
+
+    // A retro chirp when the link comes up (Nostalgia Mode). Fires on the
+    // transition into `ok`, once.
+    if (_prevStatus != LinkStatus.ok && session.status == LinkStatus.ok) {
+      final sound = context.read<SoundController>();
+      WidgetsBinding.instance.addPostFrameCallback((_) => sound.connected());
+    }
+    _prevStatus = session.status;
 
     // Keep the drag-out helper pointed at the live connection, so a file pulled
     // out of the window can be fetched and written to wherever it's dropped.
