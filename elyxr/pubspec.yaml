@@ -29,6 +29,7 @@ flutter:
 
   assets:
     - assets/branding/
+    - assets/sounds/
 
   fonts:
     - family: Chakra Petch

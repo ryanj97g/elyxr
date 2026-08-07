@@ -11,6 +11,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../state/sound.dart';
 import '../util/device.dart';
 import 'server_view.dart';
 
@@ -174,7 +175,11 @@ class _NostalgiaRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         GestureDetector(
-          onTap: () => s.nostalgia = !on,
+          onTap: () {
+            final now = !on;
+            s.nostalgia = now;
+            context.read<SoundController>().toggle(now);
+          },
           behavior: HitTestBehavior.opaque,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
