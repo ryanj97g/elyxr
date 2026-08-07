@@ -102,7 +102,8 @@ class _RainPainter extends CustomPainter {
   static const _glyphs =
       'アイウエオカキクケコサシスセソタチツテトナニヌネノﾊﾋﾌﾍﾎマミムメモﾔﾕﾖﾗﾘﾙﾚﾛﾜ0123456789:.=*+<>¦｜╌';
 
-  static const double _cell = 14.0;
+  // A denser grid — smaller cells fit several more columns of rain on screen.
+  static const double _cell = 11.5;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -133,7 +134,7 @@ class _RainPainter extends CustomPainter {
           text: _glyphs[gi],
           style: TextStyle(
             color: color,
-            fontSize: 13,
+            fontSize: 11.5,
             fontFamily: face,
             height: 1.0,
           ),

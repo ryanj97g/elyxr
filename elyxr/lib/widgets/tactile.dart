@@ -41,9 +41,9 @@ class _TactileState extends State<Tactile> {
 
   @override
   Widget build(BuildContext context) {
-    final i = widget.intensity;
-    // A finger press reads best a touch brighter than a passing hover.
-    final glow = _press ? i : i * 0.72;
+    // Press reads brighter than a passing hover.
+    final k = _press ? 1.0 : 0.62;
+    final a = widget.accent;
     return MouseRegion(
       onEnter: (_) => _update(() => _hover = true),
       onExit: (_) => _update(() => _hover = false),
@@ -51,22 +51,27 @@ class _TactileState extends State<Tactile> {
         onPointerDown: (_) => _update(() => _press = true),
         onPointerUp: (_) => _update(() => _press = false),
         onPointerCancel: (_) => _update(() => _press = false),
-        // The lit state is a phosphor wash *in front of* the surface — drawn
-        // within the widget's own bounds so a clipping parent (the file
-        // ListView) can't swallow it, plus a soft accent edge. This is the
-        // visible effect on every device; the boxShadow is only a bonus where
-        // nothing clips it.
+        // The lit state: a bright accent outline plus a gentle wash, drawn in
+        // front of the surface within the widget's own bounds so a clipping
+        // parent (the file ListView) can't swallow it. A phosphor box-shadow
+        // glow is added behind, visible wherever nothing clips it.
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 130),
+          duration: const Duration(milliseconds: 120),
           curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            borderRadius: widget.radius,
+            boxShadow: _lit
+                ? [BoxShadow(color: a.withValues(alpha: 0.30 * k), blurRadius: 16, spreadRadius: -2)]
+                : const [],
+          ),
           foregroundDecoration: BoxDecoration(
             borderRadius: widget.radius,
-            color: _lit ? widget.accent.withValues(alpha: glow) : null,
+            // A clear, bright accent outline — the unmistakable hover cue.
             border: _lit
-                ? Border.all(
-                    color: widget.accent.withValues(alpha: glow * 1.6),
-                    width: 1)
+                ? Border.all(color: a.withValues(alpha: 0.35 + 0.55 * k), width: 1.3)
                 : null,
+            // A light wash that keeps the text readable underneath.
+            color: _lit ? a.withValues(alpha: 0.10 * k) : null,
           ),
           child: widget.child,
         ),
