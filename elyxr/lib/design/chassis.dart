@@ -159,9 +159,10 @@ class _ScanlinePainter extends CustomPainter {
   bool shouldRepaint(covariant _ScanlinePainter old) => old.accent != accent;
 }
 
-/// A soft glowing scan bar that sweeps top to bottom over 8s, looping. Its
-/// bright centre rides the scan position, so at the start of each pass it sits
-/// right at the top and moves smoothly down — a visible scan, not a thin edge.
+/// A single scanner line that sweeps from the very top of the tube to the
+/// bottom once every ~7s — a quick, near-invisible pass, then a long rest.
+/// Drawn by a painter at an exact Y so `y=0` is genuinely the top edge (right
+/// under the top rail) and `y=h` the bottom — no fill-constraint stretching.
 class _Sweep extends StatefulWidget {
   final Palette palette;
   const _Sweep({required this.palette});
@@ -171,16 +172,14 @@ class _Sweep extends StatefulWidget {
 }
 
 class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
-  // A thin bright line — a scanner line that lights only a hairline as it
-  // passes, so it can't drag a lit band across the static phosphor texture.
-  static const double _band = 6;
-  // Fraction of the cycle spent sweeping; the rest is a brief rest, so the
-  // line reads as a periodic sonar pass, not constant motion.
-  static const double _sweepPart = 0.7;
+  // One pass every 7 seconds. The sweep itself is quick; the rest of the cycle
+  // is quiet, so it reads as a periodic sonar pass, not constant motion.
+  static const _cycle = Duration(seconds: 7);
+  // Fraction of the cycle spent actually moving.
+  static const double _sweepPart = 0.24;
 
   late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 3200))
-        ..repeat();
+      AnimationController(vsync: this, duration: _cycle)..repeat();
 
   @override
   void dispose() {
@@ -190,43 +189,55 @@ class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final p = widget.palette;
     return RepaintBoundary(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final h = constraints.maxHeight;
-          return AnimatedBuilder(
-            animation: _c,
-            builder: (context, _) {
-              final t = _c.value;
-              if (t > _sweepPart) return const SizedBox.shrink(); // resting
-              // A single line crosses the whole tube: its centre runs from the
-              // very top (y=0) to the bottom (y=h) during the sweep window.
-              final y = h * (t / _sweepPart);
-              return Transform.translate(
-                offset: Offset(0, y - _band / 2),
-                child: Container(
-                  height: _band,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      // A clean bright line — a hair of feather so it isn't
-                      // aliased, no glow-bar spread.
-                      colors: [
-                        p.aAlpha(0),
-                        p.aAlpha(0.65),
-                        p.aAlpha(0),
-                      ],
-                      stops: const [0.2, 0.5, 0.8],
-                    ),
-                  ),
-                ),
-              );
-            },
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          final t = _c.value;
+          // progress 0→1 down the tube during the sweep window, else resting.
+          final progress = t < _sweepPart ? t / _sweepPart : null;
+          return CustomPaint(
+            size: Size.infinite,
+            painter: _SweepPainter(widget.palette.a, progress),
           );
         },
       ),
     );
   }
+}
+
+/// Paints the scanner line: a thin, only-just-visible hairline with the
+/// faintest glow feathered around it. Nothing when resting.
+class _SweepPainter extends CustomPainter {
+  final Color accent;
+  final double? progress; // null while resting between passes
+  const _SweepPainter(this.accent, this.progress);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = progress;
+    if (p == null) return;
+    final y = size.height * p;
+    // A barely-there glow feathered a few px either side of the line.
+    final glow = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          accent.withValues(alpha: 0),
+          accent.withValues(alpha: 0.05),
+          accent.withValues(alpha: 0),
+        ],
+      ).createShader(Rect.fromLTWH(0, y - 6, size.width, 12));
+    canvas.drawRect(Rect.fromLTWH(0, y - 6, size.width, 12), glow);
+    // The crisp line itself — thin, and close to translucent.
+    final line = Paint()
+      ..color = accent.withValues(alpha: 0.13)
+      ..strokeWidth = 1.2;
+    canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SweepPainter old) =>
+      old.progress != progress || old.accent != accent;
 }
