@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
+import 'design/tokens.dart';
 import 'state/session.dart';
 import 'state/settings.dart';
 import 'state/transfers.dart';
@@ -16,12 +17,22 @@ import 'util/shake_to_close.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // The native launcher owns the window's geometry (frameless, chassis-sized,
-  // transparent — see linux/runner/my_application.cc). window_manager is here
-  // for the interactive parts: dragging by the rail and the screw controls.
+  // On Linux the native launcher owns the window's geometry (frameless,
+  // chassis-sized, transparent — see linux/runner/my_application.cc). Other
+  // platforms have no such launcher, so give window_manager the chassis' own
+  // size here; without it the runner opens at its default size with the chassis
+  // floating in the middle. window_manager also handles the interactive parts:
+  // dragging by the rail and the screw controls.
   await windowManager.ensureInitialized();
+  final opts = Platform.isLinux
+      ? const WindowOptions(titleBarStyle: TitleBarStyle.hidden)
+      : const WindowOptions(
+          titleBarStyle: TitleBarStyle.hidden,
+          size: Size(kAppWidth, kAppHeight),
+          center: true,
+        );
   await windowManager.waitUntilReadyToShow(
-    const WindowOptions(titleBarStyle: TitleBarStyle.hidden),
+    opts,
     () async {
       await windowManager.setAsFrameless();
       await windowManager.show();

@@ -24,9 +24,7 @@ pub fn resolve_bind(spec: &str) -> Result<String, String> {
 }
 
 fn tailscale_ip() -> Result<String, String> {
-    let out = std::process::Command::new("tailscale")
-        .args(["ip", "-4"])
-        .output()
+    let out = run_tailscale(&["ip", "-4"])
         .map_err(|e| format!("couldn't run tailscale to find this machine's tailnet IP: {e}"))?;
     if !out.status.success() {
         return Err("tailscale couldn't report this machine's IP (is Tailscale connected?)".into());
@@ -41,6 +39,33 @@ fn tailscale_ip() -> Result<String, String> {
         return Err("Tailscale returned no IPv4 address (is it connected?)".into());
     }
     Ok(ip)
+}
+
+/// Run the Tailscale CLI. It's on PATH on Linux; on Windows it installs to
+/// `C:\Program Files\Tailscale\tailscale.exe` and isn't on PATH by default, so
+/// try the standard install locations too. This is what lets a Windows machine
+/// resolve its own tailnet address and serve the trove, exactly like Linux.
+fn run_tailscale(args: &[&str]) -> std::io::Result<std::process::Output> {
+    #[allow(unused_mut)] // only pushed to on Windows
+    let mut candidates: Vec<std::path::PathBuf> = vec![std::path::PathBuf::from("tailscale")];
+    #[cfg(target_os = "windows")]
+    for var in ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"] {
+        if let Ok(dir) = std::env::var(var) {
+            candidates.push(
+                std::path::Path::new(&dir)
+                    .join("Tailscale")
+                    .join("tailscale.exe"),
+            );
+        }
+    }
+    let mut last = None;
+    for c in candidates {
+        match std::process::Command::new(&c).args(args).output() {
+            Ok(o) => return Ok(o),
+            Err(e) => last = Some(e),
+        }
+    }
+    Err(last.unwrap_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "tailscale not found")))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -177,19 +202,41 @@ fn default_trove_name() -> String {
     "elyxr".into()
 }
 
+/// The user's home directory: `$HOME` on Unix, `%USERPROFILE%` (or
+/// `%HOMEDRIVE%%HOMEPATH%`) on Windows. Falls back to `.` so a path always
+/// resolves to something rather than panicking.
+pub fn home_dir() -> PathBuf {
+    // The canonical home is `$HOME` on Unix and `%USERPROFILE%` on Windows;
+    // check the platform's own first so paths land where the installer puts
+    // them, then fall back to the other and to HOMEDRIVE+HOMEPATH.
+    #[cfg(target_os = "windows")]
+    let order: &[&str] = &["USERPROFILE", "HOME"];
+    #[cfg(not(target_os = "windows"))]
+    let order: &[&str] = &["HOME", "USERPROFILE"];
+    for var in order {
+        if let Ok(v) = std::env::var(var) {
+            if !v.is_empty() {
+                return PathBuf::from(v);
+            }
+        }
+    }
+    if let (Ok(drive), Ok(path)) = (std::env::var("HOMEDRIVE"), std::env::var("HOMEPATH")) {
+        if !drive.is_empty() {
+            return PathBuf::from(format!("{drive}{path}"));
+        }
+    }
+    PathBuf::from(".")
+}
+
 /// Expand a leading `~` to the user's home directory. Paths without a leading
 /// tilde are returned unchanged.
 pub fn expand_tilde(p: impl AsRef<str>) -> PathBuf {
     let p = p.as_ref();
     if let Some(rest) = p.strip_prefix("~/") {
-        if let Ok(home) = std::env::var("HOME") {
-            return Path::new(&home).join(rest);
-        }
+        return home_dir().join(rest);
     }
     if p == "~" {
-        if let Ok(home) = std::env::var("HOME") {
-            return PathBuf::from(home);
-        }
+        return home_dir();
     }
     PathBuf::from(p)
 }

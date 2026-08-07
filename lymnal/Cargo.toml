@@ -36,15 +36,28 @@ tokio-util = { version = "0.7", features = ["io", "compat"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 unicode-normalization = "0.1"
 rand = "0.8"
-libc = "0.2"
 base64 = "0.22"
 ureq = { version = "2", features = ["json"] }
+# Cross-platform disk free/total (statvfs on Unix, GetDiskFreeSpaceEx on Windows)
+# and file mtime, so the same binary builds on Linux and Windows.
+fs2 = "0.4"
+filetime = "0.2"
+
+# The tray on Linux is StatusNotifierItem over D-Bus (ksni).
+[target.'cfg(target_os = "linux")'.dependencies]
 ksni = { version = "0.3.6", default-features = false, features = ["blocking", "tokio"] }
 image = { version = "0.25", default-features = false, features = ["png"] }
+
+# The tray on Windows is a Shell_NotifyIcon via tray-icon, pumped by a small
+# Win32 message loop. Same lymnal mark, same menu — so the service is visibly
+# there on Windows too, not just Linux.
+[target.'cfg(target_os = "windows")'.dependencies]
+tray-icon = "0.19"
+image = { version = "0.25", default-features = false, features = ["png"] }
+windows-sys = { version = "0.59", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
 
 [dev-dependencies]
 tempfile = "3"
 tower = { version = "0.4", features = ["util"] }
 http-body-util = "0.1"
 blake3 = "1"
-libc = "0.2"

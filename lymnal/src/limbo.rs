@@ -203,32 +203,16 @@ fn touch(inner: &mut Inner, key: &str) {
     inner.order.push_back(key.to_string());
 }
 
+/// Free bytes on the filesystem holding `path` (cross-platform, via fs2).
 fn disk_free(path: &Path) -> u64 {
-    statvfs(path).map(|(_, avail)| avail).unwrap_or(0)
-}
-
-fn disk_total(path: &Path) -> u64 {
-    statvfs(path).map(|(total, _)| total).unwrap_or(0)
-}
-
-/// (total, available) bytes on the filesystem holding `path`.
-fn statvfs(path: &Path) -> Option<(u64, u64)> {
-    use std::os::unix::ffi::OsStrExt;
     let target = if path.exists() { path } else { Path::new(".") };
-    let c = std::ffi::CString::new(target.as_os_str().as_bytes()).ok()?;
-    // SAFETY: zeroed statvfs, read only on success.
-    unsafe {
-        let mut s: libc::statvfs = std::mem::zeroed();
-        if libc::statvfs(c.as_ptr(), &mut s) == 0 {
-            let frsize = s.f_frsize as u64;
-            Some((
-                (s.f_blocks as u64).saturating_mul(frsize),
-                (s.f_bavail as u64).saturating_mul(frsize),
-            ))
-        } else {
-            None
-        }
-    }
+    fs2::available_space(target).unwrap_or(0)
+}
+
+/// Total bytes on the filesystem holding `path` (cross-platform, via fs2).
+fn disk_total(path: &Path) -> u64 {
+    let target = if path.exists() { path } else { Path::new(".") };
+    fs2::total_space(target).unwrap_or(0)
 }
 
 #[cfg(test)]
