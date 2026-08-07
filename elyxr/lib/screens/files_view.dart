@@ -134,10 +134,13 @@ class _Console extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 1),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: glass(15, p.mid)),
-          Flexible(
+          const SizedBox(width: 8),
+          // Expanded (not Flexible) so the value fills the rest and right-aligns
+          // with a guaranteed gap — the label and value can't collide at any
+          // text scale.
+          Expanded(
             child: Text(value,
                 style: glass(15, p.bright),
                 maxLines: 1,

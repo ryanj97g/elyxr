@@ -43,7 +43,7 @@ class _TactileState extends State<Tactile> {
   Widget build(BuildContext context) {
     final i = widget.intensity;
     // A finger press reads best a touch brighter than a passing hover.
-    final glow = _press ? i : i * 0.7;
+    final glow = _press ? i : i * 0.72;
     return MouseRegion(
       onEnter: (_) => _update(() => _hover = true),
       onExit: (_) => _update(() => _hover = false),
@@ -51,26 +51,22 @@ class _TactileState extends State<Tactile> {
         onPointerDown: (_) => _update(() => _press = true),
         onPointerUp: (_) => _update(() => _press = false),
         onPointerCancel: (_) => _update(() => _press = false),
+        // The lit state is a phosphor wash *in front of* the surface — drawn
+        // within the widget's own bounds so a clipping parent (the file
+        // ListView) can't swallow it, plus a soft accent edge. This is the
+        // visible effect on every device; the boxShadow is only a bonus where
+        // nothing clips it.
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 130),
           curve: Curves.easeOut,
-          decoration: BoxDecoration(
-            borderRadius: widget.radius,
-            boxShadow: _lit
-                ? [
-                    BoxShadow(
-                      color: widget.accent.withValues(alpha: glow),
-                      blurRadius: 14,
-                      spreadRadius: -3,
-                    ),
-                  ]
-                : const [],
-          ),
           foregroundDecoration: BoxDecoration(
             borderRadius: widget.radius,
-            // A whisper of accent wash over the surface — a highlight, never
-            // enough to dull the text underneath.
-            color: _lit ? widget.accent.withValues(alpha: glow * 0.3) : null,
+            color: _lit ? widget.accent.withValues(alpha: glow) : null,
+            border: _lit
+                ? Border.all(
+                    color: widget.accent.withValues(alpha: glow * 1.6),
+                    width: 1)
+                : null,
           ),
           child: widget.child,
         ),

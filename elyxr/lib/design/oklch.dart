@@ -96,6 +96,7 @@ double lForC(double h, double targetC, double hiL, double loL,
 /// it never goes flat and clamped to the hue's in-gamut ceiling.
 double accentChroma(double chromaMul, double maxCeil, double sat) {
   final c = 0.13 * chromaMul * sat;
-  final floored = c < 0.075 ? 0.075 : c;
+  // A lower floor gives the muting drag more room to wash a colour toward grey.
+  final floored = c < 0.045 ? 0.045 : c;
   return floored < maxCeil ? floored : maxCeil;
 }
