@@ -13,6 +13,7 @@ import '../state/session.dart';
 import '../state/settings.dart';
 import '../widgets/nostalgia/cursor_trail.dart';
 import '../widgets/nostalgia/matrix_rain.dart';
+import '../widgets/nostalgia/snake_game.dart';
 import '../widgets/nostalgia/transfer_hud.dart';
 import '../widgets/rails.dart';
 import 'files_view.dart';
@@ -34,6 +35,8 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _idleAfter = Duration(seconds: 120);
   bool _idle = false;
   Timer? _idleTimer;
+  // The hidden Snake minigame (wordmark ×7 in Nostalgia Mode).
+  bool _game = false;
 
   // The live pointer position, fed to the cursor trail (Nostalgia Mode).
   final ValueNotifier<Offset?> _cursor = ValueNotifier(null);
@@ -118,18 +121,27 @@ class _HomeScreenState extends State<HomeScreen> {
           palette: p,
           inSettings: _inSettings,
           onToggleSettings: () => setState(() => _inSettings = !_inSettings),
+          onEasterEgg:
+              settings.nostalgia ? () => setState(() => _game = true) : null,
         ),
         tube: Tube(
           palette: p,
-          overlay: showSaver
-              ? GestureDetector(
-                  // Absorb the waking tap so it doesn't also click a file; the
-                  // ancestor Listener still registers it and dismisses the saver.
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {},
-                  child: MatrixRain(palette: p),
+          // The minigame wins over the screensaver; both live in the overlay.
+          overlay: _game
+              ? SnakeGame(
+                  palette: p,
+                  onExit: () => setState(() => _game = false),
                 )
-              : null,
+              : showSaver
+                  ? GestureDetector(
+                      // Absorb the waking tap so it doesn't also click a file;
+                      // the ancestor Listener still registers it and dismisses
+                      // the saver.
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {},
+                      child: MatrixRain(palette: p),
+                    )
+                  : null,
           child: tubeChild,
         ),
         bottomRail: BottomRail(
