@@ -90,7 +90,9 @@ class TroveMountController extends ChangeNotifier {
     try {
       final home = Platform.environment['HOME'];
       if (home == null) return;
-      final iconPath = '$home/.cache/elyxr/trove.png';
+      // A fresh filename (not the old trove.png) so a file manager that cached
+      // the previous icon by path shows the current mark instead of the stale one.
+      final iconPath = '$home/.cache/elyxr/trove-icon.png';
       final iconFile = File(iconPath);
       // Always (re)write it, so a branding change refreshes the cached copy
       // instead of leaving an old icon behind.
@@ -111,7 +113,15 @@ class TroveMountController extends ChangeNotifier {
     final p = _proc;
     _proc = null;
     notifyListeners();
-    if (p != null) p.kill(ProcessSignal.sigterm);
+    if (p != null) {
+      p.kill(ProcessSignal.sigterm);
+      // Give the gate a moment to release the mount cleanly (its AutoUnmount)
+      // before we force it — but never wait forever on a wedged process.
+      await Future.any<void>([
+        p.exitCode.then((_) {}),
+        Future<void>.delayed(const Duration(seconds: 2)),
+      ]);
+    }
     await _removeMountPoint(mountPath);
   }
 
@@ -129,9 +139,19 @@ class TroveMountController extends ChangeNotifier {
   /// mount a crashed gate left behind), drop the folder's custom icon, then
   /// remove the folder if it's empty. Every step is best-effort.
   Future<void> _removeMountPoint(String mountPath) async {
-    try {
-      await Process.run('fusermount3', ['-u', mountPath]);
-    } catch (_) {}
+    // Unmount with whatever helper is present, lazily so even a busy mount
+    // detaches: fuse3 first, then fuse2, then a plain lazy umount. Stop at the
+    // first that succeeds.
+    for (final cmd in <List<String>>[
+      ['fusermount3', '-u', '-z', mountPath],
+      ['fusermount', '-u', '-z', mountPath],
+      ['umount', '-l', mountPath],
+    ]) {
+      try {
+        final r = await Process.run(cmd.first, cmd.sublist(1));
+        if (r.exitCode == 0) break;
+      } catch (_) {}
+    }
     try {
       await Process.run('gio', ['set', '-t', 'unset', mountPath, 'metadata::custom-icon']);
     } catch (_) {}
