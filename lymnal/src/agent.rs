@@ -110,6 +110,15 @@ pub fn update_now(config_path: &Path) {
     run_installer(config_path);
 }
 
+/// Update this device now, the same path an announced update takes — used by the
+/// server when an owner device asks the whole fleet to update, so the server
+/// follows an update triggered from a client. Guarded against an in-flight
+/// install, and cross-platform (source rebuild on Linux, prebuilt fetch on
+/// Windows).
+pub fn trigger_local_update(config_path: PathBuf) {
+    run_installer(&config_path);
+}
+
 fn run_installer(config_path: &Path) {
     // Only one install at a time, whichever trigger fires first.
     if INSTALLING.swap(true, Ordering::SeqCst) {

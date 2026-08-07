@@ -50,6 +50,10 @@ pub fn router(state: Shared) -> Router {
         .route("/v1/delete", post(mutate::delete))
         .route("/v1/mkdir", post(mutate::mkdir))
         .route("/v1/events", get(stream::events))
+        // Any owner device can ask the whole fleet to update — the server
+        // broadcasts to every connected device and updates itself, so an update
+        // triggered from a client reaches the server and every sibling too.
+        .route("/v1/update", post(update_fleet))
         // Server-mode admin surface (§08, §09), reached by the local admin
         // token — never exposed to ordinary clients.
         .route("/v1/admin/status", get(admin::status))
@@ -158,6 +162,27 @@ async fn health(State(s): State<Shared>) -> Json<Value> {
         "drive_free_bytes": s.usage.drive_free(),
         "pairing_open": s.pairing.is_open(),
     }))
+}
+
+/// A connected owner device asks the whole fleet to update. Broadcast the
+/// update to every connected client (each follows at once, exactly as when the
+/// server itself announces) and update this server too — so an update triggered
+/// from a client away from home reaches the server and every sibling, not just
+/// the one device. Owner-only: a guest can browse, not push updates.
+async fn update_fleet(
+    State(s): State<Shared>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, ApiError> {
+    let id = require_auth(&s, &headers)?;
+    if id.role != Role::Owner {
+        return Err(ApiError::new(
+            ErrCode::PermissionDenied,
+            "Only an owner device can update the fleet.",
+        ));
+    }
+    s.events.announce_update(s.build);
+    s.trigger_self_update();
+    Ok(Json(json!({ "updating": true })))
 }
 
 #[derive(Deserialize)]

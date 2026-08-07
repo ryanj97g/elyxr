@@ -53,6 +53,10 @@ pub struct AppState {
     /// The last failures, newest last, capped at twenty.
     pub problems: Mutex<VecDeque<ProblemLine>>,
     pub bound_ok: AtomicBool,
+    /// How this device updates itself, registered by the binary at startup. Lets
+    /// a fleet-update request from a client make the server follow, without the
+    /// lib depending on the binary's platform-specific installer code.
+    update_trigger: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
 }
 
 pub type Shared = Arc<AppState>;
@@ -85,6 +89,7 @@ impl AppState {
             admin_token: mint_admin_token(),
             problems: Mutex::new(VecDeque::with_capacity(20)),
             bound_ok: AtomicBool::new(true),
+            update_trigger: Mutex::new(None),
         })
     }
 
@@ -92,6 +97,24 @@ impl AppState {
     pub fn with_config_path(self: &mut Arc<Self>, path: std::path::PathBuf) {
         if let Some(inner) = Arc::get_mut(self) {
             inner.config_path = Some(path);
+        }
+    }
+
+    /// Register how this device updates itself, called once at startup before the
+    /// state is shared. A fleet-update request then makes the server follow.
+    pub fn set_update_trigger<F>(self: &mut Arc<Self>, f: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        if let Some(inner) = Arc::get_mut(self) {
+            *inner.update_trigger.lock().unwrap() = Some(Box::new(f));
+        }
+    }
+
+    /// Run the registered update trigger, if one was set. Best-effort.
+    pub fn trigger_self_update(&self) {
+        if let Some(f) = self.update_trigger.lock().unwrap().as_ref() {
+            f();
         }
     }
 

@@ -187,6 +187,14 @@ async fn serve(
     let trove_name = cfg.trove.name.clone();
     let mut state = AppState::new(cfg, trove, usage, uploads, devices);
     state.with_config_path(config_path.clone());
+    // How the server updates itself when an owner device asks the fleet to
+    // update (POST /v1/update), so an update triggered from a client makes the
+    // server follow too. The lib holds only the callback; the platform-specific
+    // installer lives here in the binary.
+    state.set_update_trigger({
+        let cp = config_path.clone();
+        move || agent::trigger_local_update(cp.clone())
+    });
 
     // The local admin token lets server-mode elyxr on this machine reach the
     // admin surface. Written user-only; never sent over the tailnet.
