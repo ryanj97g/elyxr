@@ -38,6 +38,15 @@ class _HomeScreenState extends State<HomeScreen> {
       tubeChild = const FilesView();
     }
 
+    // Density is a global text scale for everything on the glass — the whole
+    // terminal grows or tightens together. The metal rails sit outside this
+    // MediaQuery, so the physical controls keep their fixed size.
+    tubeChild = MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: TextScaler.linear(settings.density.scale)),
+      child: tubeChild,
+    );
+
     return Chassis(
       palette: p,
       topRail: TopRail(
