@@ -10,17 +10,39 @@ import 'oklch.dart';
 
 Color _c(int argb) => Color(argb);
 
-/// The three typefaces, one job each (DESIGN.md · Type).
+/// The three typefaces, one job each (DESIGN.md · Type). These are mutable so
+/// the terminal face can be swapped from Settings — every call site reads
+/// through the `glass`/`chassis`/`mono` helpers, so changing the family here
+/// re-skins the whole app on the next rebuild.
 class Fonts {
   /// Chassis labels, section headers, rail buttons.
-  static const chassis = 'Chakra Petch';
+  static String chassis = 'Chakra Petch';
 
-  /// Everything on the glass — file rows, readouts, settings.
-  static const glass = 'VT323';
+  /// Everything on the glass — file rows, readouts, settings. Swappable.
+  static String glass = 'VT323';
 
   /// The ticker, and version strings. Nothing else.
-  static const mono = 'IBM Plex Mono';
+  static String mono = 'IBM Plex Mono';
 }
+
+/// One selectable terminal face: the font family (must be declared in
+/// pubspec.yaml under `fonts:`) and the name shown in the picker. To add one of
+/// your own TTFs: drop it in assets/fonts/, add a `- family: … / - asset: …`
+/// block to pubspec.yaml, then add one row here. That's the whole job.
+class TermFace {
+  final String family;
+  final String label;
+  const TermFace(this.family, this.label);
+}
+
+/// The terminal faces offered in Settings › TYPEFACE. VT323 is the default
+/// phosphor face; the other two bundled families are here so the switch is live
+/// immediately. Custom faces slot in as extra rows.
+const List<TermFace> kTermFaces = [
+  TermFace('VT323', 'VT323'),
+  TermFace('Chakra Petch', 'CHAKRA'),
+  TermFace('IBM Plex Mono', 'PLEX'),
+];
 
 /// The switchable phosphor accents, in spectrum order. `mono` is the white
 /// phosphor (its intensity is a lightness, not a saturation).

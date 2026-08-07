@@ -28,29 +28,36 @@ class SettingsView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Inverted header band.
+          // Terminal header: a phosphor title with an accent caret and a dim
+          // underline — the same restrained console vocabulary as the files
+          // view, not an inverted slab.
           Container(
-            color: p.a,
-            padding: const EdgeInsets.fromLTRB(15, 9, 15, 10),
+            padding: const EdgeInsets.fromLTRB(13, 11, 13, 10),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: p.dim)),
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                Text('▸',
+                    style: glass(23, p.a).copyWith(
+                        shadows: [Shadow(color: p.a, blurRadius: 10)])),
+                const SizedBox(width: 8),
                 Text('SETTINGS',
-                    style: chassis(26, p.ink, weight: FontWeight.w700, spacing: 0.26)),
+                    style: glass(26, p.bright).copyWith(
+                        shadows: [Shadow(color: p.aAlpha(0.7), blurRadius: 9)])),
                 const Spacer(),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('THIS DEVICE',
-                        style: chassis(9, p.ink.withValues(alpha: 0.62), spacing: 0.16)),
+                    Text('THIS DEVICE', style: glass(13, p.mid)),
                     Text(session.serverName ?? deviceName(),
-                        style: mono(12, p.ink, weight: FontWeight.w600)),
+                        style: mono(12, p.bright, weight: FontWeight.w600)),
                   ],
                 ),
               ],
             ),
           ),
-          Container(height: 2, color: p.dim),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(15, 13, 15, 0),
@@ -66,14 +73,16 @@ class SettingsView extends StatelessWidget {
                 const SizedBox(height: 13),
                 _section(p, '02', 'DENSITY', _DensityPicker(palette: p)),
                 const SizedBox(height: 13),
-                _section(p, '03', 'TUBE', _TubePicker(palette: p)),
+                _section(p, '03', 'TYPEFACE', _FacePicker(palette: p)),
                 const SizedBox(height: 13),
-                _section(p, '04', 'THIS DEVICE', _DeviceRows(palette: p)),
+                _section(p, '04', 'TUBE', _TubePicker(palette: p)),
+                const SizedBox(height: 13),
+                _section(p, '05', 'THIS DEVICE', _DeviceRows(palette: p)),
                 // A client can surface the trove as a real folder (the optional
                 // gate mount) — Linux only, off by default. Kept last.
                 if (settings.appMode == AppMode.client && Platform.isLinux) ...[
                   const SizedBox(height: 13),
-                  _section(p, '05', 'USE SYSTEM FILE BROWSER', _GateRow(palette: p)),
+                  _section(p, '06', 'USE SYSTEM FILE BROWSER', _GateRow(palette: p)),
                 ],
                 const SizedBox(height: 16),
               ],
@@ -102,13 +111,12 @@ class SettingsView extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 9),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  color: p.a,
-                  child: Text(num, style: mono(11, p.ink, weight: FontWeight.w600)),
-                ),
+                // A bracketed phosphor marker, not a filled chip — a terminal
+                // section token in the accent colour.
+                Text('[$num]',
+                    style: mono(12, p.a, weight: FontWeight.w600)),
                 const SizedBox(width: 9),
-                Text(title, style: chassis(12, p.bright, spacing: 0.16)),
+                Text(title, style: glass(17, p.bright)),
                 const SizedBox(width: 9),
                 Expanded(
                   child: Container(
@@ -326,6 +334,65 @@ class _DensityPicker extends StatelessWidget {
                         style: chassis(10, d == settings.density ? p.bright : p.mid, spacing: 0.1)),
                   ],
                 ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The terminal-face picker: one chip per available face, each previewing its
+/// own font so you read the choice in the choice. Swapping re-skins the whole
+/// terminal live. Add a face by dropping a TTF in assets/fonts/, declaring it in
+/// pubspec.yaml, and adding a row to kTermFaces — it shows up here automatically.
+class _FacePicker extends StatelessWidget {
+  final Palette palette;
+  const _FacePicker({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = palette;
+    final settings = context.watch<SettingsController>();
+    return Row(
+      children: [
+        for (final face in kTermFaces)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: GestureDetector(
+                onTap: () => settings.termFont = face.family,
+                behavior: HitTestBehavior.opaque,
+                child: Builder(builder: (context) {
+                  final on = settings.termFont == face.family;
+                  return Column(
+                    children: [
+                      Container(
+                        height: 48,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: p.dark ? const Color(0xFF030604) : const Color(0xFFf2f7f3),
+                          border: Border.all(color: on ? p.a : p.dim),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                        // "Aa" rendered in the face itself — a live specimen.
+                        child: Text('Aa',
+                            style: TextStyle(
+                              fontFamily: face.family,
+                              fontSize: 26,
+                              color: on ? p.a : p.foot,
+                              shadows: on ? [Shadow(color: p.a, blurRadius: 10)] : null,
+                            )),
+                      ),
+                      const SizedBox(height: 6),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(face.label,
+                            style: chassis(10, on ? p.bright : p.mid, spacing: 0.1)),
+                      ),
+                    ],
+                  );
+                }),
               ),
             ),
           ),
