@@ -264,6 +264,16 @@ class BrowseController extends ChangeNotifier {
 
   // ---- selection ----
 
+  /// A plain single click: make [index] the only selection (so the details box
+  /// shows just this one file). Multi-select is the click-and-hold gesture.
+  void selectOnly(int index) {
+    _sel
+      ..clear()
+      ..add(_entries[index].name);
+    _anchorIndex = index;
+    notifyListeners();
+  }
+
   void toggle(int index) {
     final name = _entries[index].name;
     if (_sel.contains(name)) {
