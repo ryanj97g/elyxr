@@ -4,8 +4,13 @@
 // spectrum needs to tap the actual audio output, which is a separate concern
 // deliberately kept off the player's critical path.
 
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:record/record.dart';
 
 import '../../design/text.dart';
 import '../../design/tokens.dart';
@@ -62,7 +67,12 @@ class MusicPlayerPanel extends StatelessWidget {
                 style: mono(11, p.mid)),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
+        // Real spectrum — FFT of the system's actual audio output (captured from
+        // the monitor source), so it reacts to whatever is truly coming out. It
+        // sits on top of the player and never affects playback.
+        SizedBox(height: 26, child: _Visualizer(palette: p)),
+        const SizedBox(height: 6),
         // Seek bar — tap or drag to scrub.
         LayoutBuilder(builder: (context, c) {
           void seekTo(double dx) {
@@ -228,4 +238,201 @@ class _SeekPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SeekPainter old) =>
       old.frac != frac || old.a != a;
+}
+
+/// A real spectrum: captures the system's audio OUTPUT (the monitor source) and
+/// runs an FFT over it every frame, so the bars react to what's actually coming
+/// out of the speakers — decoupled from the player entirely. If output capture
+/// isn't available it simply draws nothing; it never fakes motion and never
+/// affects playback.
+class _Visualizer extends StatefulWidget {
+  final Palette palette;
+  const _Visualizer({required this.palette});
+
+  @override
+  State<_Visualizer> createState() => _VisualizerState();
+}
+
+class _VisualizerState extends State<_Visualizer> {
+  static const int _fftSize = 1024; // power of two
+  static const int _bars = 28;
+
+  final AudioRecorder _rec = AudioRecorder();
+  StreamSubscription<Uint8List>? _sub;
+  final Float64List _ring = Float64List(_fftSize);
+  int _written = 0;
+  Timer? _timer;
+
+  final ValueNotifier<List<double>> _levels =
+      ValueNotifier<List<double>>(List<double>.filled(_bars, 0.0));
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  Future<void> _start() async {
+    try {
+      if (!await _rec.hasPermission()) return;
+      // Pick the OUTPUT monitor so we visualise what's playing, not the mic. If
+      // there's no monitor device, don't capture at all (nothing, never the mic).
+      InputDevice? monitor;
+      try {
+        for (final d in await _rec.listInputDevices()) {
+          if (d.label.toLowerCase().contains('monitor')) {
+            monitor = d;
+            break;
+          }
+        }
+      } catch (_) {}
+      if (monitor == null) return;
+      final stream = await _rec.startStream(RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: 44100,
+        numChannels: 1,
+        device: monitor,
+      ));
+      _sub = stream.listen(_onBytes, onError: (_) {});
+      _timer =
+          Timer.periodic(const Duration(milliseconds: 33), (_) => _compute());
+    } catch (_) {
+      // No capture available — the bars stay flat (honest), player unaffected.
+    }
+  }
+
+  void _onBytes(Uint8List bytes) {
+    final bd = ByteData.sublistView(bytes);
+    final n = bytes.length ~/ 2;
+    for (var i = 0; i < n; i++) {
+      _ring[_written % _fftSize] = bd.getInt16(i * 2, Endian.little) / 32768.0;
+      _written++;
+    }
+  }
+
+  void _compute() {
+    if (_written < _fftSize) return;
+    final re = Float64List(_fftSize);
+    final im = Float64List(_fftSize);
+    final start = _written % _fftSize;
+    for (var i = 0; i < _fftSize; i++) {
+      final s = _ring[(start + i) % _fftSize];
+      // Hann window to tame spectral leakage.
+      final w = 0.5 - 0.5 * math.cos(2 * math.pi * i / (_fftSize - 1));
+      re[i] = s * w;
+    }
+    _fft(re, im);
+    final half = _fftSize ~/ 2;
+    final mag = Float64List(half);
+    for (var i = 0; i < half; i++) {
+      mag[i] = math.sqrt(re[i] * re[i] + im[i] * im[i]);
+    }
+    final prev = _levels.value;
+    final out = List<double>.filled(_bars, 0.0);
+    const int loBin = 2, hiBin = 400; // ~85Hz .. ~17kHz across the bars
+    for (var b = 0; b < _bars; b++) {
+      final lo = (loBin * math.pow(hiBin / loBin, b / _bars)).floor();
+      final hi = (loBin * math.pow(hiBin / loBin, (b + 1) / _bars))
+          .ceil()
+          .clamp(lo + 1, half);
+      var peak = 0.0;
+      for (var k = lo; k < hi; k++) {
+        if (mag[k] > peak) peak = mag[k];
+      }
+      // Scale + curve. The divisor sets sensitivity (may want tuning on real
+      // audio); sqrt lifts quiet detail.
+      var v = math.sqrt((peak / 30.0).clamp(0.0, 1.0));
+      // Fast attack, slow decay so it dances rather than flickers.
+      final p = prev[b];
+      v = v > p ? v : p * 0.82 + v * 0.18;
+      out[b] = v.clamp(0.0, 1.0);
+    }
+    _levels.value = out;
+  }
+
+  // In-place iterative radix-2 Cooley–Tukey FFT. Lengths are a power of two.
+  static void _fft(Float64List re, Float64List im) {
+    final n = re.length;
+    for (var i = 1, j = 0; i < n; i++) {
+      var bit = n >> 1;
+      for (; (j & bit) != 0; bit >>= 1) {
+        j ^= bit;
+      }
+      j ^= bit;
+      if (i < j) {
+        var t = re[i];
+        re[i] = re[j];
+        re[j] = t;
+        t = im[i];
+        im[i] = im[j];
+        im[j] = t;
+      }
+    }
+    for (var len = 2; len <= n; len <<= 1) {
+      final ang = -2 * math.pi / len;
+      final wlenR = math.cos(ang), wlenI = math.sin(ang);
+      final half = len >> 1;
+      for (var i = 0; i < n; i += len) {
+        var wR = 1.0, wI = 0.0;
+        for (var k = 0; k < half; k++) {
+          final aR = re[i + k], aI = im[i + k];
+          final bR = re[i + k + half] * wR - im[i + k + half] * wI;
+          final bI = re[i + k + half] * wI + im[i + k + half] * wR;
+          re[i + k] = aR + bR;
+          im[i + k] = aI + bI;
+          re[i + k + half] = aR - bR;
+          im[i + k + half] = aI - bI;
+          final nwR = wR * wlenR - wI * wlenI;
+          wI = wR * wlenI + wI * wlenR;
+          wR = nwR;
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _sub?.cancel();
+    _rec.stop();
+    _rec.dispose();
+    _levels.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: ValueListenableBuilder<List<double>>(
+        valueListenable: _levels,
+        builder: (_, levels, __) => CustomPaint(
+          size: Size.infinite,
+          painter: _BarsPainter(levels, widget.palette.a),
+        ),
+      ),
+    );
+  }
+}
+
+class _BarsPainter extends CustomPainter {
+  final List<double> levels;
+  final Color a;
+  _BarsPainter(this.levels, this.a);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bw = size.width / levels.length;
+    final paint = Paint()..color = a.withValues(alpha: 0.9);
+    for (var i = 0; i < levels.length; i++) {
+      final h = (size.height * levels[i]).clamp(0.0, size.height);
+      if (h <= 0.5) continue;
+      canvas.drawRect(
+        Rect.fromLTWH(i * bw + bw * 0.18, size.height - h, bw * 0.64, h),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BarsPainter old) => true;
 }
