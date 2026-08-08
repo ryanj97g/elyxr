@@ -60,21 +60,35 @@ class OpenExternal {
     // Content already safely in the trove (initial download == the trove copy).
     var syncedHash = 0;
     local.readAsBytes().then((b) => syncedHash = _hash(b)).catchError((_) => 0);
+    // Cheap gate for the periodic scan: skip the read+hash unless the file's
+    // stat actually moved since we last looked.
+    DateTime? seenMtime;
+    int seenLen = -1;
 
     Timer? settle;
     Timer? idle;
+    Timer? poll;
     StreamSubscription? sub;
     var finishing = false;
 
-    Future<void> syncIfChanged() async {
+    // Upload the current on-disk content if it differs from what's already in
+    // the trove. Returns whether anything was uploaded. This is the whole
+    // auto-save-and-upload: every state the editor writes to disk goes up.
+    Future<bool> syncIfChanged() async {
+      final st = await local.stat();
+      // Nothing touched the file since the last look — no work to do.
+      if (st.modified == seenMtime && st.size == seenLen) return false;
+      seenMtime = st.modified;
+      seenLen = st.size;
       final bytes = await local.readAsBytes();
       final h = _hash(bytes);
-      if (h == syncedHash) return;
+      if (h == syncedHash) return false;
       // The edit's own save time is the timestamp that rides to the trove —
       // last writer wins, and this is when this writer wrote.
-      final mtime = (await local.lastModified()).millisecondsSinceEpoch ~/ 1000;
+      final mtime = st.modified.millisecondsSinceEpoch ~/ 1000;
       await _syncBack(client, remotePath, bytes, mtime);
       syncedHash = h;
+      return true;
     }
 
     // Tear down: make sure the final edit reached the trove, then delete the
@@ -87,6 +101,7 @@ class OpenExternal {
       finishing = true;
       settle?.cancel();
       idle?.cancel();
+      poll?.cancel();
       await sub?.cancel();
       try {
         await syncIfChanged();
@@ -106,6 +121,11 @@ class OpenExternal {
     }
 
     armIdle();
+
+    // Fast path: filesystem-event driven. When the editor writes in place the
+    // event fires and we sync ~2s later. Many editors, though, save by writing
+    // a temp file and renaming it over this one — which does NOT fire an event
+    // here — so this path alone would miss those saves entirely.
     sub = local.watch().listen((_) {
       armIdle();
       settle?.cancel();
@@ -114,11 +134,22 @@ class OpenExternal {
         try {
           await syncIfChanged();
         } catch (_) {
-          // A transient read/upload failure is retried on the next save; the
+          // A transient read/upload failure is retried on the next scan; the
           // proxy's own queue covers a lapse.
         }
       });
     }, onError: (_) => finish(), onDone: finish);
+
+    // Safety net + auto-save: a steady scan that uploads whatever is on disk,
+    // catching the atomic-save editors the event watch misses. Any real change
+    // also counts as activity, so it pushes the idle-cleanup window back.
+    poll = Timer.periodic(const Duration(seconds: 30), (_) async {
+      try {
+        if (await syncIfChanged()) armIdle();
+      } catch (_) {
+        // Transient failure — the next scan (or the proxy queue) covers it.
+      }
+    });
   }
 
   /// Delete any working copies left behind by a previous run (a crash, or a
