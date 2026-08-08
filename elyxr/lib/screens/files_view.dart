@@ -696,11 +696,13 @@ class _FileGrid extends StatelessWidget {
       final rows = browse.entries;
       return GridView.builder(
         padding: const EdgeInsets.all(10),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
+        // Little icons, several per row (3–4 depending on width) instead of two
+        // big squares — max tile width drives the count so it stays tidy.
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 108,
           mainAxisSpacing: 10,
           crossAxisSpacing: 10,
-          childAspectRatio: 0.82,
+          childAspectRatio: 0.86,
         ),
         itemCount: rows.length,
         itemBuilder: (context, i) {
@@ -726,16 +728,16 @@ class _FileGrid extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(e.isDir ? '█' : '▫',
-                      style: glass(e.isDir ? 42 : 36, e.isDir ? p.a : p.glow)),
-                  const SizedBox(height: 8),
+                      style: glass(e.isDir ? 30 : 26, e.isDir ? p.a : p.glow)),
+                  const SizedBox(height: 5),
                   Text(e.name,
                       maxLines: 2,
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
-                      style: glass(15, selected ? (p.dark ? Colors.white : Colors.black) : (e.isDir ? p.bright : p.soft))),
+                      style: glass(13, selected ? (p.dark ? Colors.white : Colors.black) : (e.isDir ? p.bright : p.soft))),
                   const SizedBox(height: 2),
                   Text(e.isDir ? '${e.childCount ?? 0} items' : fmtSize(e.sizeBytes),
-                      style: glass(12, p.mid)),
+                      style: glass(11, p.mid)),
                 ],
               ),
             ),

@@ -29,12 +29,35 @@ class MusicPlayerPanel extends StatelessWidget {
     final p = palette;
     final m = context.watch<MusicController>();
 
-    if (!m.hasTracks && !m.active) {
-      // Idle — the deck is always present; it just has nothing loaded yet.
-      return Row(children: [
-        Text('♪ ', style: glass(16, p.foot)),
-        Text('—', style: glass(15, p.foot)),
-      ]);
+    if (!m.active) {
+      // Idle — a slim one-line bar, not the full deck, so it doesn't eat the
+      // tube when nothing's playing. Still present and startable: a play button
+      // and the tracklist. The full deck only unfolds while something plays.
+      return Row(
+        children: [
+          GestureDetector(
+            onTap: m.hasTracks ? () => m.toggle() : null,
+            behavior: HitTestBehavior.opaque,
+            child: Icon(Icons.play_arrow,
+                size: 20, color: m.hasTracks ? p.a : p.foot),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(m.hasTracks ? m.title : '—',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: glass(15, p.foot)),
+          ),
+          if (m.hasTracks) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => _showTracklist(context, m, p),
+              behavior: HitTestBehavior.opaque,
+              child: Icon(Icons.queue_music, color: p.mid, size: 18),
+            ),
+          ],
+        ],
+      );
     }
 
     final total = m.duration.inMilliseconds;
