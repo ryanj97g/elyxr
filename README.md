@@ -85,7 +85,8 @@ lymnal bind seal
 
 ## Using it
 
-The trove is a live window into the server, not a copy:
+elyxr is a live window into the trove — your files on the server — not a copy of
+them:
 
 - **Click a file** to select it — its details show in the panel below. Click an
   audio file and it plays in the built-in player.
