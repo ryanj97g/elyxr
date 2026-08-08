@@ -140,7 +140,23 @@ static void register_dragout(FlView* view) {
 
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
-  gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
+  GtkWidget* toplevel = gtk_widget_get_toplevel(GTK_WIDGET(view));
+  gtk_widget_show(toplevel);
+  // Pin the window's base cursor to the normal arrow. This window is undecorated
+  // AND transparent, and nothing else sets a cursor on it — so it inherits the
+  // X11 root window's cursor, which is the crosshair. Flutter overrides this
+  // per-widget (the click cursor on the screws, etc.); this fixes the default
+  // underneath so bare/transparent regions never show the crosshair. Native, so
+  // no Dart rebuild ever affected it — which is why it survived every update.
+  GdkWindow* gdk_window = gtk_widget_get_window(toplevel);
+  if (gdk_window != nullptr) {
+    GdkDisplay* display = gtk_widget_get_display(toplevel);
+    GdkCursor* cursor = gdk_cursor_new_from_name(display, "default");
+    if (cursor != nullptr) {
+      gdk_window_set_cursor(gdk_window, cursor);
+      g_object_unref(cursor);
+    }
+  }
 }
 
 // Implements GApplication::activate.
