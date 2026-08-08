@@ -12,6 +12,7 @@ import 'design/tokens.dart';
 import 'state/session.dart';
 import 'state/settings.dart';
 import 'state/transfers.dart';
+import 'util/open_external.dart';
 import 'util/shake_to_close.dart';
 
 Future<void> main() async {
@@ -58,6 +59,11 @@ Future<void> main() async {
 
   await session.boot();
   await transfers.load();
+
+  // Reclaim any working copies a previous run left in the temp folder (opened
+  // files whose cleanup didn't get to run — a crash or force-quit). Fire and
+  // forget; it never blocks startup.
+  OpenExternal.sweepStale();
 
   // No global audio init needed — audioplayers creates players on demand and
   // uses the system's GStreamer, so there's nothing to start up here.

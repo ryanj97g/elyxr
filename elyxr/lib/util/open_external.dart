@@ -54,23 +54,55 @@ class OpenExternal {
     if (_watching.contains(remotePath)) return;
     _watching.add(remotePath);
 
-    var lastHash = 0;
-    local.readAsBytes().then((b) => lastHash = _hash(b)).catchError((_) => 0);
+    // The temp dir that holds this working copy (createTemp made one per open).
+    // Deleting it when we're done is what reclaims the space — this is "limbo".
+    final tempDir = local.parent;
+    // Content already safely in the trove (initial download == the trove copy).
+    var syncedHash = 0;
+    local.readAsBytes().then((b) => syncedHash = _hash(b)).catchError((_) => 0);
 
     Timer? settle;
     Timer? idle;
     StreamSubscription? sub;
+    var finishing = false;
 
-    void disarm() {
+    Future<void> syncIfChanged() async {
+      final bytes = await local.readAsBytes();
+      final h = _hash(bytes);
+      if (h == syncedHash) return;
+      // The edit's own save time is the timestamp that rides to the trove —
+      // last writer wins, and this is when this writer wrote.
+      final mtime = (await local.lastModified()).millisecondsSinceEpoch ~/ 1000;
+      await _syncBack(client, remotePath, bytes, mtime);
+      syncedHash = h;
+    }
+
+    // Tear down: make sure the final edit reached the trove, then delete the
+    // working copy so it doesn't bloat the temp folder. If that last confirm
+    // fails (e.g. the proxy is unreachable), keep the copy so no edit is lost —
+    // a stale leftover is swept on the next launch (by then earlier saves have
+    // already synced), so nothing accumulates forever either way.
+    Future<void> finish() async {
+      if (finishing) return;
+      finishing = true;
       settle?.cancel();
       idle?.cancel();
-      sub?.cancel();
+      await sub?.cancel();
+      try {
+        await syncIfChanged();
+      } catch (_) {
+        _watching.remove(remotePath);
+        return;
+      }
+      try {
+        await tempDir.delete(recursive: true);
+      } catch (_) {}
       _watching.remove(remotePath);
     }
 
     void armIdle() {
       idle?.cancel();
-      idle = Timer(const Duration(minutes: 10), disarm);
+      idle = Timer(const Duration(minutes: 10), finish);
     }
 
     armIdle();
@@ -80,21 +112,33 @@ class OpenExternal {
       // Wait for writes to settle, then sync only if the content really changed.
       settle = Timer(const Duration(seconds: 2), () async {
         try {
-          final bytes = await local.readAsBytes();
-          final h = _hash(bytes);
-          if (h == lastHash) return;
-          lastHash = h;
-          // The edit's own save time is the timestamp that rides to the trove —
-          // last writer wins, and this is when this writer wrote.
-          final mtime =
-              (await local.lastModified()).millisecondsSinceEpoch ~/ 1000;
-          await _syncBack(client, remotePath, bytes, mtime);
+          await syncIfChanged();
         } catch (_) {
           // A transient read/upload failure is retried on the next save; the
           // proxy's own queue covers a lapse.
         }
       });
-    }, onError: (_) => disarm(), onDone: disarm);
+    }, onError: (_) => finish(), onDone: finish);
+  }
+
+  /// Delete any working copies left behind by a previous run (a crash, or a
+  /// force-quit before the 10-minute idle cleanup fired). Safe to call at
+  /// startup: every elyxr_open_* temp dir belongs to an earlier session, and
+  /// each edit was already synced back on save, so nothing unsaved is lost.
+  static Future<void> sweepStale() async {
+    try {
+      final tmp = Directory.systemTemp;
+      await for (final e in tmp.list(followLinks: false)) {
+        if (e is Directory && e.path.split(Platform.pathSeparator).last
+            .startsWith('elyxr_open_')) {
+          try {
+            await e.delete(recursive: true);
+          } catch (_) {}
+        }
+      }
+    } catch (_) {
+      // No temp access / nothing to sweep — never fatal.
+    }
   }
 
   /// Upload the edited bytes back. This goes to the local proxy, which holds it

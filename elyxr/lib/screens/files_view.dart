@@ -16,6 +16,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/actions.dart';
 import '../state/browse.dart';
+import '../state/music.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
 import '../util/drag_out.dart';
@@ -577,7 +578,7 @@ class _Row extends StatelessWidget {
         if (HardwareKeyboard.instance.isShiftPressed) {
           browse.selectRange(index);
         } else {
-          browse.selectOnly(index);
+          _selectEntry(context, browse, index, entry);
         }
       },
       onDoubleTap: () => _openEntry(context, browse, entry),
@@ -646,6 +647,22 @@ class _Row extends StatelessWidget {
   }
 }
 
+/// A plain single click: select just this entry (its details fill the box
+/// below). If it's an audio file, one click also starts it in the in-app
+/// player — no extra button, no long-press.
+void _selectEntry(
+    BuildContext context, BrowseController browse, int index, Entry entry) {
+  browse.selectOnly(index);
+  if (!entry.isDir && isAudioName(entry.name)) {
+    final client = context.read<SessionController>().client;
+    if (client != null) {
+      final path =
+          browse.path.isEmpty ? entry.name : '${browse.path}/${entry.name}';
+      context.read<MusicController>().playTroveFile(client, path, entry.name);
+    }
+  }
+}
+
 /// Open an entry the way a double-click should: a folder navigates into itself;
 /// a file is downloaded to limbo and handed to the OS default app, with edits
 /// synced back to the trove (see OpenExternal) — no preview overlay, no dialog.
@@ -694,7 +711,7 @@ class _FileGrid extends StatelessWidget {
             // Single click = select this one; double-click = open it (folder
             // navigates, file opens in the default app via limbo); click-and-hold
             // = multi-select.
-            onTap: () => browse.selectOnly(i),
+            onTap: () => _selectEntry(context, browse, i, e),
             onDoubleTap: () => _openEntry(context, browse, e),
             onLongPress: () => browse.toggle(i),
             child: Container(
