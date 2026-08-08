@@ -12,7 +12,11 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
   never reaches across the tailnet itself. It runs as a systemd *user* service
   and shows a system-tray icon.
 - **elyxr** (Flutter) — the app, and the main way in on every device. It browses,
-  opens, and edits the trove; a Server/Client toggle sets the device's role.
+  opens, plays, and edits the trove; a Server/Client toggle sets the device's
+  role. A single click selects a file (audio plays in a built-in player); a
+  double-click opens it in the default program; click-and-hold multi-selects.
+  Terminal fonts dropped into `elyxr/assets/fonts/custom/` are registered at
+  runtime, so adding a face needs no code change.
 - **gate** (Rust, FUSE) — optional, Linux-only. Surfaces the trove as a real
   folder in your file manager (off by default; Settings → *Use System File
   Browser*). It's a thin window onto the local lymnal proxy, so it rides the same
@@ -59,11 +63,13 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
   **passing through** (synced, ordinary LRU). It is never the trove and never a
   user-facing folder.
 - **Editing syncs back.** Open a file in your default program and elyxr watches
-  the copy; a real change — writes settled for a moment, and the content actually
-  different — uploads back through the proxy. It lands on the trove at once when
-  reachable, and otherwise stays *held*, where a background pusher retries every
-  few seconds until it lands. So a save made during a lapse is never lost, and the
-  refresh control drains the queue on demand.
+  the copy — both by file-system events and a periodic re-scan, so a save is
+  caught even from editors that write to a temp file and rename it into place. A
+  real change (writes settled for a moment, and the content actually different)
+  uploads back through the proxy. It lands on the trove at once when reachable,
+  and otherwise stays *held*, where a background pusher retries every few seconds
+  until it lands. So a save made during a lapse is never lost, and the refresh
+  control drains the queue on demand.
 - **Last writer wins.** A write is a deliberate act, so the most recent upload is
   the truth; each carries the edit's own save time. A commit that could only fit
   in limbo by dropping held work is refused instead — held work is never
@@ -97,6 +103,14 @@ Everything you need to *use* elyxr is in the [README](README.md). This is the
 - The installer (`elyxr.sh`) is also the updater: it rebuilds only what changed,
   re-installs a binary only when it differs, and restarts the service only when
   its binary changed.
+- **A routine update needs no password.** Everything it does — pull the code,
+  rebuild, install the user-space binaries, reopen the app — happens without root.
+  A background, tray, or fleet update runs detached with no terminal, so it never
+  blocks on a password prompt: it applies all the no-root work and, if it ever
+  finds a genuinely new *system* package (which does need root, once), it skips
+  that part and posts a notification asking you to run the installer once in a
+  terminal to finish it. That first-time system setup is the only step that ever
+  asks for a password.
 - A restart first waits for any in-flight upload to finish (`lymnal drain`), so an
   update never cuts one off.
 - Because **lymnal** — the always-on service, not the app — receives the

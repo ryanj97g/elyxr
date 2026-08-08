@@ -87,17 +87,20 @@ lymnal bind seal
 
 The trove is a live window into the server, not a copy:
 
-- **Open a file** and just that file downloads, right then. Images preview in the
-  app; other files open in your default program, and any edits you save come back
-  to the trove on their own.
+- **Click a file** to select it — its details show in the panel below. Click an
+  audio file and it plays in the built-in player.
+- **Double-click a file** to open it: just that file downloads, right then, and
+  opens in your default program. Any edits you save come back to the trove on
+  their own — and even if the server is briefly unreachable, the change waits on
+  this device and lands the moment it's back.
+- **Click and hold** to select several files at once.
 - **Add a file** — the app's upload button, or drag one in — and it's saved to the
   server, so every device sees it.
 - **Drag a file out** of the app's window and it downloads to wherever you drop it.
 - **Delete a file** and it's gone everywhere. The app asks first, since the trove
   is shared.
 
-No syncing by hand — using the files *is* the sync. A save made while the server
-is unreachable waits on this device and lands the moment it's back.
+No syncing by hand — using the files *is* the sync.
 
 ## Updates
 
@@ -116,7 +119,8 @@ it's just how it looks and feels on this device:
   white one's brightness).
 - **Tube** — dark glow, or light paper.
 - **Density** — how large the text sits.
-- **Typeface** — the terminal font, from VT323 to a dozen others.
+- **Typeface** — the terminal font, from VT323 to a dozen others. Drop your own
+  `.ttf`/`.otf` files into `elyxr/assets/fonts/custom/` and they show up here too.
 
 And a few practical ones, in the same place:
 
