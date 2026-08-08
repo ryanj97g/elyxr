@@ -67,7 +67,7 @@ fn run_service(config_path: PathBuf) -> anyhow::Result<()> {
         // A client device: the tray shows it's linked to its server and stays up
         // while lymnal keeps the device updated and proxies the trove locally.
         let host = link.server.split(':').next().unwrap_or(&link.server).to_string();
-        let _tray = tray::spawn(format!("connected to {host}"), app_bin, repo);
+        let _tray = tray::spawn(format!("connected to {host}"), app_bin, repo, config_path.clone());
         // The update-watcher runs on its own thread (a blocking SSE loop)…
         let watch = agent::Link {
             server: link.server.clone(),
@@ -239,8 +239,11 @@ async fn serve(
     // A server device: the tray names the trove it's sharing. Register it from a
     // plain thread — the tray's setup does a blocking wait that must not run on a
     // tokio worker — and park there so its handle (and the icon) stay alive.
+    let tray_config = config_path.clone();
     std::thread::spawn(move || {
-        if let Some(_handle) = tray::spawn(format!("serving {trove_name}"), app_bin, repo) {
+        if let Some(_handle) =
+            tray::spawn(format!("serving {trove_name}"), app_bin, repo, tray_config)
+        {
             std::thread::park();
         }
     });

@@ -20,6 +20,7 @@ pub fn spawn(
     _status: String,
     _app_bin: Option<std::path::PathBuf>,
     _repo: Option<std::path::PathBuf>,
+    _config_path: std::path::PathBuf,
 ) -> Option<()> {
     None
 }
@@ -66,9 +67,12 @@ mod linux_tray {
         /// The installed elyxr app, so "Open elyxr" can launch it. `None` on a
         /// headless install (--no-app), which just omits that menu item.
         pub app_bin: Option<PathBuf>,
-        /// The elyxr repo, so "Update now" can re-run the installer. `None` if we
-        /// couldn't find it, which omits that item.
+        /// The elyxr repo. `None` if we couldn't find it, which omits "Update
+        /// now" (there'd be nothing to build from).
         pub repo: Option<PathBuf>,
+        /// This device's lymnal config, so "Update now" runs the exact same update
+        /// the app button and `lymnal update` do (agent::update_fleet_and_self).
+        pub config_path: PathBuf,
     }
 
     impl ksni::Tray for LymnalTray {
@@ -96,6 +100,7 @@ mod linux_tray {
             use ksni::menu::*;
             let app_bin = self.app_bin.clone();
             let repo = self.repo.clone();
+            let config_path = self.config_path.clone();
             let mut items: Vec<ksni::MenuItem<Self>> = vec![
                 StandardItem {
                     label: self.status.clone(),
@@ -122,25 +127,16 @@ mod linux_tray {
                     .into(),
                 );
             }
-            if let Some(dir) = repo {
+            if repo.is_some() {
+                let cfg = config_path.clone();
                 items.push(
                     StandardItem {
                         label: "Update now".into(),
+                        // The exact same update the app's button and `lymnal
+                        // update` run — one function, one robust path (detached
+                        // scope, fleet-wide, survives the restart it performs).
                         activate: Box::new(move |_| {
-                            let script = dir.join("elyxr.sh");
-                            // Own systemd scope so restarting lymnal mid-update
-                            // doesn't kill the update along with the tray.
-                            let _ = std::process::Command::new("systemd-run")
-                                .args(["--user", "--scope", "--quiet", "bash"])
-                                .arg(&script)
-                                .current_dir(&dir)
-                                .spawn()
-                                .or_else(|_| {
-                                    std::process::Command::new("bash")
-                                        .arg(&script)
-                                        .current_dir(&dir)
-                                        .spawn()
-                                });
+                            crate::agent::update_fleet_and_self(&cfg);
                         }),
                         ..Default::default()
                     }
@@ -183,11 +179,13 @@ mod linux_tray {
         status: String,
         app_bin: Option<PathBuf>,
         repo: Option<PathBuf>,
+        config_path: PathBuf,
     ) -> Option<ksni::blocking::Handle<LymnalTray>> {
         let tray = LymnalTray {
             status,
             app_bin,
             repo,
+            config_path,
         };
         // assume_sni_available: lymnal starts at login, often before the
         // desktop's tray host is ready. Without this a not-ready host fails the
@@ -219,6 +217,7 @@ mod windows_tray {
         status: String,
         _app_bin: Option<PathBuf>,
         repo: Option<PathBuf>,
+        config_path: PathBuf,
     ) -> Option<Handle> {
         // On Windows the app sits next to lymnal (the installer puts elyxr.exe and
         // lymnal.exe in one folder), so find it there rather than trusting the
@@ -229,14 +228,19 @@ mod windows_tray {
             .filter(|p| p.exists());
 
         let handle = std::thread::spawn(move || {
-            if let Err(e) = run(status, app_bin, repo) {
+            if let Err(e) = run(status, app_bin, repo, config_path) {
                 tracing::debug!(error = %e, "couldn't show lymnal in the system tray");
             }
         });
         Some(Handle(handle))
     }
 
-    fn run(status: String, app_bin: Option<PathBuf>, _repo: Option<PathBuf>) -> anyhow::Result<()> {
+    fn run(
+        status: String,
+        app_bin: Option<PathBuf>,
+        _repo: Option<PathBuf>,
+        config_path: PathBuf,
+    ) -> anyhow::Result<()> {
         let menu = Menu::new();
         let status_item = MenuItem::new(&status, false, None);
         menu.append(&status_item)?;
@@ -267,8 +271,9 @@ mod windows_tray {
                         let _ = std::process::Command::new(bin).spawn();
                     }
                 } else if ev.id == update_id {
-                    // Same update the agent runs — a prebuilt fetch on Windows.
-                    crate::agent::update_now(std::path::Path::new(""));
+                    // The exact same update the app's button and `lymnal update`
+                    // run (a prebuilt fetch on Windows), fleet-wide.
+                    crate::agent::update_fleet_and_self(&config_path);
                 } else if ev.id == refresh_id {
                     refresh_connection();
                 }

@@ -119,14 +119,17 @@ pub fn trigger_local_update(config_path: PathBuf) {
     run_installer(&config_path);
 }
 
+/// Run the installer to update THIS device — the single code path every trigger
+/// funnels through: the app's Update button and the tray's "Update now" (both via
+/// `update_fleet_and_self`), the `lymnal update` command, and this agent's own
+/// auto-update. Guarded so one process can't launch two at once.
 fn run_installer(config_path: &Path) {
-    // Only one install at a time, whichever trigger fires first.
     if INSTALLING.swap(true, Ordering::SeqCst) {
         return;
     }
-    tracing::info!("client agent: server announced an update, updating this device");
+    tracing::info!("update: applying to this device");
     #[cfg(not(target_os = "windows"))]
-    update_from_source(config_path);
+    launch_local_installer(config_path);
     #[cfg(target_os = "windows")]
     {
         let _ = config_path; // the Windows update doesn't need the repo
@@ -134,33 +137,59 @@ fn run_installer(config_path: &Path) {
     }
 }
 
-/// Linux/Unix: rebuild from the checked-out source by re-running the installer
-/// in its own systemd scope, so restarting lymnal partway through (the installer
-/// does that) doesn't kill the update along with the agent that started it.
+/// Linux/Unix: re-run the installer detached in its own systemd scope, so the
+/// lymnal/app restart it performs can't kill the update midway. The scope carries
+/// a fixed unit name (`elyxr-update`), so a second trigger while one is already
+/// running is refused by systemd — no double builds, no matter how many places
+/// (app, tray, command, agent) fire at once. Falls back to a plain detached run
+/// where systemd-run isn't available.
 #[cfg(not(target_os = "windows"))]
-fn update_from_source(config_path: &Path) {
+pub fn launch_local_installer(config_path: &Path) {
     let repo = match crate::cli::find_repo(config_path) {
         Ok(r) => r,
         Err(e) => {
-            tracing::warn!(error = %e, "client agent: can't find the repo to update from");
+            tracing::warn!(error = %e, "update: can't find the repo to update from");
             INSTALLING.store(false, Ordering::SeqCst);
             return;
         }
     };
     let script = repo.join("elyxr.sh");
     let started = std::process::Command::new("systemd-run")
-        .args(["--user", "--scope", "--quiet", "bash"])
+        .args(["--user", "--scope", "--unit=elyxr-update", "--quiet", "bash"])
         .arg(&script)
         .current_dir(&repo)
         .spawn();
     if let Err(e) = started {
-        // No systemd-run (unusual): fall back to a plain detached run.
-        tracing::warn!(error = %e, "client agent: systemd-run failed, running the installer directly");
-        let _ = std::process::Command::new("bash")
+        tracing::warn!(error = %e, "update: systemd-run unavailable; running the installer detached");
+        let _ = std::process::Command::new("setsid")
+            .arg("bash")
             .arg(&script)
             .current_dir(&repo)
-            .spawn();
+            .spawn()
+            .or_else(|_| {
+                std::process::Command::new("bash")
+                    .arg(&script)
+                    .current_dir(&repo)
+                    .spawn()
+            });
     }
+}
+
+/// A person triggered a full update on THIS device — the app's Update button, the
+/// tray's "Update now", or `lymnal update`. All three call this, so they behave
+/// identically: notify the rest of the fleet (best-effort — a client asks its
+/// server to update everyone, a server broadcasts to its clients) and then update
+/// this device. A duplicate install from the fleet broadcast echoing back is
+/// refused by the installer's fixed scope name.
+pub fn update_fleet_and_self(config_path: &Path) {
+    if let Some(dir) = config_path.parent() {
+        if let Some(link) = load_link(dir) {
+            let _ = crate::cli::request_fleet_update(&link);
+        } else {
+            let _ = crate::cli::announce_update_to_clients(config_path);
+        }
+    }
+    run_installer(config_path);
 }
 
 /// Windows: there is no compiler on the device, so an update is a *fetch*, not a
