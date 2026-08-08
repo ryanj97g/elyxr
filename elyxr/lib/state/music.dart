@@ -15,9 +15,9 @@ import 'package:path_provider/path_provider.dart';
 
 import '../api/lymnal_client.dart';
 
-/// Audio extensions the player accepts — common formats plus tracker modules
-/// (demoscene/keygen fare). Module playback depends on the engine's decoders;
-/// where a module can't be decoded, that track simply won't play.
+/// Audio extensions the player accepts — common formats SoLoud decodes directly,
+/// plus tracker modules (.xm/.mod/.s3m/.it, demoscene/keygen fare) which are
+/// rendered to PCM on load (see MusicController._renderModule) so they play too.
 const kAudioExts = {
   'ogg', 'mp3', 'wav', 'flac', 'm4a', 'aac', 'opus',
   'xm', 'mod', 's3m', 'it',
@@ -98,7 +98,7 @@ class MusicController extends ChangeNotifier {
     _pos = Duration.zero;
     try {
       if (_handle != null) await _sl.stop(_handle!);
-      _source = await _sl.loadAsset(_tracks[_index]);
+      _source = await _loadAssetPlayable(_tracks[_index]);
       _dur = _sl.getLength(_source!);
       _handle = _sl.play(_source!, volume: 0.9);
       _playing = true;
@@ -107,6 +107,15 @@ class MusicController extends ChangeNotifier {
       _playing = false;
     }
     notifyListeners();
+  }
+
+  /// Start the built-in easter-egg soundtrack from the top. This is what
+  /// Nostalgia Mode triggers when it switches on. No-op if audio is down or the
+  /// baked-in playlist is empty; if something is already playing it restarts the
+  /// playlist from the first track.
+  Future<void> startBuiltIn() async {
+    if (!_ready || _tracks.isEmpty) return;
+    await playIndex(0);
   }
 
   /// Stream and play one audio file from the trove (long-press on a client file
@@ -118,11 +127,14 @@ class MusicController extends ChangeNotifier {
       final bytes = await client.downloadBytes(path);
       final dir = await getTemporaryDirectory();
       final dot = path.lastIndexOf('.');
-      final ext = dot >= 0 ? path.substring(dot) : '';
-      final f = File('${dir.path}/elyxr_stream$ext');
+      final ext = dot >= 0 ? path.substring(dot + 1).toLowerCase() : '';
+      final f = File('${dir.path}/elyxr_stream.$ext');
       await f.writeAsBytes(bytes, flush: true);
       if (_handle != null) await _sl.stop(_handle!);
-      _source = await _sl.loadFile(f.path);
+      // A tracker module has to be rendered to PCM first (SoLoud can't decode
+      // them); everything else SoLoud loads directly.
+      final playable = _isModule(ext) ? await _renderModule(f.path, ext) : f.path;
+      _source = await _sl.loadFile(playable);
       _dur = _sl.getLength(_source!);
       _override = _pretty(name);
       _pos = Duration.zero;
@@ -133,6 +145,50 @@ class MusicController extends ChangeNotifier {
       _playing = false;
     }
     notifyListeners();
+  }
+
+  // Tracker-module extensions SoLoud can't decode on its own — rendered to WAV
+  // first (see _renderModule).
+  static const _moduleExts = {'xm', 'mod', 's3m', 'it'};
+  bool _isModule(String ext) => _moduleExts.contains(ext.toLowerCase());
+
+  /// Load a bundled track. A normal format goes straight into SoLoud; a tracker
+  /// module is extracted to disk and rendered to WAV first, because SoLoud has no
+  /// module decoder.
+  Future<AudioSource> _loadAssetPlayable(String assetKey) async {
+    final ext = assetKey.split('.').last.toLowerCase();
+    if (!_isModule(ext)) return _sl.loadAsset(assetKey);
+    final data = await rootBundle.load(assetKey);
+    final dir = await getTemporaryDirectory();
+    final src = File('${dir.path}/elyxr_asset_${assetKey.hashCode & 0x7fffffff}.$ext');
+    await src.writeAsBytes(data.buffer.asUint8List(), flush: true);
+    final wav = await _renderModule(src.path, ext);
+    return _sl.loadFile(wav);
+  }
+
+  /// Render a tracker module (.xm/.mod/.s3m/.it) to a temp WAV so SoLoud — which
+  /// only decodes mp3/ogg/wav/flac — can play it, with the FFT visualiser still
+  /// reacting since it's PCM by then. Prefers openmpt123 (a purpose-built module
+  /// renderer, installed by elyxr.sh); falls back to ffmpeg if it's present.
+  /// Cached by input path. If no renderer is available it returns the original
+  /// path unchanged (SoLoud then simply won't load it — no worse than before).
+  Future<String> _renderModule(String inPath, String ext) async {
+    final dir = await getTemporaryDirectory();
+    final out = '${dir.path}/elyxr_mod_${inPath.hashCode & 0x7fffffff}.wav';
+    if (File(out).existsSync()) return out;
+    final attempts = <List<String>>[
+      ['openmpt123', '--quiet', '--force', '--render', '-o', out, inPath],
+      ['ffmpeg', '-y', '-loglevel', 'error', '-i', inPath, out],
+    ];
+    for (final a in attempts) {
+      try {
+        final r = await Process.run(a.first, a.sublist(1));
+        if (r.exitCode == 0 && File(out).existsSync()) return out;
+      } catch (_) {
+        // renderer not installed — try the next
+      }
+    }
+    return inPath;
   }
 
   void _startPoll() {

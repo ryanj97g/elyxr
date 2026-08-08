@@ -15,7 +15,6 @@ import '../state/music.dart';
 import '../state/sound.dart';
 import '../state/updater.dart';
 import '../util/device.dart';
-import '../widgets/nostalgia/music_player.dart';
 import 'server_view.dart';
 
 class SettingsView extends StatelessWidget {
@@ -70,13 +69,8 @@ class SettingsView extends StatelessWidget {
                 // above everything numbered, so it reads as the mode gate it is.
                 _NostalgiaRow(palette: p),
                 const SizedBox(height: 13),
-                // The music deck: in Nostalgia Mode, or whenever a track is
-                // playing (e.g. a trove file streamed from anywhere).
-                if (settings.nostalgia ||
-                    context.select<MusicController, bool>((m) => m.active)) ...[
-                  _section(p, '♪', 'MUSIC', MusicPlayerPanel(palette: p)),
-                  const SizedBox(height: 13),
-                ],
+                // The music player lives on the first page (always visible), not
+                // here — Settings never hosts it.
                 // On the server device, its controls (pairing, limits, recent
                 // problems) live here in Settings, since the tube now shows the
                 // trove's files like every other device.
@@ -190,8 +184,12 @@ class _NostalgiaRow extends StatelessWidget {
             s.nostalgia = now;
             final sound = context.read<SoundController>();
             sound.toggle(now);
-            // A laugh every time it switches on — always, stacking.
-            if (now) sound.laugh();
+            // Switching on: the laugh plays (always, stacking) and the built-in
+            // easter-egg soundtrack starts through the always-present player.
+            if (now) {
+              sound.laugh();
+              context.read<MusicController>().startBuiltIn();
+            }
           },
           behavior: HitTestBehavior.opaque,
           child: Padding(

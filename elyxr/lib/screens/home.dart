@@ -13,7 +13,6 @@ import '../state/session.dart';
 import '../state/settings.dart';
 import '../widgets/nostalgia/cursor_trail.dart';
 import '../widgets/nostalgia/matrix_rain.dart';
-import '../widgets/nostalgia/mini_music_bar.dart';
 import '../widgets/nostalgia/snake_game.dart';
 import '../widgets/nostalgia/transfer_hud.dart';
 import '../widgets/rails.dart';
@@ -166,16 +165,6 @@ class _HomeScreenState extends State<HomeScreen> {
             left: 14,
             right: 14,
             child: TransferHud(palette: p),
-          ),
-        // The mini music bar rides at the bottom of the tube whenever a track is
-        // active — any mode, since streaming a trove file isn't a nostalgia-only
-        // feature. It self-hides when nothing's playing.
-        if (!_inSettings)
-          Positioned(
-            left: 14,
-            right: 14,
-            bottom: 62,
-            child: MiniMusicBar(palette: p),
           ),
         // Cursor trail — Nostalgia Mode only.
         if (settings.nostalgia)

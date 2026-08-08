@@ -143,8 +143,10 @@ BASE_PKGS=(curl ca-certificates)
 BUILD_PKGS=(build-essential pkg-config git fuse3 libfuse3-dev)
 # libasound2-dev is the ALSA development headers, which flutter_soloud (the app's
 # audio engine, behind the music player) compiles its ALSA backend against — the
-# app build fails with "alsa/asoundlib.h file not found" without it.
-[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libasound2-dev)
+# app build fails with "alsa/asoundlib.h file not found" without it. openmpt123
+# is a runtime tool: the player shells out to it to render tracker modules
+# (.xm/.mod/.s3m/.it) to PCM, since SoLoud can't decode them itself.
+[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libasound2-dev openmpt123)
 BASE_NEED=(); BUILD_NEED=()
 if command -v dpkg >/dev/null 2>&1; then
   for p in "${BASE_PKGS[@]}";  do dpkg -s "$p" >/dev/null 2>&1 || BASE_NEED+=("$p"); done
