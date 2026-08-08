@@ -323,15 +323,16 @@ if [ "$APP" = 1 ]; then
   phase "building the app"
   # Flutter's incremental build cache can go stale across an update: it reports
   # success while leaving the compiled Dart (build/.../lib/libapp.so) on the old
-  # build — so an update says "ok" while nothing changes on screen. Guard against
-  # it by cleaning whenever the checked-out commit differs from the one the app
-  # was last built at: a real update rebuilds from scratch and always lands,
-  # while a no-op re-run at the same commit skips the clean and stays fast. The
-  # stamp lives under build/ (gitignored); it's read before any clean and written
-  # after a successful build.
+  # build — so an update says "ok" while nothing changes on screen. When the
+  # checked-out commit differs from the last one built, force a fresh Dart
+  # compile — but NOT with `flutter clean`, which deletes build/ (the working
+  # binary and all). If the new build then failed (a bad commit), clean would
+  # leave no app at all. Instead drop only Flutter's assemble cache: that forces
+  # the recompile while the last good bundle stays put until the new one
+  # overwrites it, so a failed build can never brick the installed app.
   DART_STAMP="elyxr/build/.elyxr-built-commit"
   if [ "$(cat "$DART_STAMP" 2>/dev/null || true)" != "$ELYXR_COMMIT" ]; then
-    ( cd elyxr && sh_ flutter clean )
+    rm -rf elyxr/.dart_tool/flutter_build 2>/dev/null || true
   fi
   # Build the app (carrying the same build number lymnal does). If it fails only
   # because a plugin needs a system -dev header that isn't installed, don't let a
