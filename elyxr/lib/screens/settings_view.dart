@@ -184,11 +184,15 @@ class _NostalgiaRow extends StatelessWidget {
             s.nostalgia = now;
             final sound = context.read<SoundController>();
             sound.toggle(now);
-            // Switching on: the laugh plays (always, stacking) and the built-in
-            // easter-egg soundtrack starts through the always-present player.
+            // Switching on: the laugh plays (always, stacking). The built-in
+            // easter-egg soundtrack only auto-starts if nothing is already
+            // playing — if the player is live (a track the user picked, or a
+            // trove stream), Nostalgia leaves it alone rather than yanking it
+            // back to track 0.
             if (now) {
               sound.laugh();
-              context.read<MusicController>().startBuiltIn();
+              final music = context.read<MusicController>();
+              if (!music.active) music.startBuiltIn();
             }
           },
           behavior: HitTestBehavior.opaque,
