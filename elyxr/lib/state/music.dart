@@ -7,6 +7,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
@@ -51,6 +52,18 @@ class MusicController extends ChangeNotifier {
   // the shown title and hides the playlist index.
   String? _override;
 
+  // ---- real-time visualizer data ----
+  // The spectrum bars are NOT captured from the speakers (that path always lags
+  // by a capture buffer). Instead the *actual audio of the current track* is
+  // analysed once into a spectrogram (see _startSpectro), and the bars are read
+  // straight off the live play head. Zero capture race — it's the real FFT of
+  // the real audio, shown at the exact playback instant, so it locks to the beat
+  // and updates as fast as the screen refreshes. Row-major [frame * kVisBars].
+  Float32List? _spectro;
+  int _spectroFrames = 0;
+  double _spectroFps = 60.0;
+  int _spectroToken = 0; // bumps per track so a stale async build is discarded
+
   MusicController() {
     _player.onPositionChanged.listen((d) {
       _pos = d;
@@ -82,6 +95,45 @@ class MusicController extends ChangeNotifier {
   String titleAt(int i) => _pretty(_tracks[i]);
   bool get isStream => _override != null;
   bool get active => _hasSource && (_playing || _pos > Duration.zero);
+
+  /// Number of spectrum bars the analysis produces (and the visualizer draws).
+  static const int kVisBars = _kVisBars;
+
+  /// The spectrum bars (0..1) for the current play position — the real FFT of
+  /// the real audio at exactly this instant. Empty until the current track's
+  /// spectrogram has been analysed (the visualizer just rests flat until then).
+  List<double> visualizerBars() {
+    final s = _spectro;
+    final n = _spectroFrames;
+    if (s == null || n == 0) return const <double>[];
+    var f = (_pos.inMicroseconds * _spectroFps / 1000000.0).floor();
+    if (f < 0) f = 0;
+    if (f >= n) f = n - 1;
+    final base = f * kVisBars;
+    return List<double>.generate(kVisBars, (b) => s[base + b].toDouble());
+  }
+
+  /// Analyse the actual audio file into a spectrogram on a background isolate,
+  /// then hold it for the visualizer to sample by play position. Never blocks or
+  /// affects playback: if analysis fails (no ffmpeg, odd file), the bars simply
+  /// stay flat. Each call invalidates any earlier build via the token.
+  Future<void> _startSpectro(String path) async {
+    final token = ++_spectroToken;
+    _spectro = null;
+    _spectroFrames = 0;
+    try {
+      final res = await compute(_analyzeSpectrogram, path);
+      if (token != _spectroToken) return; // track changed mid-analysis
+      _spectro = res.data;
+      _spectroFrames = res.frames;
+      _spectroFps = res.fps;
+    } catch (_) {
+      if (token == _spectroToken) {
+        _spectro = null;
+        _spectroFrames = 0;
+      }
+    }
+  }
 
   Future<void> _load() async {
     try {
@@ -129,21 +181,24 @@ class MusicController extends ChangeNotifier {
   static const _moduleExts = {'xm', 'mod', 's3m', 'it'};
   bool _isModule(String ext) => _moduleExts.contains(ext.toLowerCase());
 
-  /// Build a playable source for a bundled asset. A normal format plays straight
-  /// from assets; a tracker module is extracted and rendered to WAV first.
-  Future<Source> _assetSource(String assetKey) async {
+  /// Build a playable source for a bundled asset, plus a local file path the
+  /// visualizer can analyse. A normal format plays straight from assets but is
+  /// also copied to a temp file so its spectrum can be computed; a tracker
+  /// module is extracted and rendered to WAV, which serves both purposes.
+  Future<(Source, String)> _assetSource(String assetKey) async {
     final ext = assetKey.split('.').last.toLowerCase();
-    if (!_isModule(ext)) {
-      // AssetSource prepends 'assets/'; our keys already start with it.
-      return AssetSource(assetKey.replaceFirst('assets/', ''));
-    }
     final data = await rootBundle.load(assetKey);
     final dir = await getTemporaryDirectory();
-    final src =
+    final local =
         File('${dir.path}/elyxr_asset_${assetKey.hashCode & 0x7fffffff}.$ext');
-    await src.writeAsBytes(data.buffer.asUint8List(), flush: true);
-    final wav = await _renderModule(src.path, ext);
-    return DeviceFileSource(wav);
+    await local.writeAsBytes(data.buffer.asUint8List(), flush: true);
+    if (_isModule(ext)) {
+      final wav = await _renderModule(local.path, ext);
+      return (DeviceFileSource(wav), wav);
+    }
+    // AssetSource prepends 'assets/'; our keys already start with it. The bars
+    // read from the temp copy, not the bundle, so both stay in sync.
+    return (AssetSource(assetKey.replaceFirst('assets/', '')), local.path);
   }
 
   /// Render a tracker module to a temp WAV (openmpt123, ffmpeg as a fallback) so
@@ -175,11 +230,12 @@ class MusicController extends ChangeNotifier {
     _override = null;
     _pos = Duration.zero;
     try {
-      final src = await _assetSource(_tracks[_index]);
+      final (src, analysisPath) = await _assetSource(_tracks[_index]);
       await _player.stop();
       await _player.play(src);
       _hasSource = true;
       _playing = true;
+      _startSpectro(analysisPath); // fire-and-forget; never blocks playback
     } catch (_) {
       _playing = false;
     }
@@ -204,6 +260,7 @@ class MusicController extends ChangeNotifier {
       _hasSource = true;
       _pos = Duration.zero;
       _playing = true;
+      _startSpectro(playable); // real spectrum for the streamed file too
     } catch (_) {
       _playing = false;
     }
@@ -286,7 +343,141 @@ class MusicController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _spectroToken++; // orphan any in-flight analysis
     _player.dispose();
     super.dispose();
+  }
+}
+
+// ---- spectrogram analysis (runs on a background isolate) ----
+
+const int _kVisBars = 28;
+
+/// A precomputed spectrogram: [frames * _kVisBars] bar levels (0..1), row-major,
+/// at [fps] frames per second. Sampled by play position for the visualizer.
+class _SpectroResult {
+  final Float32List data;
+  final int frames;
+  final double fps;
+  const _SpectroResult(this.data, this.frames, this.fps);
+}
+
+/// Decode the actual audio at [path] to PCM (via ffmpeg) and turn it into a
+/// spectrogram — a real FFT per video-frame-sized hop across the whole track.
+/// Runs on a background isolate (see compute), so the heavy work never touches
+/// the UI thread. On any failure it throws and the caller leaves the bars flat.
+Future<_SpectroResult> _analyzeSpectrogram(String path) async {
+  const int rate = 22050; // plenty for a bar visualizer, quick to process
+  const double fps = 60.0; // one spectrum per screen frame
+  const int win = 1024; // FFT window (power of two)
+  final int hop = (rate / fps).round();
+
+  // ffmpeg decodes anything GStreamer can play to raw mono s16le on stdout.
+  final res = await Process.run(
+    'ffmpeg',
+    [
+      '-v', 'error',
+      '-i', path,
+      '-f', 's16le',
+      '-acodec', 'pcm_s16le',
+      '-ac', '1',
+      '-ar', '$rate',
+      'pipe:1',
+    ],
+    stdoutEncoding: null, // raw bytes, not text
+  );
+  final raw = res.stdout as List<int>;
+  final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
+  final nSamples = bytes.length ~/ 2;
+  if (nSamples < win) throw StateError('too short to analyse');
+
+  // s16le bytes -> normalized samples.
+  final bd = ByteData.sublistView(bytes, 0, nSamples * 2);
+  final samples = Float64List(nSamples);
+  for (var i = 0; i < nSamples; i++) {
+    samples[i] = bd.getInt16(i * 2, Endian.little) / 32768.0;
+  }
+
+  // Log-spaced band edges (shared across frames): ~85Hz .. ~11kHz.
+  final half = win ~/ 2;
+  const int loBin = 2;
+  final int hiBin = (half - 1).clamp(loBin + 1, half);
+  final edges = List<int>.generate(_kVisBars + 1, (b) {
+    final v = (loBin * math.pow(hiBin / loBin, b / _kVisBars)).round();
+    return v.clamp(loBin, half);
+  });
+
+  // Precompute the Hann window once.
+  final hann = Float64List(win);
+  for (var i = 0; i < win; i++) {
+    hann[i] = 0.5 - 0.5 * math.cos(2 * math.pi * i / (win - 1));
+  }
+
+  final frames = ((nSamples - win) ~/ hop) + 1;
+  final out = Float32List(frames * _kVisBars);
+  final re = Float64List(win);
+  final im = Float64List(win);
+
+  for (var f = 0; f < frames; f++) {
+    final start = f * hop;
+    for (var i = 0; i < win; i++) {
+      re[i] = samples[start + i] * hann[i];
+      im[i] = 0.0;
+    }
+    _fft(re, im);
+    final base = f * _kVisBars;
+    for (var b = 0; b < _kVisBars; b++) {
+      final lo = edges[b];
+      final hi = math.max(edges[b + 1], lo + 1);
+      var peak = 0.0;
+      for (var k = lo; k < hi; k++) {
+        // Magnitude normalized by window so it's scale-independent (0..~1).
+        final m = math.sqrt(re[k] * re[k] + im[k] * im[k]) / (win / 2);
+        if (m > peak) peak = m;
+      }
+      // sqrt curve lifts ordinary (sub-full-scale) music into a visible swing.
+      out[base + b] = math.sqrt((peak / 0.22).clamp(0.0, 1.0)).toDouble();
+    }
+  }
+  return _SpectroResult(out, frames, fps);
+}
+
+// In-place iterative radix-2 Cooley–Tukey FFT. Length must be a power of two.
+void _fft(Float64List re, Float64List im) {
+  final n = re.length;
+  for (var i = 1, j = 0; i < n; i++) {
+    var bit = n >> 1;
+    for (; (j & bit) != 0; bit >>= 1) {
+      j ^= bit;
+    }
+    j ^= bit;
+    if (i < j) {
+      var t = re[i];
+      re[i] = re[j];
+      re[j] = t;
+      t = im[i];
+      im[i] = im[j];
+      im[j] = t;
+    }
+  }
+  for (var len = 2; len <= n; len <<= 1) {
+    final ang = -2 * math.pi / len;
+    final wlenR = math.cos(ang), wlenI = math.sin(ang);
+    final half = len >> 1;
+    for (var i = 0; i < n; i += len) {
+      var wR = 1.0, wI = 0.0;
+      for (var k = 0; k < half; k++) {
+        final aR = re[i + k], aI = im[i + k];
+        final bR = re[i + k + half] * wR - im[i + k + half] * wI;
+        final bI = re[i + k + half] * wI + im[i + k + half] * wR;
+        re[i + k] = aR + bR;
+        im[i + k] = aI + bI;
+        re[i + k + half] = aR - bR;
+        im[i + k + half] = aI - bI;
+        final nwR = wR * wlenR - wI * wlenI;
+        wI = wR * wlenI + wI * wlenR;
+        wR = nwR;
+      }
+    }
   }
 }

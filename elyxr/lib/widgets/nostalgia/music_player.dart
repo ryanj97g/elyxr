@@ -1,15 +1,13 @@
 // The music player deck: now-playing title, a draggable seek bar, shuffle/repeat,
-// a tracklist, and play/pause + skip. Every control drives real playback
-// (audioplayers). No visualizer here — playback is the point, and a real
-// spectrum needs to tap the actual audio output, which is a separate concern
-// deliberately kept off the player's critical path.
+// a tracklist, play/pause + skip, and a real spectrum visualizer. Every control
+// drives real playback (audioplayers); the visualizer reads the current track's
+// analysed spectrogram off the live play head (see MusicController) and never
+// affects playback.
 
-import 'dart:async';
-import 'dart:io';
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:provider/provider.dart';
 
 import '../../design/text.dart';
@@ -68,10 +66,11 @@ class MusicPlayerPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        // Real spectrum — FFT of the system's actual audio output (captured from
-        // the monitor source), so it reacts to whatever is truly coming out. It
-        // sits on top of the player and never affects playback.
-        SizedBox(height: 26, child: _Visualizer(palette: p)),
+        // Real spectrum — the actual audio of the current track, analysed into a
+        // spectrogram and read straight off the live play head. It's the true
+        // FFT of the true audio shown at the exact playback instant, so it locks
+        // to the beat with no capture lag. Sits on top; never affects playback.
+        SizedBox(height: 26, child: _Visualizer(palette: p, music: m)),
         const SizedBox(height: 6),
         // Seek bar — tap or drag to scrub.
         LayoutBuilder(builder: (context, c) {
@@ -240,175 +239,58 @@ class _SeekPainter extends CustomPainter {
       old.frac != frac || old.a != a;
 }
 
-/// A real spectrum: captures the system's audio OUTPUT (the monitor source) and
-/// runs an FFT over it every frame, so the bars react to what's actually coming
-/// out of the speakers — decoupled from the player entirely. If output capture
-/// isn't available it simply draws nothing; it never fakes motion and never
-/// affects playback.
+/// A real spectrum: the current track's own audio, analysed into a spectrogram
+/// (see MusicController) and sampled off the live play head every screen frame.
+/// It's the true FFT of the true audio shown at the exact playback instant — no
+/// capture pipeline, so it can't lag the beat. When nothing is playing (or the
+/// spectrogram isn't ready yet) the bars rest at zero; it never fakes motion and
+/// never affects playback.
 class _Visualizer extends StatefulWidget {
   final Palette palette;
-  const _Visualizer({required this.palette});
+  final MusicController music;
+  const _Visualizer({required this.palette, required this.music});
 
   @override
   State<_Visualizer> createState() => _VisualizerState();
 }
 
-class _VisualizerState extends State<_Visualizer> {
-  static const int _fftSize = 1024; // power of two
-  static const int _bars = 28;
-
-  Process? _proc;
-  StreamSubscription<List<int>>? _sub;
-  final Float64List _ring = Float64List(_fftSize);
-  int _written = 0;
-  int _carry = -1; // odd leftover byte between chunks
-  Timer? _timer;
-
-  final ValueNotifier<List<double>> _levels =
-      ValueNotifier<List<double>>(List<double>.filled(_bars, 0.0));
+class _VisualizerState extends State<_Visualizer>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  // Smoothed display levels — instant attack, quick decay, so the bars punch on
+  // transients and fall back fast rather than snapping or drifting.
+  final Float64List _display = Float64List(MusicController.kVisBars);
+  final ValueNotifier<List<double>> _levels = ValueNotifier<List<double>>(
+      List<double>.filled(MusicController.kVisBars, 0.0));
 
   @override
   void initState() {
     super.initState();
-    _start();
+    // A ticker fires once per frame (vsync), so the bars refresh as fast as the
+    // display and stay locked to the play position.
+    _ticker = createTicker(_tick)..start();
   }
 
-  Future<void> _start() async {
-    // Capture the system's audio OUTPUT via the default monitor source, using the
-    // OS's own recorder (parecord, from pulseaudio-utils / pipewire-pulse). Raw
-    // s16le mono at 44.1k on stdout. Linux only; elsewhere the bars stay flat.
-    // If parecord isn't present it just fails quietly — nothing, never faked.
-    if (!Platform.isLinux) return;
-    try {
-      _proc = await Process.start('parecord', const [
-        '--raw',
-        '--format=s16le',
-        '--rate=44100',
-        '--channels=1',
-        // Low latency: without this parecord buffers ~1–2s, so the bars react
-        // to audio that already played — the visualizer looks disconnected from
-        // the beat. A small target latency makes it track the music live.
-        '--latency-msec=25',
-        '--process-time-msec=10',
-        '-d',
-        '@DEFAULT_MONITOR@',
-      ]);
-      _proc!.stderr.drain<void>().catchError((_) {});
-      _sub = _proc!.stdout.listen(_onBytes, onError: (_) {}, cancelOnError: false);
-      _timer =
-          Timer.periodic(const Duration(milliseconds: 22), (_) => _compute());
-    } catch (_) {
-      // No parecord / no monitor — the bars stay flat (honest), player unaffected.
+  void _tick(Duration _) {
+    final m = widget.music;
+    // Only animate to live data while actually playing; paused/idle rests to 0.
+    final src = m.playing ? m.visualizerBars() : const <double>[];
+    final out = List<double>.filled(MusicController.kVisBars, 0.0);
+    var changed = false;
+    for (var b = 0; b < MusicController.kVisBars; b++) {
+      final target = b < src.length ? src[b] : 0.0;
+      final cur = _display[b];
+      final next = target > cur ? target : cur * 0.62 + target * 0.38;
+      if ((next - cur).abs() > 0.001) changed = true;
+      _display[b] = next;
+      out[b] = next;
     }
-  }
-
-  void _onBytes(List<int> bytes) {
-    var i = 0;
-    // Finish a sample split across chunk boundaries.
-    if (_carry >= 0 && bytes.isNotEmpty) {
-      final lo = _carry, hi = bytes[0];
-      var s = lo | (hi << 8);
-      if (s >= 0x8000) s -= 0x10000;
-      _ring[_written % _fftSize] = s / 32768.0;
-      _written++;
-      _carry = -1;
-      i = 1;
-    }
-    for (; i + 1 < bytes.length; i += 2) {
-      var s = bytes[i] | (bytes[i + 1] << 8);
-      if (s >= 0x8000) s -= 0x10000;
-      _ring[_written % _fftSize] = s / 32768.0;
-      _written++;
-    }
-    if (i < bytes.length) _carry = bytes[i]; // one byte left over
-  }
-
-  void _compute() {
-    if (_written < _fftSize) return;
-    final re = Float64List(_fftSize);
-    final im = Float64List(_fftSize);
-    final start = _written % _fftSize;
-    for (var i = 0; i < _fftSize; i++) {
-      final s = _ring[(start + i) % _fftSize];
-      // Hann window to tame spectral leakage.
-      final w = 0.5 - 0.5 * math.cos(2 * math.pi * i / (_fftSize - 1));
-      re[i] = s * w;
-    }
-    _fft(re, im);
-    final half = _fftSize ~/ 2;
-    final mag = Float64List(half);
-    for (var i = 0; i < half; i++) {
-      mag[i] = math.sqrt(re[i] * re[i] + im[i] * im[i]);
-    }
-    final prev = _levels.value;
-    final out = List<double>.filled(_bars, 0.0);
-    const int loBin = 2, hiBin = 400; // ~85Hz .. ~17kHz across the bars
-    for (var b = 0; b < _bars; b++) {
-      final lo = (loBin * math.pow(hiBin / loBin, b / _bars)).floor();
-      final hi = (loBin * math.pow(hiBin / loBin, (b + 1) / _bars))
-          .ceil()
-          .clamp(lo + 1, half);
-      var peak = 0.0;
-      for (var k = lo; k < hi; k++) {
-        if (mag[k] > peak) peak = mag[k];
-      }
-      // Scale + curve. The divisor sets sensitivity; sqrt lifts quiet detail so
-      // ordinary music (well below full scale) still swings the bars.
-      var v = math.sqrt((peak / 16.0).clamp(0.0, 1.0));
-      // Instant attack, quick-but-smooth decay so it punches on the beat and
-      // falls back fast rather than drifting like a lava lamp.
-      final p = prev[b];
-      v = v > p ? v : p * 0.62 + v * 0.38;
-      out[b] = v.clamp(0.0, 1.0);
-    }
-    _levels.value = out;
-  }
-
-  // In-place iterative radix-2 Cooley–Tukey FFT. Lengths are a power of two.
-  static void _fft(Float64List re, Float64List im) {
-    final n = re.length;
-    for (var i = 1, j = 0; i < n; i++) {
-      var bit = n >> 1;
-      for (; (j & bit) != 0; bit >>= 1) {
-        j ^= bit;
-      }
-      j ^= bit;
-      if (i < j) {
-        var t = re[i];
-        re[i] = re[j];
-        re[j] = t;
-        t = im[i];
-        im[i] = im[j];
-        im[j] = t;
-      }
-    }
-    for (var len = 2; len <= n; len <<= 1) {
-      final ang = -2 * math.pi / len;
-      final wlenR = math.cos(ang), wlenI = math.sin(ang);
-      final half = len >> 1;
-      for (var i = 0; i < n; i += len) {
-        var wR = 1.0, wI = 0.0;
-        for (var k = 0; k < half; k++) {
-          final aR = re[i + k], aI = im[i + k];
-          final bR = re[i + k + half] * wR - im[i + k + half] * wI;
-          final bI = re[i + k + half] * wI + im[i + k + half] * wR;
-          re[i + k] = aR + bR;
-          im[i + k] = aI + bI;
-          re[i + k + half] = aR - bR;
-          im[i + k + half] = aI - bI;
-          final nwR = wR * wlenR - wI * wlenI;
-          wI = wR * wlenI + wI * wlenR;
-          wR = nwR;
-        }
-      }
-    }
+    if (changed) _levels.value = out;
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
-    _sub?.cancel();
-    _proc?.kill();
+    _ticker.dispose();
     _levels.dispose();
     super.dispose();
   }

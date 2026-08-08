@@ -146,10 +146,10 @@ BUILD_PKGS=(build-essential pkg-config git fuse3 libfuse3-dev)
 # plugin sets (base/good + libav) provide the codecs so mp3/ogg/flac/etc. play
 # with the OS's own libraries — no bundled codec libs, so none of the glibc
 # mismatch that made the previous engine fail to load. openmpt123 renders tracker
-# modules (.xm/.mod/.s3m/.it) to PCM. pulseaudio-utils provides `parecord`, which
-# the visualizer uses to capture the audio output (the default monitor) and FFT
-# what's actually playing.
-[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav openmpt123 pulseaudio-utils)
+# modules (.xm/.mod/.s3m/.it) to PCM. ffmpeg decodes the current track to raw PCM
+# so the visualizer can analyse it into a spectrogram (the bars are read off the
+# play head — the real FFT of the real audio, with no capture lag).
+[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav openmpt123 ffmpeg)
 BASE_NEED=(); BUILD_NEED=()
 if command -v dpkg >/dev/null 2>&1; then
   for p in "${BASE_PKGS[@]}";  do dpkg -s "$p" >/dev/null 2>&1 || BASE_NEED+=("$p"); done
