@@ -11,6 +11,8 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/actions.dart';
 import '../state/browse.dart';
+import '../state/music.dart';
+import '../state/session.dart';
 import '../state/settings.dart';
 import '../state/transfers.dart';
 import '../util/format.dart';
@@ -50,6 +52,22 @@ class _SelectionBarState extends State<SelectionBar> {
         ? fmtCount(browse.selection.length, 'item')
         : '${fmtCount(_res!.fileCount, 'file')} · ${fmtSize(_res!.totalBytes)}';
 
+    // When exactly one thing is selected, the box shows single-file actions:
+    // PLAY (for audio, into the in-app player) and RENAME — the two things that
+    // used to hide on a long-press before click-and-hold became multi-select.
+    Entry? single;
+    if (browse.selection.length == 1) {
+      final name = browse.selection.first;
+      for (final e in browse.entries) {
+        if (e.name == name) {
+          single = e;
+          break;
+        }
+      }
+    }
+    final canPlay =
+        single != null && !single.isDir && isAudioName(single.name);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(13, 8, 13, 6),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
@@ -57,21 +75,65 @@ class _SelectionBarState extends State<SelectionBar> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Flexible(child: Text(figures, style: glass(16, p.bright), overflow: TextOverflow.ellipsis)),
-          Row(
-            children: [
-              _action(p, 'DOWNLOAD', () => _download(context, browse, actions)),
-              const SizedBox(width: 12),
-              _action(p, 'DELETE', () => _delete(context, browse, p)),
-              const SizedBox(width: 12),
-              GestureDetector(
-                onTap: browse.clearSelection,
-                child: Text('CLEAR', style: glass(16, p.mid)),
-              ),
-            ],
+          Flexible(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 12,
+              runSpacing: 2,
+              children: [
+                if (canPlay)
+                  _action(p, 'PLAY', () => _play(context, browse, single!)),
+                if (single != null)
+                  _action(p, 'RENAME',
+                      () => _rename(context, browse, p, single!.name)),
+                _action(p, 'DOWNLOAD', () => _download(context, browse, actions)),
+                _action(p, 'DELETE', () => _delete(context, browse, p)),
+                GestureDetector(
+                  onTap: browse.clearSelection,
+                  child: Text('CLEAR', style: glass(16, p.mid)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+
+  /// Stream the selected audio file from the trove into the in-app player.
+  void _play(BuildContext context, BrowseController browse, Entry entry) {
+    final client = context.read<SessionController>().client;
+    if (client == null) return;
+    final path = browse.path.isEmpty
+        ? entry.name
+        : '${browse.path}/${entry.name}';
+    context.read<MusicController>().playTroveFile(client, path, entry.name);
+  }
+
+  /// Rename with the taken-name flow: Replace / Keep both as (1) / Cancel.
+  Future<void> _rename(BuildContext context, BrowseController browse, Palette p,
+      String name) async {
+    final newName = await showRename(context, p, name);
+    if (newName == null || newName == name || !context.mounted) return;
+    try {
+      await browse.rename(name, newName);
+    } on LymnalError catch (e) {
+      if (e.code == 'TARGET_EXISTS' && context.mounted) {
+        final choice = await showConflict(context, p, newName);
+        switch (choice) {
+          case ConflictChoice.replace:
+            await browse.rename(name, newName, onConflict: 'replace');
+            break;
+          case ConflictChoice.keepBoth:
+            await browse.rename(name, newName, onConflict: 'suffix');
+            break;
+          case ConflictChoice.cancel:
+            break;
+        }
+      } else if (context.mounted) {
+        await showLymnalError(context, p, e);
+      }
+    }
   }
 
   Widget _action(Palette p, String label, VoidCallback onTap) => GestureDetector(

@@ -16,16 +16,15 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/actions.dart';
 import '../state/browse.dart';
-import '../state/music.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
 import '../util/drag_out.dart';
 import '../util/format.dart';
+import '../util/open_external.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/nostalgia/music_player.dart';
 import '../widgets/tactile.dart';
 import '../widgets/transfer_panel.dart';
-import 'preview.dart';
 
 class FilesView extends StatelessWidget {
   const FilesView({super.key});
@@ -570,25 +569,18 @@ class _Row extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      // A single click selects (so a folder can be selected to delete/move,
-      // like any file); a folder opens on double-click and a file previews —
-      // the standard file-manager convention.
+      // Single click = select this one file (its details fill the box below).
+      // Double click = open it (a folder navigates in; a file downloads to limbo
+      // and opens in your default app, edits syncing back — no dialog, no second
+      // click). Click-and-hold = multi-select. Shift-click extends a range.
       onTap: () {
         if (HardwareKeyboard.instance.isShiftPressed) {
           browse.selectRange(index);
         } else {
-          browse.toggle(index);
+          browse.selectOnly(index);
         }
       },
-      onDoubleTap: () {
-        if (isDir) {
-          browse.open(entry.name.isEmpty
-              ? browse.path
-              : (browse.path.isEmpty ? entry.name : '${browse.path}/${entry.name}'));
-        } else {
-          openPreview(context, browse.entries, index);
-        }
-      },
+      onDoubleTap: () => _openEntry(context, browse, entry),
       // Drag a file sideways to pull it out of the window; where you drop it is
       // where it downloads. A vertical drag still scrolls the list.
       onHorizontalDragStart: isDir
@@ -599,23 +591,7 @@ class _Row extends StatelessWidget {
                   : '${browse.path}/${entry.name}';
               DragOut.begin(path, entry.name);
             },
-      onLongPress: () {
-        // Long-pressing an audio file streams it from the trove into the music
-        // player (any mode). Non-audio files rename, as before.
-        if (!isDir && isAudioName(entry.name)) {
-          final client = context.read<SessionController>().client;
-          if (client != null) {
-            final path = browse.path.isEmpty
-                ? entry.name
-                : '${browse.path}/${entry.name}';
-            context
-                .read<MusicController>()
-                .playTroveFile(client, path, entry.name);
-            return;
-          }
-        }
-        _renameEntry(context, browse, p, entry.name);
-      },
+      onLongPress: () => browse.toggle(index),
       // Hover on desktop / press on touch lights the row the same way.
       child: Tactile(
         accent: p.a,
@@ -668,32 +644,23 @@ class _Row extends StatelessWidget {
       ),
     );
   }
+}
 
-  /// Rename with the taken-name flow: Replace / Keep both as (1) / Cancel.
-  Future<void> _renameEntry(
-      BuildContext context, BrowseController browse, Palette p, String name) async {
-    final newName = await showRename(context, p, name);
-    if (newName == null || newName == name || !context.mounted) return;
-    try {
-      await browse.rename(name, newName);
-    } on LymnalError catch (e) {
-      if (e.code == 'TARGET_EXISTS' && context.mounted) {
-        final choice = await showConflict(context, p, newName);
-        switch (choice) {
-          case ConflictChoice.replace:
-            await browse.rename(name, newName, onConflict: 'replace');
-            break;
-          case ConflictChoice.keepBoth:
-            await browse.rename(name, newName, onConflict: 'suffix');
-            break;
-          case ConflictChoice.cancel:
-            break;
-        }
-      } else if (context.mounted) {
-        await showLymnalError(context, p, e);
-      }
-    }
+/// Open an entry the way a double-click should: a folder navigates into itself;
+/// a file is downloaded to limbo and handed to the OS default app, with edits
+/// synced back to the trove (see OpenExternal) — no preview overlay, no dialog.
+void _openEntry(BuildContext context, BrowseController browse, Entry entry) {
+  if (entry.isDir) {
+    browse.open(entry.name.isEmpty
+        ? browse.path
+        : (browse.path.isEmpty ? entry.name : '${browse.path}/${entry.name}'));
+    return;
   }
+  final client = context.read<SessionController>().client;
+  if (client == null) return;
+  final path =
+      browse.path.isEmpty ? entry.name : '${browse.path}/${entry.name}';
+  OpenExternal.open(client, path, entry.name);
 }
 
 // ------------------------------------------------------------- file grid ---
@@ -724,16 +691,12 @@ class _FileGrid extends StatelessWidget {
           final selected = browse.selection.contains(e.name);
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
-            // Single click selects; double-click opens a folder or previews a
-            // file — so a folder can be selected to delete/move like any file.
-            onTap: () => browse.toggle(i),
-            onDoubleTap: () {
-              if (e.isDir) {
-                browse.open(browse.path.isEmpty ? e.name : '${browse.path}/${e.name}');
-              } else {
-                openPreview(context, browse.entries, i);
-              }
-            },
+            // Single click = select this one; double-click = open it (folder
+            // navigates, file opens in the default app via limbo); click-and-hold
+            // = multi-select.
+            onTap: () => browse.selectOnly(i),
+            onDoubleTap: () => _openEntry(context, browse, e),
+            onLongPress: () => browse.toggle(i),
             child: Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
