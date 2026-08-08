@@ -229,11 +229,13 @@ class Palette {
   Color aAlpha(double f) => a.withValues(alpha: f);
 }
 
-/// The visible chassis: portrait, not resizable. This is the real app size and
-/// it never changes — the chassis is always rendered at exactly this many
-/// logical pixels, full size, never scaled down to make room for anything.
+/// The visible chassis: portrait, not resizable. It carries the Galaxy S22
+/// Ultra screen proportion (1440 × 3088 px, ~19.3:9) — at this 440-wide
+/// chassis that aspect makes the height 944 (440 × 3088 / 1440 ≈ 943.6). The
+/// chassis is always rendered at exactly this many logical pixels, full size,
+/// never scaled down to make room for anything.
 const double kAppWidth = 440;
-const double kAppHeight = 884;
+const double kAppHeight = 944;
 
 /// Transparent breathing room added *around* the chassis on every side. The
 /// window is bigger than the chassis by this much — the chassis stays full
