@@ -44,6 +44,11 @@ class SettingsController extends ChangeNotifier {
   // Sounds, gated under nostalgia. Its own switch so the retro SFX can be
   // silenced without leaving nostalgia mode.
   bool _sound = true;
+  // A dev-only escape hatch: let the normally-locked window be resized. Purely
+  // in-memory — never persisted, never on by default, off on every launch, and
+  // undocumented. The window is meant to be a fixed size; this is the buried way
+  // out for when it isn't.
+  bool _allowResize = false;
 
   Accent get accent => _accent;
   Density get density => _density;
@@ -60,6 +65,7 @@ class SettingsController extends ChangeNotifier {
   String get termFont => _termFont;
   bool get nostalgia => _nostalgia;
   bool get sound => _sound;
+  bool get allowResize => _allowResize;
 
   void _load() {
     _accent = _enumByName(Accent.values, _prefs.getString('accent'), Accent.green);
@@ -124,6 +130,14 @@ class SettingsController extends ChangeNotifier {
   set nostalgia(bool v) {
     if (_nostalgia == v) return;
     _nostalgia = v;
+    notifyListeners();
+  }
+
+  // In-session only, like nostalgia: never written to prefs, so it's off on
+  // every launch. Applying it to the actual window is the settings toggle's job.
+  set allowResize(bool v) {
+    if (_allowResize == v) return;
+    _allowResize = v;
     notifyListeners();
   }
   set sound(bool v) => _set('sound', () => _sound = v, () => _prefs.setBool('sound', v));

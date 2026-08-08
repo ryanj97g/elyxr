@@ -1,7 +1,7 @@
 name: elyxr
 description: "Elyxr — reach a folder on the server from anywhere."
 publish_to: 'none'
-version: 2.0.5
+version: 0.9.0
 
 environment:
   sdk: ^3.9.0
@@ -36,6 +36,7 @@ flutter:
     - assets/branding/
     - assets/sounds/
     - assets/music/
+    - assets/nonsense.txt
 
   fonts:
     - family: Chakra Petch
