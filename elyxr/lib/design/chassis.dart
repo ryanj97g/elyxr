@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../widgets/speakers.dart';
 import 'tokens.dart';
 
 /// The tinted metal chassis: a gradient body with a border and an inner
@@ -42,8 +43,12 @@ class Chassis extends StatelessWidget {
         border: Border.all(color: p.mb, width: 1),
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Column(
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
+          Positioned.fill(
+            child: Column(
+              children: [
           // A machined-metal bevel: a bright highlight hairline catches the
           // light at the top edge, and a dark recessed hairline sits in shadow
           // at the bottom — together the panel reads as raised, brushed metal.
@@ -61,6 +66,23 @@ class Chassis extends StatelessWidget {
           const SizedBox(height: 2),
           // The recessed bottom hairline — the shadowed underside of the bevel.
           Container(height: 1, color: p.mv1),
+              ],
+            ),
+          ),
+          // Woofers moulded into the bottom corners: each covers the tube's
+          // bottom corner beneath it (a reverse notch) and the end of the
+          // bottom rail — which is why the rail's controls are inset to live in
+          // the space between them.
+          Positioned(
+            left: 0,
+            bottom: 0,
+            child: CornerSpeaker(palette: p, left: true),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: CornerSpeaker(palette: p, left: false),
+          ),
         ],
       ),
     );

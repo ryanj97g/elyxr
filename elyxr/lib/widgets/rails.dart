@@ -12,7 +12,6 @@ import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
 import 'nostalgia/nonsense_button.dart';
-import 'speakers.dart';
 
 /// The top rail: screw · ELYXR · hold-bar · vent · v0.9 · screw.
 ///
@@ -230,7 +229,9 @@ class BottomRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = palette;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(3, 1, 3, 2),
+      // Inset on both sides so the controls sit in the screen space *between*
+      // the two corner woofers, never under them.
+      padding: const EdgeInsets.fromLTRB(72, 1, 72, 2),
       child: Row(
         children: [
           // TEXT / GRID rocker — only meaningful on the file list.
@@ -249,10 +250,6 @@ class BottomRail extends StatelessWidget {
                 ],
               ),
             ),
-          const Spacer(),
-          // Two woofers that bump to the music's bass (real spectrum), centred
-          // on the rail in the space that was empty.
-          SpeakerPair(palette: p),
           const Spacer(),
           if (nostalgia) ...[
             NonsenseButton(palette: p),

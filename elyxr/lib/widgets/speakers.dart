@@ -1,7 +1,11 @@
-// Two little woofers on the bottom rail that bump to the music. Not faked: they
-// read the same live spectrum the visualizer does (MusicController.visualizerBars,
-// sampled off the play head), take the low end, and push the cone + glow on the
-// bass. Still metal grilles when nothing's playing.
+// Woofers built into the bottom corners of the chassis. Each is a metal pod
+// shaped to the corner — it covers the tube's corner underneath (a reverse
+// notch), so the screen reads as moulded around a real speaker — with a grille
+// that bumps to the music's bass. Not faked: the bass comes from the same live
+// spectrum the visualizer uses (MusicController.visualizerBars, off the play
+// head). Still a metal grille when nothing's playing.
+
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
@@ -11,16 +15,18 @@ import 'package:provider/provider.dart';
 import '../design/tokens.dart';
 import '../state/music.dart';
 
-class SpeakerPair extends StatefulWidget {
+class CornerSpeaker extends StatefulWidget {
   final Palette palette;
+  final bool left; // bottom-left vs bottom-right — corner shaping mirrors.
   final double size;
-  const SpeakerPair({super.key, required this.palette, this.size = 20});
+  const CornerSpeaker(
+      {super.key, required this.palette, required this.left, this.size = 66});
 
   @override
-  State<SpeakerPair> createState() => _SpeakerPairState();
+  State<CornerSpeaker> createState() => _CornerSpeakerState();
 }
 
-class _SpeakerPairState extends State<SpeakerPair>
+class _CornerSpeakerState extends State<CornerSpeaker>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   double _level = 0;
@@ -33,18 +39,17 @@ class _SpeakerPairState extends State<SpeakerPair>
   }
 
   void _tick(Duration _) {
-    final music = context.read<MusicController>();
-    final bars = music.playing ? music.visualizerBars() : const <double>[];
+    final m = context.read<MusicController>();
+    final bars = m.playing ? m.visualizerBars() : const <double>[];
     var bass = 0.0;
     if (bars.isNotEmpty) {
-      // The lowest few bands are the bass — average them.
-      final n = bars.length < 4 ? bars.length : 4;
+      final n = math.min(4, bars.length); // the low bands
       for (var i = 0; i < n; i++) {
         bass += bars[i];
       }
       bass /= n;
     }
-    // Instant push, quick-but-smooth settle — a cone thumping, not a wobble.
+    // Instant push, quick settle — a cone thump, not a wobble.
     _level = bass > _level ? bass : _level * 0.80 + bass * 0.20;
     _bass.value = _level;
   }
@@ -58,90 +63,108 @@ class _SpeakerPairState extends State<SpeakerPair>
 
   @override
   Widget build(BuildContext context) {
-    final p = widget.palette;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _Woofer(level: _bass, palette: p, size: widget.size),
-        const SizedBox(width: 9),
-        _Woofer(level: _bass, palette: p, size: widget.size),
-      ],
-    );
-  }
-}
-
-class _Woofer extends StatelessWidget {
-  final ValueListenable<double> level;
-  final Palette palette;
-  final double size;
-  const _Woofer(
-      {required this.level, required this.palette, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: ValueListenableBuilder<double>(
-        valueListenable: level,
-        builder: (_, v, __) => CustomPaint(
-          size: Size(size, size),
-          painter: _WooferPainter(palette, v.clamp(0.0, 1.0)),
+      child: SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: ValueListenableBuilder<double>(
+          valueListenable: _bass,
+          builder: (_, v, __) => CustomPaint(
+            painter: _CornerSpeakerPainter(
+                widget.palette, v.clamp(0.0, 1.0), widget.left),
+          ),
         ),
       ),
     );
   }
 }
 
-class _WooferPainter extends CustomPainter {
+class _CornerSpeakerPainter extends CustomPainter {
   final Palette p;
-  final double level; // 0..1 bass energy right now
-  const _WooferPainter(this.p, this.level);
+  final double level; // 0..1 bass energy now
+  final bool left;
+  const _CornerSpeakerPainter(this.p, this.level, this.left);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final r = size.width / 2;
+    final rect = Offset.zero & size;
 
-    // The bass glow behind the cone — brighter and wider as it thumps.
+    // The metal pod filling the corner. The OUTER corner (the chassis corner)
+    // rounds to the chassis radius; the INNER corner (facing the screen) rounds
+    // larger, so the tube appears to curve around the speaker — the reverse
+    // notch. The pod covers whatever tube corner is beneath it.
+    const outer = Radius.circular(8); // matches the chassis border radius
+    const notch = Radius.circular(20); // the screen's curve around the woofer
+    const small = Radius.circular(3);
+    final pod = left
+        ? RRect.fromRectAndCorners(rect,
+            bottomLeft: outer, topRight: notch, topLeft: small, bottomRight: small)
+        : RRect.fromRectAndCorners(rect,
+            bottomRight: outer, topLeft: notch, topRight: small, bottomLeft: small);
+
+    // Metal, tuned to the chassis' dark lower body so it reads as the same case.
+    canvas.drawRRect(
+      pod,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [p.m2, p.m3],
+        ).createShader(rect),
+    );
+    // A hairline highlight along the top edge — the moulded bevel.
+    canvas.drawRRect(
+      pod.deflate(0.5),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = p.mh.withValues(alpha: 0.5),
+    );
+
+    // The woofer.
+    final c = size.center(Offset.zero);
+    final r = math.min(size.width, size.height) / 2 - 6;
+
+    // Bass glow behind the cone — bigger/brighter as it thumps.
     if (level > 0.02) {
       canvas.drawCircle(
         c,
-        r * (1 + level * 0.35),
+        r * (1 + level * 0.3),
         Paint()
-          ..color = p.a.withValues(alpha: (level * 0.55).clamp(0.0, 1.0))
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2 + 4 * level),
+          ..color = p.a.withValues(alpha: (level * 0.5).clamp(0.0, 1.0))
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 3 + 5 * level),
       );
     }
 
-    // The basket: a metal ring.
-    canvas.drawCircle(c, r - 0.5, Paint()..color = p.m2);
+    // The basket: a recessed ring.
+    canvas.drawCircle(c, r, Paint()..color = p.mv1);
     canvas.drawCircle(
         c,
-        r - 0.5,
+        r,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1
+          ..strokeWidth = 1.4
           ..color = p.mh);
 
-    // The cone — pushes outward on the beat (a woofer moving air).
-    final coneR = ((r - 2.5) * (1 + level * 0.14)).clamp(0.0, r - 1);
+    // The cone — pushes out on the beat.
+    final coneR = ((r - 3) * (1 + level * 0.13)).clamp(0.0, r - 1);
     canvas.drawCircle(c, coneR, Paint()..color = p.m3);
-    // A couple of surround rings for the grille look.
     final ring = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8
+      ..strokeWidth = 1
       ..color = p.mv1;
     canvas.drawCircle(c, coneR * 0.72, ring);
-    canvas.drawCircle(c, coneR * 0.44, ring);
+    canvas.drawCircle(c, coneR * 0.46, ring);
 
-    // The dust cap in the middle, lighting up in the accent as the bass hits.
+    // The dust cap lights up in the accent as the bass hits.
     canvas.drawCircle(
       c,
-      coneR * 0.28,
-      Paint()..color = Color.lerp(p.mt, p.a, level.clamp(0.0, 1.0))!,
+      coneR * 0.26,
+      Paint()..color = Color.lerp(p.mt, p.a, level)!,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _WooferPainter old) =>
-      old.level != level || old.p != p;
+  bool shouldRepaint(covariant _CornerSpeakerPainter old) =>
+      old.level != level || old.left != left || old.p != p;
 }
