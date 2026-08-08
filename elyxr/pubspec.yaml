@@ -23,10 +23,6 @@ dependencies:
   # flutter_soloud, whose precompiled codec libs required a newer glibc than most
   # systems have and failed to load entirely.
   audioplayers: ^6.0.0
-  # Captures the system audio OUTPUT (the monitor source) so the visualizer can
-  # FFT what's actually coming out — a real spectrum of the end product, decoupled
-  # from the player.
-  record: ^5.1.0
 
 dev_dependencies:
   flutter_test:

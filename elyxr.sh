@@ -145,9 +145,11 @@ BUILD_PKGS=(build-essential pkg-config git fuse3 libfuse3-dev)
 # GStreamer: the -dev packages are needed to build the plugin, and the runtime
 # plugin sets (base/good + libav) provide the codecs so mp3/ogg/flac/etc. play
 # with the OS's own libraries — no bundled codec libs, so none of the glibc
-# mismatch that made the previous engine fail to load. openmpt123 is a runtime
-# tool the player shells out to, to render tracker modules (.xm/.mod/.s3m/.it).
-[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav openmpt123)
+# mismatch that made the previous engine fail to load. openmpt123 renders tracker
+# modules (.xm/.mod/.s3m/.it) to PCM. pulseaudio-utils provides `parecord`, which
+# the visualizer uses to capture the audio output (the default monitor) and FFT
+# what's actually playing.
+[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav openmpt123 pulseaudio-utils)
 BASE_NEED=(); BUILD_NEED=()
 if command -v dpkg >/dev/null 2>&1; then
   for p in "${BASE_PKGS[@]}";  do dpkg -s "$p" >/dev/null 2>&1 || BASE_NEED+=("$p"); done

@@ -5,12 +5,12 @@
 // deliberately kept off the player's critical path.
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:record/record.dart';
 
 import '../../design/text.dart';
 import '../../design/tokens.dart';
@@ -257,10 +257,11 @@ class _VisualizerState extends State<_Visualizer> {
   static const int _fftSize = 1024; // power of two
   static const int _bars = 28;
 
-  final AudioRecorder _rec = AudioRecorder();
-  StreamSubscription<Uint8List>? _sub;
+  Process? _proc;
+  StreamSubscription<List<int>>? _sub;
   final Float64List _ring = Float64List(_fftSize);
   int _written = 0;
+  int _carry = -1; // odd leftover byte between chunks
   Timer? _timer;
 
   final ValueNotifier<List<double>> _levels =
@@ -273,41 +274,48 @@ class _VisualizerState extends State<_Visualizer> {
   }
 
   Future<void> _start() async {
+    // Capture the system's audio OUTPUT via the default monitor source, using the
+    // OS's own recorder (parecord, from pulseaudio-utils / pipewire-pulse). Raw
+    // s16le mono at 44.1k on stdout. Linux only; elsewhere the bars stay flat.
+    // If parecord isn't present it just fails quietly — nothing, never faked.
+    if (!Platform.isLinux) return;
     try {
-      if (!await _rec.hasPermission()) return;
-      // Pick the OUTPUT monitor so we visualise what's playing, not the mic. If
-      // there's no monitor device, don't capture at all (nothing, never the mic).
-      InputDevice? monitor;
-      try {
-        for (final d in await _rec.listInputDevices()) {
-          if (d.label.toLowerCase().contains('monitor')) {
-            monitor = d;
-            break;
-          }
-        }
-      } catch (_) {}
-      if (monitor == null) return;
-      final stream = await _rec.startStream(RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
-        sampleRate: 44100,
-        numChannels: 1,
-        device: monitor,
-      ));
-      _sub = stream.listen(_onBytes, onError: (_) {});
+      _proc = await Process.start('parecord', const [
+        '--raw',
+        '--format=s16le',
+        '--rate=44100',
+        '--channels=1',
+        '-d',
+        '@DEFAULT_MONITOR@',
+      ]);
+      _proc!.stderr.drain<void>().catchError((_) {});
+      _sub = _proc!.stdout.listen(_onBytes, onError: (_) {}, cancelOnError: false);
       _timer =
           Timer.periodic(const Duration(milliseconds: 33), (_) => _compute());
     } catch (_) {
-      // No capture available — the bars stay flat (honest), player unaffected.
+      // No parecord / no monitor — the bars stay flat (honest), player unaffected.
     }
   }
 
-  void _onBytes(Uint8List bytes) {
-    final bd = ByteData.sublistView(bytes);
-    final n = bytes.length ~/ 2;
-    for (var i = 0; i < n; i++) {
-      _ring[_written % _fftSize] = bd.getInt16(i * 2, Endian.little) / 32768.0;
+  void _onBytes(List<int> bytes) {
+    var i = 0;
+    // Finish a sample split across chunk boundaries.
+    if (_carry >= 0 && bytes.isNotEmpty) {
+      final lo = _carry, hi = bytes[0];
+      var s = lo | (hi << 8);
+      if (s >= 0x8000) s -= 0x10000;
+      _ring[_written % _fftSize] = s / 32768.0;
+      _written++;
+      _carry = -1;
+      i = 1;
+    }
+    for (; i + 1 < bytes.length; i += 2) {
+      var s = bytes[i] | (bytes[i + 1] << 8);
+      if (s >= 0x8000) s -= 0x10000;
+      _ring[_written % _fftSize] = s / 32768.0;
       _written++;
     }
+    if (i < bytes.length) _carry = bytes[i]; // one byte left over
   }
 
   void _compute() {
@@ -394,8 +402,7 @@ class _VisualizerState extends State<_Visualizer> {
   void dispose() {
     _timer?.cancel();
     _sub?.cancel();
-    _rec.stop();
-    _rec.dispose();
+    _proc?.kill();
     _levels.dispose();
     super.dispose();
   }
