@@ -190,40 +190,50 @@ class _RootState extends State<_Root> {
     // margin — the extra area is transparent, just room for the glow and the
     // desktop behind it. The chassis is never shrunk to make room.
     final p = settings.palette;
+    final g = p.edgeGlow;
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(kGlowMargin),
-              child: FittedBox(fit: BoxFit.contain, child: child),
-            ),
-          ),
-          // The max-saturation glow, painted OVER everything: an accent bloom
-          // that comes in from the window (screen) edges, washes across the
-          // chassis, and fills the transparent margin out to the border — so it
-          // reads as real light on the chassis, not a backlight behind it. Off
-          // until the colour has maxed (edgeGlow ramps in). Non-interactive.
-          if (p.edgeGlow > 0.001)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(
-                        color: p.a
-                            .withValues(alpha: (0.9 * p.edgeGlow).clamp(0.0, 1.0)),
-                        blurRadius: 40 + 90 * p.edgeGlow,
-                        spreadRadius: 6,
-                        blurStyle: BlurStyle.inner,
-                      ),
-                    ],
-                  ),
+      // The chassis sits at full size inside a slightly larger transparent box.
+      // The max-saturation glow is a thin bloom around the metal edge that fades
+      // to nothing *within* the surrounding room — so it dissolves like real
+      // light instead of being sliced at the window edge. FittedBox scales the
+      // whole box (chassis + room) to the window, keeping the chassis full size.
+      body: Center(
+        child: FittedBox(
+          fit: BoxFit.contain,
+          child: SizedBox(
+            width: kAppWidth + kGlowMargin * 2,
+            height: kAppHeight + kGlowMargin * 2,
+            child: Center(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: g > 0.001
+                      ? [
+                          // A tight, brighter core right at the edge...
+                          BoxShadow(
+                            color: p.a.withValues(alpha: (0.65 * g).clamp(0.0, 1.0)),
+                            blurRadius: 6 + 8 * g,
+                            spreadRadius: g,
+                          ),
+                          // ...and a soft, dim outer feather that fades to zero
+                          // well inside the room (no hard line).
+                          BoxShadow(
+                            color: p.a.withValues(alpha: (0.28 * g).clamp(0.0, 1.0)),
+                            blurRadius: 12 + 16 * g,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: SizedBox(
+                  width: kAppWidth,
+                  height: kAppHeight,
+                  child: child,
                 ),
               ),
             ),
-        ],
+          ),
+        ),
       ),
     );
   }
