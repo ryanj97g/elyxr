@@ -49,8 +49,8 @@ class Chassis extends StatelessWidget {
             ? [
                 BoxShadow(
                   color: p.a.withValues(alpha: (0.85 * p.edgeGlow).clamp(0.0, 1.0)),
-                  blurRadius: 14 + 54 * p.edgeGlow,
-                  spreadRadius: 2 + 10 * p.edgeGlow,
+                  blurRadius: 12 + 44 * p.edgeGlow,
+                  spreadRadius: 2 + 6 * p.edgeGlow,
                 ),
               ]
             : null,

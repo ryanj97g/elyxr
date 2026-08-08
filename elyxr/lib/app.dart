@@ -184,19 +184,45 @@ class _RootState extends State<_Root> {
         ? const HomeScreen()
         : (session.isFirstRun ? const FirstRunScreen() : const HomeScreen());
 
-    // The window is transparent, so the metal fills it and its rounded corners
-    // become the window's shape — no void, no chrome. FittedBox scales the fixed
-    // 440×884 chassis to whatever size the window is, so it fits short screens.
-    // A small transparent inset around it is deliberate: it's the room the
-    // max-saturation glow (chassis boxShadow) bleeds into, so the glow reads as
-    // leaving the metal instead of being clipped at the window edge.
+    // The window is transparent and LARGER than the chassis by kGlowMargin on
+    // every side (see tokens). The chassis is shown at full size, inset by that
+    // margin — the extra area is transparent, just room for the glow and the
+    // desktop behind it. The chassis is never shrunk to make room.
+    final p = settings.palette;
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(26),
-          child: FittedBox(fit: BoxFit.contain, child: child),
-        ),
+      body: Stack(
+        children: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(kGlowMargin),
+              child: FittedBox(fit: BoxFit.contain, child: child),
+            ),
+          ),
+          // The max-saturation glow, painted OVER everything: an accent bloom
+          // that comes in from the window (screen) edges, washes across the
+          // chassis, and fills the transparent margin out to the border — so it
+          // reads as real light on the chassis, not a backlight behind it. Off
+          // until the colour has maxed (edgeGlow ramps in). Non-interactive.
+          if (p.edgeGlow > 0.001)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: p.a
+                            .withValues(alpha: (0.9 * p.edgeGlow).clamp(0.0, 1.0)),
+                        blurRadius: 40 + 90 * p.edgeGlow,
+                        spreadRadius: 6,
+                        blurStyle: BlurStyle.inner,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
