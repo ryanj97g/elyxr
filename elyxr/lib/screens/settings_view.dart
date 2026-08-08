@@ -198,42 +198,30 @@ class _NostalgiaRow extends StatelessWidget {
               children: [
                 Text('◈', style: glass(20, on ? p.a : p.foot)),
                 const SizedBox(width: 9),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('NOSTALGIA MODE',
-                          style: chassis(13, on ? p.bright : p.mid, spacing: 0.16)),
-                      Text(
-                          on
-                              ? 'the retro toys are awake'
-                              : 'off — the plain instrument',
-                          style: glass(14, p.foot)),
-                    ],
+                // What it does lives in a hover popup on the label itself — no
+                // spelled-out list on the page, no narration of the off state.
+                Tooltip(
+                  message: 'Matrix screensaver\nCursor trail\nTransfer log\n'
+                      'Snake (wordmark ×7)\nNonsense button\nSound effects\n'
+                      'Auto-plays the soundtrack',
+                  decoration: BoxDecoration(
+                    color: p.tubeBg,
+                    border: Border.all(color: p.a.withValues(alpha: 0.5)),
+                    borderRadius: BorderRadius.circular(4),
                   ),
+                  textStyle: glass(14, p.soft),
+                  child: Text('NOSTALGIA MODE',
+                      style: chassis(13, on ? p.bright : p.mid, spacing: 0.16)),
                 ),
+                const Spacer(),
                 _toggle(p, on),
               ],
             ),
           ),
         ),
-        // When on, list what it turns on — names only. The list disappears with
-        // the toggle.
-        if (on) ...[
-          const SizedBox(height: 3),
-          for (final name in const [
-            'Matrix screensaver',
-            'Cursor trail',
-            'Transfer log',
-            'Snake',
-            'Nonsense button',
-            'Music player',
-          ])
-            Padding(
-              padding: const EdgeInsets.only(left: 29, top: 1, bottom: 1),
-              child: Text('· $name', style: glass(14, p.foot)),
-            ),
-          // Sound is on by default within nostalgia, but silence-able on its own.
+        // The only sub-control: silence the sound effects without leaving the
+        // mode. No feature list — that's in the label's hover popup.
+        if (on)
           GestureDetector(
             onTap: () => s.sound = !s.sound,
             behavior: HitTestBehavior.opaque,
@@ -250,7 +238,6 @@ class _NostalgiaRow extends StatelessWidget {
               ),
             ),
           ),
-        ],
         Container(height: 1, color: p.dim),
       ],
     );

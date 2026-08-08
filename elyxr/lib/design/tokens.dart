@@ -157,6 +157,11 @@ class Palette {
   // How hard the tube blooms — grows as the saturation drag reaches its top, so
   // maxing the colour also brightens the glow overall. Read by the chassis.
   late final double bloom;
+  // A separate, intense glow quality that takes over once the colour has hit its
+  // chroma ceiling and the drag is only adding glow. Ramped (glowT²) so it stays
+  // near zero through normal saturation and then blooms hard at the very top —
+  // and the chassis reads it to throw a real glow *past* its own metal edge.
+  late final double edgeGlow;
 
   void _build() {
     final h = _s.mono ? 0.0 : _s.hue;
@@ -203,7 +208,8 @@ class Palette {
       foot = _c(trueArgb(0.52, h, maxC * 0.70 * wc));
       glow = _c(trueArgb(0.60 + 0.07 * glowT, h, maxC * wc));
       tubeBg = _c(trueArgb(0.085, h, 0.020 * wc));
-      bloom = 0.07 + 0.13 * glowT;
+      bloom = 0.07 + 0.30 * glowT;
+      edgeGlow = glowT * glowT;
     } else {
       bright = _s.mono
           ? _c(oklchArgb(0.24, 0, 0))
@@ -215,6 +221,7 @@ class Palette {
       glow = _c(trueArgb(0.55, h, maxC * wc));
       tubeBg = _c(trueArgb(0.940, h, 0.018 * wc));
       bloom = 0.04 * glowT;
+      edgeGlow = glowT * glowT * 0.6;
     }
   }
 

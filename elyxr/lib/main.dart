@@ -66,7 +66,13 @@ Future<void> main() async {
   try {
     await SoLoud.instance.init();
     SoLoud.instance.setVisualizationEnabled(true);
-  } catch (_) {}
+  } catch (e, st) {
+    // The audio engine didn't start — the laugh, sound effects, and music would
+    // all be silent. Surface it (visible in a terminal run) instead of hiding it,
+    // so a "no sound" report has a cause to look at rather than a silent no-op.
+    stderr.writeln('elyxr: audio engine failed to start — playback will be silent: $e');
+    stderr.writeln(st.toString());
+  }
 
   runApp(ShakeToClose(
     child: ElyxrApp(

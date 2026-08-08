@@ -60,18 +60,34 @@ class _TactileState extends State<Tactile> {
           curve: Curves.easeOut,
           decoration: BoxDecoration(
             borderRadius: widget.radius,
+            // A soft accent wash under the content...
+            color: _lit ? a.withValues(alpha: 0.07 * k) : null,
             boxShadow: _lit
-                ? [BoxShadow(color: a.withValues(alpha: 0.30 * k), blurRadius: 16, spreadRadius: -2)]
+                ? [
+                    // ...an INNER phosphor bloom feathered in from the edges. An
+                    // outer shadow gets clipped away by the file list, which is
+                    // why the hover used to read as a hard box; an inner glow is
+                    // painted within the widget's own bounds, so it always shows —
+                    // it's a real glow, not an outline.
+                    BoxShadow(
+                        color: a.withValues(alpha: 0.55 * k),
+                        blurRadius: 15,
+                        blurStyle: BlurStyle.inner),
+                    // ...plus an outer halo wherever nothing clips it (the metal
+                    // rails, the grid tiles).
+                    BoxShadow(
+                        color: a.withValues(alpha: 0.38 * k),
+                        blurRadius: 20,
+                        spreadRadius: -3),
+                  ]
                 : const [],
           ),
           foregroundDecoration: BoxDecoration(
             borderRadius: widget.radius,
-            // A clear, bright accent outline — the unmistakable hover cue.
+            // Only a faint edge — soft, not a hard box. The glow carries the cue.
             border: _lit
-                ? Border.all(color: a.withValues(alpha: 0.35 + 0.55 * k), width: 1.3)
+                ? Border.all(color: a.withValues(alpha: 0.22 * k), width: 1)
                 : null,
-            // A light wash that keeps the text readable underneath.
-            color: _lit ? a.withValues(alpha: 0.10 * k) : null,
           ),
           child: widget.child,
         ),
