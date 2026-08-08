@@ -202,6 +202,13 @@ class _RootState extends State<_Root> {
             width: kWindowWidth,
             height: kWindowHeight,
             child: Center(
+              // All three layers are ALWAYS present so the Stack's child count
+              // never changes — otherwise the app (layer 2) shifts position when
+              // the glow appears/disappears, and Flutter, matching children by
+              // position, would tear down and rebuild the whole app, dropping its
+              // state (closing Settings, killing an in-progress drag). Only the
+              // glow *shadow* is gated on the drag amount; the layers stay put,
+              // and the chassis carries a key so its identity is rock-stable.
               child: Stack(
                 clipBehavior: Clip.none,
                 alignment: Alignment.center,
@@ -209,57 +216,65 @@ class _RootState extends State<_Root> {
                   // 1) The glow that LEAVES the chassis: a bloom that bleeds
                   //    outward into the transparent ring and fades to nothing
                   //    (no hard edge — it dissolves inside the room).
-                  if (g > 0.001)
-                    SizedBox(
+                  SizedBox(
+                    width: kAppWidth,
+                    height: kAppHeight,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(9),
+                        boxShadow: g > 0.001
+                            ? [
+                                BoxShadow(
+                                  color: p.a.withValues(
+                                      alpha: (0.55 * g).clamp(0.0, 1.0)),
+                                  blurRadius: 14 + 26 * g,
+                                  spreadRadius: 1 + 8 * g,
+                                ),
+                                BoxShadow(
+                                  color: p.a.withValues(
+                                      alpha: (0.26 * g).clamp(0.0, 1.0)),
+                                  blurRadius: 30 + 44 * g,
+                                  spreadRadius: 1 + 4 * g,
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
+                  ),
+                  // 2) The chassis itself, at full size — keyed so it keeps its
+                  //    identity (and its state) no matter what siblings do.
+                  SizedBox(
+                    key: const ValueKey('elyxr-chassis'),
+                    width: kAppWidth,
+                    height: kAppHeight,
+                    child: child,
+                  ),
+                  // 3) The glow OVER the chassis: brought to front, an inner
+                  //    bloom that spills forward across the metal edge and fades
+                  //    inward — a lit tube glowing over its own bezel, not a
+                  //    housing that's merely backlit.
+                  IgnorePointer(
+                    child: SizedBox(
                       width: kAppWidth,
                       height: kAppHeight,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(9),
-                          boxShadow: [
-                            BoxShadow(
-                              color: p.a
-                                  .withValues(alpha: (0.55 * g).clamp(0.0, 1.0)),
-                              blurRadius: 14 + 26 * g,
-                              spreadRadius: 1 + 8 * g,
-                            ),
-                            BoxShadow(
-                              color: p.a
-                                  .withValues(alpha: (0.26 * g).clamp(0.0, 1.0)),
-                              blurRadius: 30 + 44 * g,
-                              spreadRadius: 1 + 4 * g,
-                            ),
-                          ],
+                          boxShadow: g > 0.001
+                              ? [
+                                  BoxShadow(
+                                    color: p.a.withValues(
+                                        alpha: (0.45 * g).clamp(0.0, 1.0)),
+                                    blurRadius: 18 + 26 * g,
+                                    spreadRadius: 0,
+                                    blurStyle: BlurStyle.inner,
+                                  ),
+                                ]
+                              : null,
                         ),
                       ),
                     ),
-                  // 2) The chassis itself, at full size.
-                  SizedBox(width: kAppWidth, height: kAppHeight, child: child),
-                  // 3) The glow OVER the chassis: brought to front, an inner
-                  //    bloom that spills forward across the metal edge and fades
-                  //    inward — a lit tube glowing over its own bezel, not a
-                  //    housing that's merely backlit.
-                  if (g > 0.001)
-                    IgnorePointer(
-                      child: SizedBox(
-                        width: kAppWidth,
-                        height: kAppHeight,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(9),
-                            boxShadow: [
-                              BoxShadow(
-                                color: p.a.withValues(
-                                    alpha: (0.45 * g).clamp(0.0, 1.0)),
-                                blurRadius: 18 + 26 * g,
-                                spreadRadius: 0,
-                                blurStyle: BlurStyle.inner,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                  ),
                 ],
               ),
             ),
