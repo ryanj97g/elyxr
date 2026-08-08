@@ -188,16 +188,40 @@ SUDO_KEEPALIVE=""
 cleanup() { [ -n "$SUDO_KEEPALIVE" ] && kill "$SUDO_KEEPALIVE" 2>/dev/null || true; }
 trap cleanup EXIT
 
-if [ "$(id -u)" -eq 0 ]; then
-  SUDO=""
-elif [ "$NEED_SUDO" = 1 ]; then
-  SUDO="sudo"
-  echo "elyxr needs your password once for setup. Updates after this won't ask."
-  sudo -v || { echo "${RED}sudo is required for setup — nothing was installed.${RST}"; exit 1; }
-  ( while true; do sudo -n true 2>/dev/null; sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
-  SUDO_KEEPALIVE=$!
-else
-  SUDO=""
+# Decide whether we have root — or can get it *without ever hanging*. This is the
+# heart of the fix. A routine update needs no root at all, so it skips this
+# whole dance. When a root step IS needed, a background/tray/fleet update runs
+# detached with no terminal to type a password into, so it must never block on
+# sudo (that ~2-second hang was aborting every such update). We only prompt when
+# stdin is a real terminal — i.e. a direct `./elyxr.sh` run.
+SUDO=""
+CAN_SUDO=1
+if [ "$NEED_SUDO" = 1 ]; then
+  CAN_SUDO=0
+  if [ "$(id -u)" -eq 0 ]; then
+    CAN_SUDO=1
+  elif sudo -n true 2>/dev/null; then
+    CAN_SUDO=1; SUDO="sudo"         # root with no prompt (cached creds / NOPASSWD)
+  elif [ -t 0 ]; then
+    echo "elyxr needs your password once for setup. Updates after this won't ask."
+    if sudo -v; then
+      CAN_SUDO=1; SUDO="sudo"
+      ( while true; do sudo -n true 2>/dev/null; sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
+      SUDO_KEEPALIVE=$!
+    fi
+  fi
+  # A root step is needed but we couldn't get root here (a detached update, no
+  # terminal). Do NOT abort — that abort is what broke the tray button, `lymnal
+  # update`, and the fleet update. Instead: do everything that doesn't need root
+  # (pull, rebuild, install the user-space binaries, reopen the app), turn every
+  # "$SUDO <root cmd>" into a harmless no-op (":"), and tell the user once that a
+  # one-time terminal run is still pending for the root-only part (system packages).
+  if [ "$CAN_SUDO" = 0 ]; then
+    SUDO=":"
+    echo "${RED}A one-time setup step needs a password; skipping it for now.${RST}"
+    echo "Run ${GRN}./elyxr.sh${RST} in a terminal once to finish it."
+    notify "elyxr updated. One-time setup pending — run ./elyxr.sh in a terminal once."
+  fi
 fi
 
 # Record where the repo lives so `lymnal update` can find and re-run this
@@ -571,7 +595,18 @@ if [ "$APP" = 1 ] && [ -n "${APP_BIN:-}" ]; then
     fi
     pkill -f "$APP_BIN" 2>/dev/null || true
     sleep 1
-    ( setsid env "${app_env[@]}" "$APP_BIN" >/dev/null 2>&1 & ) 2>/dev/null || true
+    # Start the fresh window in its OWN transient unit, not as a child of this
+    # update's systemd scope — otherwise, when this script ends and the scope is
+    # torn down, systemd kills the window we just opened (which is why a
+    # successful update stopped reopening the app). Fall back to setsid where
+    # systemd-run isn't available.
+    if command -v systemd-run >/dev/null 2>&1 \
+       && systemd-run --user --collect --quiet \
+            env "${app_env[@]}" "$APP_BIN" >/dev/null 2>&1; then
+      :
+    else
+      ( setsid env "${app_env[@]}" "$APP_BIN" >/dev/null 2>&1 & ) 2>/dev/null || true
+    fi
     APP_RESTARTED=1
   fi
 fi
