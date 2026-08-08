@@ -285,13 +285,18 @@ class _VisualizerState extends State<_Visualizer> {
         '--format=s16le',
         '--rate=44100',
         '--channels=1',
+        // Low latency: without this parecord buffers ~1–2s, so the bars react
+        // to audio that already played — the visualizer looks disconnected from
+        // the beat. A small target latency makes it track the music live.
+        '--latency-msec=25',
+        '--process-time-msec=10',
         '-d',
         '@DEFAULT_MONITOR@',
       ]);
       _proc!.stderr.drain<void>().catchError((_) {});
       _sub = _proc!.stdout.listen(_onBytes, onError: (_) {}, cancelOnError: false);
       _timer =
-          Timer.periodic(const Duration(milliseconds: 33), (_) => _compute());
+          Timer.periodic(const Duration(milliseconds: 22), (_) => _compute());
     } catch (_) {
       // No parecord / no monitor — the bars stay flat (honest), player unaffected.
     }
@@ -347,12 +352,13 @@ class _VisualizerState extends State<_Visualizer> {
       for (var k = lo; k < hi; k++) {
         if (mag[k] > peak) peak = mag[k];
       }
-      // Scale + curve. The divisor sets sensitivity (may want tuning on real
-      // audio); sqrt lifts quiet detail.
-      var v = math.sqrt((peak / 30.0).clamp(0.0, 1.0));
-      // Fast attack, slow decay so it dances rather than flickers.
+      // Scale + curve. The divisor sets sensitivity; sqrt lifts quiet detail so
+      // ordinary music (well below full scale) still swings the bars.
+      var v = math.sqrt((peak / 16.0).clamp(0.0, 1.0));
+      // Instant attack, quick-but-smooth decay so it punches on the beat and
+      // falls back fast rather than drifting like a lava lamp.
       final p = prev[b];
-      v = v > p ? v : p * 0.82 + v * 0.18;
+      v = v > p ? v : p * 0.62 + v * 0.38;
       out[b] = v.clamp(0.0, 1.0);
     }
     _levels.value = out;
