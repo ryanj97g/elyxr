@@ -4,6 +4,9 @@
 // from that hue by the OKLCH engine (oklch.dart), gamut-true so a whole screen
 // sits in one phosphor colour and stays that colour. A new accent is one row.
 
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart' show AssetManifest, FontLoader, rootBundle;
 
@@ -48,7 +51,6 @@ const List<TermFace> kTermFaces = [
   TermFace('Julius Sans One', 'JULIUS'),
   TermFace('Redacted Script', 'REDACTED'),
   TermFace('Flow Circular', 'FLOW'),
-  TermFace('Odisean Tech', 'ODISEAN'),
   TermFace('Ordinary Love', 'ORDINARY'),
   TermFace('Holo Edge Four', 'HOLO EDGE'),
   TermFace('Digital Moneter', 'DIGITAL'),
@@ -92,6 +94,48 @@ Future<void> loadCustomFonts() async {
   } catch (_) {
     // No manifest or no custom folder — nothing to load.
   }
+}
+
+/// A manual, on-disk refresh — for previewing a font you've dropped into the
+/// folder but haven't committed/rebuilt yet. Startup's loadCustomFonts reads the
+/// *bundled* copy; this reads the *actual* assets/fonts/custom/ directory in the
+/// repo (found via the path lymnal recorded at install), so uncommitted fonts
+/// show up too. Loads any new .ttf/.otf and returns how many faces it added.
+Future<int> reloadCustomFontsFromDisk() async {
+  var added = 0;
+  try {
+    final home = Platform.environment['HOME'];
+    if (home == null) return 0;
+    final repoFile = File('$home/.config/lymnal/repo.path');
+    if (!repoFile.existsSync()) return 0;
+    final repo = (await repoFile.readAsString()).trim();
+    if (repo.isEmpty) return 0;
+    final dir = Directory('$repo/elyxr/assets/fonts/custom');
+    if (!dir.existsSync()) return 0;
+    final files = dir.listSync().whereType<File>().toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+    for (final f in files) {
+      final l = f.path.toLowerCase();
+      if (!(l.endsWith('.ttf') || l.endsWith('.otf'))) continue;
+      final name = f.path.split(Platform.pathSeparator).last;
+      final dot = name.lastIndexOf('.');
+      final family = dot > 0 ? name.substring(0, dot) : name;
+      if (termFaces.any((t) => t.family == family)) continue; // already have it
+      try {
+        final bytes = await f.readAsBytes();
+        final loader = FontLoader(family)
+          ..addFont(Future.value(ByteData.sublistView(bytes)));
+        await loader.load();
+        customTermFaces.add(TermFace(family, family.toUpperCase()));
+        added++;
+      } catch (_) {
+        // Unreadable / invalid font file — skip it.
+      }
+    }
+  } catch (_) {
+    // No repo path / no folder — nothing to refresh.
+  }
+  return added;
 }
 
 /// The switchable phosphor accents, in spectrum order. `mono` is the white

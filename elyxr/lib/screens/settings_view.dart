@@ -537,12 +537,47 @@ class _FacePicker extends StatelessWidget {
     final faces = termFaces;
     return SizedBox(
       height: 67,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.hardEdge,
-        itemCount: faces.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
+      child: Row(
+        children: [
+          // Manual refresh: re-scan the fonts folder on disk for a face you've
+          // dropped in but not committed/rebuilt yet — a live preview.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => context.read<SettingsController>().reloadFonts(),
+            child: SizedBox(
+              width: 40,
+              child: Column(
+                children: [
+                  Container(
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: p.dark
+                          ? const Color(0xFF030604)
+                          : const Color(0xFFf2f7f3),
+                      border: Border.all(color: p.dim),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    child: Icon(Icons.refresh, size: 20, color: p.mid),
+                  ),
+                  const SizedBox(height: 5),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text('SCAN',
+                        style: chassis(9.5, p.mid, spacing: 0.08)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.hardEdge,
+              itemCount: faces.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, i) {
           final face = faces[i];
           final on = settings.termFont == face.family;
           return SizedBox(
@@ -582,7 +617,10 @@ class _FacePicker extends StatelessWidget {
               ),
             ),
           );
-        },
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
