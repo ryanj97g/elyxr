@@ -185,51 +185,82 @@ class _RootState extends State<_Root> {
         ? const HomeScreen()
         : (session.isFirstRun ? const FirstRunScreen() : const HomeScreen());
 
-    // The window is transparent and LARGER than the chassis by kGlowMargin on
-    // every side (see tokens). The chassis is shown at full size, inset by that
-    // margin — the extra area is transparent, just room for the glow and the
-    // desktop behind it. The chassis is never shrunk to make room.
+    // The chassis is the real app: a fixed 440×884 portrait, ALWAYS rendered at
+    // full size. The window (kWindowWidth×kWindowHeight) is bigger than the
+    // chassis by kGlowMargin on every side — that extra ring is transparent,
+    // pure room for the glow to bleed into. FittedBox fits this whole box to the
+    // window (which is exactly this size → scale 1.0), so the chassis is never
+    // shrunk; on a genuinely short screen the whole thing scales together.
     final p = settings.palette;
-    final g = p.edgeGlow;
+    final g = p.edgeGlow; // 0 at normal saturation, 1 at the very top.
     return Scaffold(
       backgroundColor: Colors.transparent,
-      // The chassis sits at full size inside a slightly larger transparent box.
-      // The max-saturation glow is a thin bloom around the metal edge that fades
-      // to nothing *within* the surrounding room — so it dissolves like real
-      // light instead of being sliced at the window edge. FittedBox scales the
-      // whole box (chassis + room) to the window, keeping the chassis full size.
       body: Center(
         child: FittedBox(
           fit: BoxFit.contain,
           child: SizedBox(
-            width: kAppWidth + kGlowMargin * 2,
-            height: kAppHeight + kGlowMargin * 2,
+            width: kWindowWidth,
+            height: kWindowHeight,
             child: Center(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(9),
-                  boxShadow: g > 0.001
-                      ? [
-                          // A tight, brighter core right at the edge...
-                          BoxShadow(
-                            color: p.a.withValues(alpha: (0.65 * g).clamp(0.0, 1.0)),
-                            blurRadius: 6 + 8 * g,
-                            spreadRadius: g,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  // 1) The glow that LEAVES the chassis: a bloom that bleeds
+                  //    outward into the transparent ring and fades to nothing
+                  //    (no hard edge — it dissolves inside the room).
+                  if (g > 0.001)
+                    SizedBox(
+                      width: kAppWidth,
+                      height: kAppHeight,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(9),
+                          boxShadow: [
+                            BoxShadow(
+                              color: p.a
+                                  .withValues(alpha: (0.55 * g).clamp(0.0, 1.0)),
+                              blurRadius: 14 + 26 * g,
+                              spreadRadius: 1 + 8 * g,
+                            ),
+                            BoxShadow(
+                              color: p.a
+                                  .withValues(alpha: (0.26 * g).clamp(0.0, 1.0)),
+                              blurRadius: 30 + 44 * g,
+                              spreadRadius: 1 + 4 * g,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  // 2) The chassis itself, at full size.
+                  SizedBox(width: kAppWidth, height: kAppHeight, child: child),
+                  // 3) The glow OVER the chassis: brought to front, an inner
+                  //    bloom that spills forward across the metal edge and fades
+                  //    inward — a lit tube glowing over its own bezel, not a
+                  //    housing that's merely backlit.
+                  if (g > 0.001)
+                    IgnorePointer(
+                      child: SizedBox(
+                        width: kAppWidth,
+                        height: kAppHeight,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(9),
+                            boxShadow: [
+                              BoxShadow(
+                                color: p.a.withValues(
+                                    alpha: (0.45 * g).clamp(0.0, 1.0)),
+                                blurRadius: 18 + 26 * g,
+                                spreadRadius: 0,
+                                blurStyle: BlurStyle.inner,
+                              ),
+                            ],
                           ),
-                          // ...and a soft, dim outer feather that fades to zero
-                          // well inside the room (no hard line).
-                          BoxShadow(
-                            color: p.a.withValues(alpha: (0.28 * g).clamp(0.0, 1.0)),
-                            blurRadius: 12 + 16 * g,
-                          ),
-                        ]
-                      : null,
-                ),
-                child: SizedBox(
-                  width: kAppWidth,
-                  height: kAppHeight,
-                  child: child,
-                ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),

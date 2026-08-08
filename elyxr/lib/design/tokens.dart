@@ -229,18 +229,20 @@ class Palette {
   Color aAlpha(double f) => a.withValues(alpha: f);
 }
 
-/// The visible chassis: portrait, not resizable. Its aspect matches a modern
-/// phone screen (1440×3088) so the same layout ports cleanly to a phone later.
+/// The visible chassis: portrait, not resizable. This is the real app size and
+/// it never changes — the chassis is always rendered at exactly this many
+/// logical pixels, full size, never scaled down to make room for anything.
 const double kAppWidth = 440;
-const double kAppHeight = 944; // 440 × (3088/1440) ≈ phone aspect
+const double kAppHeight = 884;
 
-/// Transparent room around the chassis for the max-saturation glow to fade into.
-/// A glow can only be drawn inside the window, so without this the bloom is
-/// sliced flat at the chassis edge; with it the glow reaches zero *before* the
-/// window edge, so it dissolves like real light instead of hitting a hard line.
-/// Kept modest so the chassis only floats a little rather than shrinking.
-const double kGlowMargin = 44;
+/// Transparent breathing room added *around* the chassis on every side. The
+/// window is bigger than the chassis by this much — the chassis stays full
+/// size and this extra ring is pure transparent space for the glow to bleed
+/// into. It does NOT shrink the app; it enlarges the window.
+const double kGlowMargin = 56;
 
-/// The OS window: the chassis plus that transparent glow room on every side.
-const double kWindowWidth = kAppWidth + kGlowMargin * 2; // 528
-const double kWindowHeight = kAppHeight + kGlowMargin * 2; // 1032
+/// The real OS window: the chassis plus the transparent glow ring on all sides.
+/// The native runner is sized to exactly this, so the chassis inside renders at
+/// full 440×884 with the ring as spare room — no downscaling of the app.
+const double kWindowWidth = kAppWidth + kGlowMargin * 2;
+const double kWindowHeight = kAppHeight + kGlowMargin * 2;
