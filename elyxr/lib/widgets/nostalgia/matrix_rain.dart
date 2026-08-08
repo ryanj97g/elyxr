@@ -77,7 +77,11 @@ class _MatrixRainState extends State<MatrixRain>
           painter: _RainPainter(
             _t,
             _columns,
-            head: widget.palette.bright,
+            // A hot leading edge that still carries the picked hue — the accent
+            // lifted a little toward white, NOT the phosphor `bright` (which sits
+            // so light that purple/blue read as plain white). Everything else is
+            // the accent itself, so the rain is genuinely the colour you chose.
+            head: Color.lerp(widget.palette.a, const Color(0xFFFFFFFF), 0.28)!,
             trail: widget.palette.a,
             face: Fonts.glass,
           ),
@@ -126,7 +130,7 @@ class _RainPainter extends CustomPainter {
         final frac = 1 - k / col.trail;
         final color = isHead
             ? head
-            : trail.withValues(alpha: (frac * frac * 0.85).clamp(0.0, 1.0));
+            : trail.withValues(alpha: (frac * frac * 0.9).clamp(0.06, 1.0));
         // A glyph that flips occasionally as the column falls.
         final gi = (col.phase + row * 17 + (t * 6).floor() * (row.isEven ? 1 : 0)) %
             _glyphs.length;
