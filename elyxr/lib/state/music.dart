@@ -37,6 +37,12 @@ class MusicController extends ChangeNotifier {
   int _index = 0;
   bool _playing = false;
   bool _shuffle = false;
+  // Nostalgia's easter-egg shuffle. Separate from the user-facing _shuffle
+  // toggle: only startBuiltIn (Nostalgia Mode) ever turns this on. While it's on,
+  // the soundtrack auto-advances to a random *different* track every time one
+  // ends — the keygen "how many songs ARE there?" effect — without ever changing
+  // the player's own default order.
+  bool _eggShuffle = false;
   MusicRepeat _repeat = MusicRepeat.off;
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
@@ -98,11 +104,26 @@ class MusicController extends ChangeNotifier {
     return n.replaceAll(RegExp(r'[_-]+'), ' ').trim();
   }
 
-  /// Start the built-in easter-egg soundtrack from the top — what Nostalgia Mode
-  /// triggers when it switches on. No-op if the baked-in playlist is empty.
+  /// Start the built-in easter-egg soundtrack — what Nostalgia Mode triggers when
+  /// it switches on. Never starts at track 0 or plays in order: it begins on a
+  /// random track and, from then on, every track that ends is followed by a
+  /// random *different* one (see _eggShuffle / _onComplete). No-op if the
+  /// baked-in playlist is empty.
   Future<void> startBuiltIn() async {
     if (_tracks.isEmpty) return;
-    await playIndex(0);
+    _eggShuffle = true;
+    await playIndex(_tracks.length == 1 ? 0 : _rnd.nextInt(_tracks.length));
+  }
+
+  /// A random track index different from the one playing now (or 0 if there's
+  /// only one). Used by the easter-egg shuffle; independent of _shuffle.
+  int _pickRandom() {
+    if (_tracks.length <= 1) return 0;
+    int r;
+    do {
+      r = _rnd.nextInt(_tracks.length);
+    } while (r == _index);
+    return r;
   }
 
   static const _moduleExts = {'xm', 'mod', 's3m', 'it'};
@@ -236,10 +257,14 @@ class MusicController extends ChangeNotifier {
     return playIndex(_shuffle && _tracks.length > 1 ? _pickNext() : _index - 1);
   }
 
-  // A track ended on its own: honour repeat/shuffle.
+  // A track ended on its own: honour repeat/shuffle. Explicit repeat-one wins
+  // (a user can still lock one track); otherwise Nostalgia's egg shuffle keeps
+  // the soundtrack endlessly non-linear, never repeating back-to-back.
   void _onComplete() {
     if (_repeat == MusicRepeat.one) {
       playIndex(_index);
+    } else if (_eggShuffle && _tracks.length > 1) {
+      playIndex(_pickRandom());
     } else if (_shuffle || _repeat == MusicRepeat.all) {
       next();
     } else if (_index < _tracks.length - 1) {
