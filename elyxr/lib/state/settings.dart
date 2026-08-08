@@ -83,6 +83,9 @@ class SettingsController extends ChangeNotifier {
     _accentSat = _prefs.getDouble('accentSat') ?? 1.0;
     _monoL = _prefs.getDouble('monoL') ?? 0.72;
     _termFont = _prefs.getString('termFont') ?? 'VT323';
+    // If the saved face no longer exists (e.g. a font that was removed), fall
+    // back to the default rather than render in a missing family.
+    if (!termFaces.any((f) => f.family == _termFont)) _termFont = 'VT323';
     // Nostalgia Mode always starts off — it's a session toy, never a saved
     // preference. (Deliberately not read back from prefs.)
     _nostalgia = false;
@@ -130,6 +133,13 @@ class SettingsController extends ChangeNotifier {
   set nostalgia(bool v) {
     if (_nostalgia == v) return;
     _nostalgia = v;
+    notifyListeners();
+  }
+
+  /// Re-scan the on-disk custom-fonts folder (uncommitted drops included) and
+  /// rebuild so any new faces appear in the picker. Dev convenience.
+  Future<void> reloadFonts() async {
+    await reloadCustomFontsFromDisk();
     notifyListeners();
   }
 

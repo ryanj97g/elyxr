@@ -81,9 +81,6 @@ flutter:
     - family: Ordinary Love
       fonts:
         - asset: assets/fonts/OrdinaryLove-Regular.ttf
-    - family: Odisean Tech
-      fonts:
-        - asset: assets/fonts/OdiseanTech-Regular.ttf
     - family: Holo Edge Four
       fonts:
         - asset: assets/fonts/HoloEdgeFour-Regular.otf
