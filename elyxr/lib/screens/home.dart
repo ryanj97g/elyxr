@@ -27,8 +27,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  bool _inSettings = false;
-
   // Nostalgia Mode screensaver: after 30s with no interaction, the tube falls to
   // the Matrix rain. Once it's up, only a click dismisses it — moving the mouse
   // doesn't. The timer only runs in Nostalgia Mode; otherwise it's inert.
@@ -87,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // the network, a server reads it straight off local disk. The server's own
     // controls (pairing, limits) live in Settings.
     Widget tubeChild;
-    if (_inSettings) {
+    if (settings.inSettings) {
       tubeChild = const SettingsView();
     } else {
       tubeChild = const FilesView();
@@ -120,8 +118,8 @@ class _HomeScreenState extends State<HomeScreen> {
         palette: p,
         topRail: TopRail(
           palette: p,
-          inSettings: _inSettings,
-          onToggleSettings: () => setState(() => _inSettings = !_inSettings),
+          inSettings: settings.inSettings,
+          onToggleSettings: () => settings.inSettings = !settings.inSettings,
           onEasterEgg:
               settings.nostalgia ? () => setState(() => _game = true) : null,
         ),
@@ -149,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mode: settings.mode,
           status: session.status,
           onMode: (m) => settings.mode = m,
-          inSettings: _inSettings,
+          inSettings: settings.inSettings,
           nostalgia: settings.nostalgia,
         ),
       ),
@@ -159,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         app,
         // Transfer HUD — Nostalgia Mode only.
-        if (settings.nostalgia && !_inSettings)
+        if (settings.nostalgia && !settings.inSettings)
           Positioned(
             top: 60,
             left: 14,

@@ -49,6 +49,11 @@ class SettingsController extends ChangeNotifier {
   // undocumented. The window is meant to be a fixed size; this is the buried way
   // out for when it isn't.
   bool _allowResize = false;
+  // Whether the settings screen is showing. Kept here, not in the home widget's
+  // own state, so a rebuild (e.g. while dragging a colour swatch) can never wipe
+  // it and bounce you out of settings. In-memory; resets to the files view on
+  // launch.
+  bool _inSettings = false;
 
   Accent get accent => _accent;
   Density get density => _density;
@@ -66,6 +71,7 @@ class SettingsController extends ChangeNotifier {
   bool get nostalgia => _nostalgia;
   bool get sound => _sound;
   bool get allowResize => _allowResize;
+  bool get inSettings => _inSettings;
 
   void _load() {
     _accent = _enumByName(Accent.values, _prefs.getString('accent'), Accent.green);
@@ -148,6 +154,12 @@ class SettingsController extends ChangeNotifier {
   set allowResize(bool v) {
     if (_allowResize == v) return;
     _allowResize = v;
+    notifyListeners();
+  }
+
+  set inSettings(bool v) {
+    if (_inSettings == v) return;
+    _inSettings = v;
     notifyListeners();
   }
   set sound(bool v) => _set('sound', () => _sound = v, () => _prefs.setBool('sound', v));
