@@ -44,6 +44,9 @@ class MusicController extends ChangeNotifier {
   // ends — the keygen "how many songs ARE there?" effect — without ever changing
   // the player's own default order.
   bool _eggShuffle = false;
+  // Nostalgia was switched off; after a grace period the built-in soundtrack
+  // stops (a quick toggle back on cancels it). See scheduleBuiltInStop.
+  Timer? _nostalgiaStop;
   MusicRepeat _repeat = MusicRepeat.off;
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
@@ -163,8 +166,44 @@ class MusicController extends ChangeNotifier {
   /// baked-in playlist is empty.
   Future<void> startBuiltIn() async {
     if (_tracks.isEmpty) return;
+    cancelBuiltInStop();
     _eggShuffle = true;
     await playIndex(_tracks.length == 1 ? 0 : _rnd.nextInt(_tracks.length));
+  }
+
+  /// Nostalgia Mode was switched off. After a 3-second grace period (so a quick
+  /// toggle off/on doesn't cut the music), stop the built-in easter-egg
+  /// soundtrack and return the player to rest — BUT only if what's playing is
+  /// that soundtrack (an asset track). A trove file the user started streaming
+  /// is theirs and keeps playing. Same behaviour in server and client mode, since
+  /// it's the one shared player either way.
+  void scheduleBuiltInStop() {
+    _nostalgiaStop?.cancel();
+    _nostalgiaStop = Timer(const Duration(seconds: 3), () {
+      if (_playing && !isStream) stopPlayback();
+    });
+  }
+
+  /// Cancel a pending built-in stop (Nostalgia was toggled back on in time).
+  void cancelBuiltInStop() {
+    _nostalgiaStop?.cancel();
+    _nostalgiaStop = null;
+  }
+
+  /// Stop playback entirely and return the player to its resting state — from
+  /// here it only plays again when the user picks a trove file (or Nostalgia
+  /// restarts the soundtrack). Clears the easter-egg shuffle too.
+  Future<void> stopPlayback() async {
+    _nostalgiaStop?.cancel();
+    _eggShuffle = false;
+    try {
+      await _player.stop();
+    } catch (_) {}
+    _playing = false;
+    _hasSource = false;
+    _override = null;
+    _pos = Duration.zero;
+    notifyListeners();
   }
 
   /// A random track index different from the one playing now (or 0 if there's
@@ -344,6 +383,7 @@ class MusicController extends ChangeNotifier {
   @override
   void dispose() {
     _spectroToken++; // orphan any in-flight analysis
+    _nostalgiaStop?.cancel();
     _player.dispose();
     super.dispose();
   }

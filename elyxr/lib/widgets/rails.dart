@@ -13,7 +13,7 @@ import '../state/session.dart';
 import '../state/settings.dart';
 import 'nostalgia/nonsense_button.dart';
 
-/// The top rail: screw · ELYXR · hold-bar · vent · v2.0.5 · screw.
+/// The top rail: screw · ELYXR · hold-bar · vent · v0.9 · screw.
 ///
 /// Holding the wordmark for 250ms is the only way into settings. Nothing marks
 /// it as pressable, and nothing should (DESIGN.md · Interactions).
@@ -159,7 +159,7 @@ class _TopRailState extends State<TopRail> {
           const SizedBox(width: 9),
           // The version sits on the metal, so it uses the fixed chassis face —
           // it stays put when the terminal (screen) face is swapped.
-          Text('v2.0.5', style: chassis(9, p.mt)),
+          Text('v0.9', style: chassis(9, p.mt)),
           const SizedBox(width: 9),
           // Right screw quietly closes the window.
           _screw(p, onTap: () => windowManager.close(), tip: 'Close'),

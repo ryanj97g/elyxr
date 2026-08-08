@@ -6,6 +6,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../design/text.dart';
 import '../design/tokens.dart';
@@ -94,6 +95,12 @@ class SettingsView extends StatelessWidget {
                   _section(p, '06', 'USE SYSTEM FILE BROWSER', _GateRow(palette: p)),
                 ],
                 const SizedBox(height: 16),
+                // Buried at the very bottom, unnumbered, undocumented: a dev
+                // escape hatch to unlock the fixed window's size. In-memory only
+                // (never saved, off on every launch). Not a listed feature.
+                const SizedBox(height: 44),
+                _ResizeRow(palette: p),
+                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -103,7 +110,7 @@ class SettingsView extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('ELYXR 2.0.5 · lymnal 2.0.5', style: mono(10, p.foot)),
+                Text('ELYXR 0.9 · lymnal 0.9', style: mono(10, p.foot)),
                 Text('HOLD ELYXR TO EXIT', style: chassis(10, p.mid, spacing: 0.1)),
               ],
             ),
@@ -141,6 +148,60 @@ class SettingsView extends StatelessWidget {
           body,
         ],
       );
+}
+
+/// The buried, undocumented resize escape hatch. Understated on purpose — it
+/// reads as a stray line, not a feature. Flips the in-memory allowResize flag
+/// (never saved) and applies it straight to the window. Off on every launch.
+class _ResizeRow extends StatelessWidget {
+  final Palette palette;
+  const _ResizeRow({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<SettingsController>();
+    final p = palette;
+    final on = s.allowResize;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () async {
+        final v = !on;
+        s.allowResize = v;
+        try {
+          await windowManager.setResizable(v);
+          await windowManager.setMaximizable(v);
+        } catch (_) {}
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text('allow window resizing', style: glass(13, p.foot)),
+            ),
+            Container(
+              width: 26,
+              height: 14,
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+              decoration: BoxDecoration(
+                color: p.mv1,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: on ? p.a : p.mb,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// The Nostalgia Mode master switch (and, once it's on, the sound sub-switch).
@@ -184,15 +245,20 @@ class _NostalgiaRow extends StatelessWidget {
             s.nostalgia = now;
             final sound = context.read<SoundController>();
             sound.toggle(now);
-            // Switching on: the laugh plays (always, stacking). The built-in
-            // easter-egg soundtrack only auto-starts if nothing is already
-            // playing — if the player is live (a track the user picked, or a
-            // trove stream), Nostalgia leaves it alone rather than yanking it
-            // back to track 0.
+            final music = context.read<MusicController>();
             if (now) {
+              // Switching on: the laugh plays (always, stacking). The built-in
+              // easter-egg soundtrack only auto-starts if nothing is already
+              // playing — if the player is live (a track the user picked, or a
+              // trove stream), Nostalgia leaves it alone rather than yanking it
+              // back to track 0. Cancel any pending auto-stop from a recent off.
+              music.cancelBuiltInStop();
               sound.laugh();
-              final music = context.read<MusicController>();
               if (!music.active) music.startBuiltIn();
+            } else {
+              // Switching off: after a 3s grace period, stop the easter-egg
+              // soundtrack (but leave a user's trove stream playing).
+              music.scheduleBuiltInStop();
             }
           },
           behavior: HitTestBehavior.opaque,
@@ -214,8 +280,11 @@ class _NostalgiaRow extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   textStyle: glass(14, p.soft),
+                  // Uses glass() (the swappable terminal face), not chassis(),
+                  // so it re-skins with the chosen font like everything else on
+                  // the glass — it was the one label stuck on the fixed face.
                   child: Text('NOSTALGIA MODE',
-                      style: chassis(13, on ? p.bright : p.mid, spacing: 0.16)),
+                      style: glass(16, on ? p.bright : p.mid, spacing: 0.16)),
                 ),
                 const Spacer(),
                 _toggle(p, on),

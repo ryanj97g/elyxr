@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 
 import '../../design/text.dart';
 import '../../design/tokens.dart';
@@ -22,7 +23,10 @@ class NonsenseButton extends StatefulWidget {
 class _NonsenseButtonState extends State<NonsenseButton> {
   final _rnd = Random();
 
-  static const _bits = <String>[
+  // The messages come from assets/nonsense.txt — a dev-only file (edit it,
+  // rebuild, done; it's baked in so users can't change it). These built-ins are
+  // just the fallback if that file is ever missing.
+  static const _fallback = <String>[
     r'¯\_(ツ)_/¯',
     'beep boop',
     'nothing happened',
@@ -36,6 +40,29 @@ class _NonsenseButtonState extends State<NonsenseButton> {
     'ᕕ( ᐛ )ᕗ',
     'wow. a button.',
   ];
+  List<String> _bits = _fallback;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBits();
+  }
+
+  Future<void> _loadBits() async {
+    try {
+      final raw = await rootBundle.loadString('assets/nonsense.txt');
+      final lines = <String>[];
+      for (final l in raw.split('\n')) {
+        final line = l.replaceAll('\r', '');
+        final t = line.trim();
+        if (t.isEmpty || t.startsWith('#')) continue; // blanks + comments
+        lines.add(line.trimRight());
+      }
+      if (lines.isNotEmpty && mounted) setState(() => _bits = lines);
+    } catch (_) {
+      // Missing / unreadable — keep the built-in fallback list.
+    }
+  }
 
   void _fire() {
     final overlay = Overlay.of(context);

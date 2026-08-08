@@ -1,0 +1,17 @@
+# Nonsense Button messages — one per line.
+# This is a DEV file: edit it here, rebuild, and the button says your lines.
+# It ships baked into the build, so end users can't change it.
+# Blank lines and lines starting with # are ignored.
+
+¯\_(ツ)_/¯
+beep boop
+nothing happened
+you found the button
+(⌐■_■)
+<(^_^)>
+01001000 01001001
+do not press again
+that tickles
+± 0.00 nonsense
+ᕕ( ᐛ )ᕗ
+wow. a button.
