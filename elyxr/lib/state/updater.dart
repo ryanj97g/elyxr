@@ -17,13 +17,10 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import 'transfers.dart';
-
 enum UpdateStage { idle, updating, waitingForUpload, failed }
 
 class UpdateController extends ChangeNotifier {
-  final TransferController _transfers;
-  UpdateController(this._transfers);
+  UpdateController();
 
   UpdateStage stage = UpdateStage.idle;
   String? error;
@@ -71,19 +68,12 @@ class UpdateController extends ChangeNotifier {
       proc.stderr.listen((_) {});
       final code = await proc.exitCode;
       if (code == 0) {
-        // Server path: the build finished synchronously — relaunch onto it now.
-        await _relaunchWhenClear();
-      } else if (code == 10) {
-        // Client path: we asked the server to update the fleet. This device's
-        // own update runs in the background via its agent, which restarts the
-        // app when the new build is ready — so stay on "updating" and let that
-        // restart happen, rather than relaunching onto the old binary now.
-        stage = UpdateStage.updating;
-        notifyListeners();
-        // Safety net: if the restart never comes (the update failed upstream),
-        // don't sit on the spinner forever.
+        // The update is launched. It runs detached (its own systemd scope),
+        // rebuilds, and restarts this app when the new build is ready — so we
+        // stay on "updating" and let that restart happen. This is the exact same
+        // path the tray's "Update now" and `lymnal update` take.
         _fleetTimeout?.cancel();
-        _fleetTimeout = Timer(const Duration(minutes: 5), () {
+        _fleetTimeout = Timer(const Duration(minutes: 10), () {
           if (stage == UpdateStage.updating) {
             stage = UpdateStage.idle;
             notifyListeners();
@@ -91,40 +81,14 @@ class UpdateController extends ChangeNotifier {
         });
       } else {
         stage = UpdateStage.failed;
-        error = 'The update didn\'t finish (exit $code).';
+        error = 'The update didn\'t start (exit $code).';
         notifyListeners();
       }
     } catch (e) {
       stage = UpdateStage.failed;
-      error = 'Could not run the update: $e';
+      error = 'Could not start the update: $e';
       notifyListeners();
     }
-  }
-
-  /// Relaunch onto the fresh build now, or the instant an in-flight upload ends.
-  Future<void> _relaunchWhenClear() async {
-    while (_transfers.hasPendingUpload) {
-      if (stage != UpdateStage.waitingForUpload) {
-        stage = UpdateStage.waitingForUpload;
-        notifyListeners();
-      }
-      await Future<void>.delayed(const Duration(seconds: 1));
-    }
-    await _relaunch();
-  }
-
-  Future<void> _relaunch() async {
-    try {
-      final exe = Platform.resolvedExecutable;
-      if (File(exe).existsSync()) {
-        await Process.start(exe, const [], mode: ProcessStartMode.detached);
-      }
-    } catch (_) {
-      // If relaunch can't spawn, the person reopens elyxr themselves — the new
-      // build is already in place.
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    exit(0);
   }
 
   /// Retry after a failed update.

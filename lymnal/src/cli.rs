@@ -300,68 +300,14 @@ fn bind(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
 /// changed, and restarts the service if its binary changed. Extra args (e.g.
 /// --verbose) are forwarded to the installer.
 fn update(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
-    // If this device is linked to a server (a client), ask the server to update
-    // the whole fleet instead of only itself. The server broadcasts to every
-    // connected device — including this one, whose agent then runs the installer
-    // — and updates itself, so an update from a client reaches the server and
-    // every sibling. This is what makes the experience bidirectional: you can be
-    // away from the server and still update everything from your own device.
-    if let Some(dir) = config_path.parent() {
-        if let Some(link) = crate::agent::load_link(dir) {
-            // A client press. Every device connects to the server, not to each
-            // other, so the server is how the *other* devices hear about it: ask
-            // it to broadcast the update (it also rebuilds itself). When the
-            // server is reachable, that broadcast comes straight back to this
-            // device and our own agent applies the update — so we don't also
-            // self-trigger here, which would race a second installer.
-            //
-            // When the server is NOT reachable, a press must still never be a
-            // no-op: update THIS device from source right now, detached in its
-            // own systemd scope so it outlives the app/service restart the
-            // installer performs. The other devices catch up on their own the
-            // next time the fleet build moves — no device waits on the server's
-            // version or its being online to update itself.
-            match request_fleet_update(&link) {
-                Ok(()) => println!("Asked {} to update every device.", link.server),
-                Err(e) => {
-                    eprintln!(
-                        "couldn't reach {} to update the fleet ({e}); updating this device on its own.",
-                        link.server
-                    );
-                    crate::agent::trigger_local_update(config_path.to_path_buf());
-                }
-            }
-            // Exit 10 — "requested": either way this device updates in the
-            // background (a detached installer restarts the app when the build is
-            // ready), so the app waits rather than relaunching onto the old binary
-            // now.
-            std::process::exit(10);
-        }
-    }
-
-    // Otherwise this is the server: announce to connected clients, then install.
-    let repo = find_repo(config_path)?;
-    let script = repo.join("elyxr.sh");
-    if !script.exists() {
-        anyhow::bail!(
-            "found a recorded repo at {} but no elyxr.sh there. Re-run ./elyxr.sh from the repo once.",
-            repo.display()
-        );
-    }
-    // Tell any connected clients an update is starting, so they update in step
-    // with this one instead of waiting to notice a version gap. Best-effort: if
-    // the local service isn't reachable, the update still runs.
-    let _ = announce_update_to_clients(config_path);
-
-    let status = std::process::Command::new("bash")
-        .arg(&script)
-        .args(args)
-        .current_dir(&repo)
-        .status()
-        .map_err(|e| anyhow::anyhow!("couldn't launch the installer at {}: {e}", script.display()))?;
-    if !status.success() {
-        anyhow::bail!("the installer reported a problem (see its output above).");
-    }
+    let _ = args; // the unified installer takes no extra arguments
+    // One path for every trigger — the app's Update button, the tray's "Update
+    // now", and this command all call the same function: notify the fleet
+    // (best-effort) and update this device, detached in its own systemd scope so
+    // it survives the app/service restart the install performs. Returns as soon
+    // as the update is launched; it rebuilds and restarts the app on its own.
+    crate::agent::update_fleet_and_self(config_path);
+    println!("Update started — it runs in the background and the app restarts when the new build is ready.");
     Ok(())
 }
 
@@ -392,7 +338,7 @@ fn drain(config_path: &std::path::Path) -> anyhow::Result<()> {
 /// Ask the paired server to update the whole fleet (client side of `lymnal
 /// update`). The server broadcasts to every connected device and updates itself,
 /// so the update reaches the server and every sibling — not just this device.
-fn request_fleet_update(link: &crate::agent::Link) -> anyhow::Result<()> {
+pub(crate) fn request_fleet_update(link: &crate::agent::Link) -> anyhow::Result<()> {
     let url = format!("http://{}/v1/update", link.server);
     ureq::post(&url)
         .set("Authorization", &format!("Bearer {}", link.token))
@@ -404,7 +350,7 @@ fn request_fleet_update(link: &crate::agent::Link) -> anyhow::Result<()> {
 
 /// Ask the local running service to broadcast an "update starting" event to
 /// connected clients. Best-effort — errors are ignored by the caller.
-fn announce_update_to_clients(config_path: &std::path::Path) -> anyhow::Result<()> {
+pub(crate) fn announce_update_to_clients(config_path: &std::path::Path) -> anyhow::Result<()> {
     let cfg = load(config_path)?;
     let addr = resolve_bind(&cfg.bind).map_err(|e| anyhow::anyhow!("{e}"))?;
     let base = format!("http://{addr}");
