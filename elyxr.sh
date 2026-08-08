@@ -314,12 +314,26 @@ fi
 
 if [ "$APP" = 1 ]; then
   phase "building the app"
+  # Flutter's incremental build cache can go stale across an update: it reports
+  # success while leaving the compiled Dart (build/.../lib/libapp.so) on the old
+  # build — so an update says "ok" while nothing changes on screen. Guard against
+  # it by cleaning whenever the checked-out commit differs from the one the app
+  # was last built at: a real update rebuilds from scratch and always lands,
+  # while a no-op re-run at the same commit skips the clean and stays fast. The
+  # stamp lives under build/ (gitignored); it's read before any clean and written
+  # after a successful build.
+  DART_STAMP="elyxr/build/.elyxr-built-commit"
+  if [ "$(cat "$DART_STAMP" 2>/dev/null || true)" != "$ELYXR_COMMIT" ]; then
+    ( cd elyxr && sh_ flutter clean )
+  fi
   # The app carries the same build number lymnal does (computed once above), so a
   # client can tell when it's behind the server and offer to update.
   ( cd elyxr && sh_ flutter config --enable-linux-desktop && sh_ flutter pub get \
       && sh_ flutter build linux --release \
            --dart-define=ELYXR_BUILD="$ELYXR_BUILD" \
            --dart-define=ELYXR_COMMIT="$ELYXR_COMMIT" )
+  mkdir -p "$(dirname "$DART_STAMP")"
+  printf '%s\n' "$ELYXR_COMMIT" > "$DART_STAMP"
   done_
 fi
 
