@@ -316,9 +316,9 @@ class _AccentPicker extends StatelessWidget {
               padding: const EdgeInsets.only(right: 4),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                // Press picks the phosphor; drag up/down pushes its intensity —
-                // saturation (and glow) for a colour, lightness for mono. Double-
-                // tap resets. The whole tube responds live.
+                // A single press picks the phosphor; dragging up/down pushes its
+                // intensity — saturation (and glow) for a colour, lightness for
+                // mono. Nothing else: no double-tap. The whole tube responds live.
                 onTapDown: (_) => settings.accent = accent,
                 onVerticalDragUpdate: (d) {
                   final up = -(d.primaryDelta ?? 0);
@@ -326,13 +326,6 @@ class _AccentPicker extends StatelessWidget {
                     settings.monoL = settings.monoL + up * 0.0026;
                   } else {
                     settings.accentSat = settings.accentSat + up * 0.006;
-                  }
-                },
-                onDoubleTap: () {
-                  if (accent == Accent.mono) {
-                    settings.monoL = 0.72;
-                  } else {
-                    settings.accentSat = 1.0;
                   }
                 },
                 child: _swatch(accent, accent == settings.accent, palette, settings),
