@@ -3,6 +3,7 @@
 // sampled off the play head), take the low end, and push the cone + glow on the
 // bass. Still metal grilles when nothing's playing.
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:provider/provider.dart';
