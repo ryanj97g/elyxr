@@ -1,23 +1,23 @@
-// The Nostalgia Mode music player, on the SoLoud engine. A playlist of whatever
-// is in assets/music/ (.ogg/.mp3/.wav), with play/pause, seek, skip, shuffle and
-// repeat. Position is polled (SoLoud has no position stream); a track ending is
-// detected by its voice handle going invalid. All playback is guarded so a
-// missing file or absent audio device never affects the app.
+// The music player, on audioplayers (GStreamer on Linux — the system's own
+// codecs). Plays whatever is in assets/music/ plus any audio file streamed from
+// the trove. mp3/ogg/wav/flac play directly; tracker modules (.xm/.mod/.s3m/.it)
+// are rendered to WAV on load (openmpt123) first. Playback never depends on the
+// visualizer — that's a separate concern entirely now.
 
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show AssetManifest, rootBundle;
-import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../api/lymnal_client.dart';
 
-/// Audio extensions the player accepts — common formats SoLoud decodes directly,
-/// plus tracker modules (.xm/.mod/.s3m/.it, demoscene/keygen fare) which are
-/// rendered to PCM on load (see MusicController._renderModule) so they play too.
+/// Audio extensions the player accepts — common formats GStreamer decodes
+/// directly, plus tracker modules (.xm/.mod/.s3m/.it) which are rendered to PCM
+/// on load (see _renderModule) so they play too.
 const kAudioExts = {
   'ogg', 'mp3', 'wav', 'flac', 'm4a', 'aac', 'opus',
   'xm', 'mod', 's3m', 'it',
@@ -31,6 +31,7 @@ enum MusicRepeat { off, all, one }
 
 class MusicController extends ChangeNotifier {
   final _rnd = math.Random();
+  final AudioPlayer _player = AudioPlayer();
 
   List<String> _tracks = []; // asset keys under assets/music/
   int _index = 0;
@@ -39,20 +40,27 @@ class MusicController extends ChangeNotifier {
   MusicRepeat _repeat = MusicRepeat.off;
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
-
-  AudioSource? _source;
-  SoundHandle? _handle;
-  Timer? _poll;
-  // Set when playing a one-off file streamed from the trove (not the asset
-  // playlist); overrides the shown title and hides the playlist index.
+  bool _hasSource = false;
+  // Set when playing a one-off trove stream (not the asset playlist); overrides
+  // the shown title and hides the playlist index.
   String? _override;
 
   MusicController() {
+    _player.onPositionChanged.listen((d) {
+      _pos = d;
+      notifyListeners();
+    });
+    _player.onDurationChanged.listen((d) {
+      _dur = d;
+      notifyListeners();
+    });
+    _player.onPlayerStateChanged.listen((s) {
+      _playing = s == PlayerState.playing;
+      notifyListeners();
+    });
+    _player.onPlayerComplete.listen((_) => _onComplete());
     _load();
   }
-
-  SoLoud get _sl => SoLoud.instance;
-  bool get _ready => _sl.isInitialized;
 
   List<String> get tracks => _tracks;
   bool get hasTracks => _tracks.isNotEmpty;
@@ -67,7 +75,7 @@ class MusicController extends ChangeNotifier {
       _override ?? (hasTracks ? _pretty(_tracks[_index]) : 'no tracks');
   String titleAt(int i) => _pretty(_tracks[i]);
   bool get isStream => _override != null;
-  bool get active => _source != null && (_playing || _pos > Duration.zero);
+  bool get active => _hasSource && (_playing || _pos > Duration.zero);
 
   Future<void> _load() async {
     try {
@@ -90,88 +98,36 @@ class MusicController extends ChangeNotifier {
     return n.replaceAll(RegExp(r'[_-]+'), ' ').trim();
   }
 
-  Future<void> playIndex(int i) async {
-    if (_tracks.isEmpty || !_ready) return;
-    _index = i % _tracks.length;
-    if (_index < 0) _index += _tracks.length;
-    _override = null;
-    _pos = Duration.zero;
-    try {
-      if (_handle != null) await _sl.stop(_handle!);
-      _source = await _loadAssetPlayable(_tracks[_index]);
-      _dur = _sl.getLength(_source!);
-      _handle = _sl.play(_source!, volume: 0.9);
-      _playing = true;
-      _startPoll();
-    } catch (_) {
-      _playing = false;
-    }
-    notifyListeners();
-  }
-
-  /// Start the built-in easter-egg soundtrack from the top. This is what
-  /// Nostalgia Mode triggers when it switches on. No-op if audio is down or the
-  /// baked-in playlist is empty; if something is already playing it restarts the
-  /// playlist from the first track.
+  /// Start the built-in easter-egg soundtrack from the top — what Nostalgia Mode
+  /// triggers when it switches on. No-op if the baked-in playlist is empty.
   Future<void> startBuiltIn() async {
-    if (!_ready || _tracks.isEmpty) return;
+    if (_tracks.isEmpty) return;
     await playIndex(0);
   }
 
-  /// Stream and play one audio file from the trove (long-press on a client file
-  /// row). Downloads it through the local proxy to a temp file, then plays it.
-  Future<void> playTroveFile(
-      LymnalClient client, String path, String name) async {
-    if (!_ready) return;
-    try {
-      final bytes = await client.downloadBytes(path);
-      final dir = await getTemporaryDirectory();
-      final dot = path.lastIndexOf('.');
-      final ext = dot >= 0 ? path.substring(dot + 1).toLowerCase() : '';
-      final f = File('${dir.path}/elyxr_stream.$ext');
-      await f.writeAsBytes(bytes, flush: true);
-      if (_handle != null) await _sl.stop(_handle!);
-      // A tracker module has to be rendered to PCM first (SoLoud can't decode
-      // them); everything else SoLoud loads directly.
-      final playable = _isModule(ext) ? await _renderModule(f.path, ext) : f.path;
-      _source = await _sl.loadFile(playable);
-      _dur = _sl.getLength(_source!);
-      _override = _pretty(name);
-      _pos = Duration.zero;
-      _handle = _sl.play(_source!, volume: 0.9);
-      _playing = true;
-      _startPoll();
-    } catch (_) {
-      _playing = false;
-    }
-    notifyListeners();
-  }
-
-  // Tracker-module extensions SoLoud can't decode on its own — rendered to WAV
-  // first (see _renderModule).
   static const _moduleExts = {'xm', 'mod', 's3m', 'it'};
   bool _isModule(String ext) => _moduleExts.contains(ext.toLowerCase());
 
-  /// Load a bundled track. A normal format goes straight into SoLoud; a tracker
-  /// module is extracted to disk and rendered to WAV first, because SoLoud has no
-  /// module decoder.
-  Future<AudioSource> _loadAssetPlayable(String assetKey) async {
+  /// Build a playable source for a bundled asset. A normal format plays straight
+  /// from assets; a tracker module is extracted and rendered to WAV first.
+  Future<Source> _assetSource(String assetKey) async {
     final ext = assetKey.split('.').last.toLowerCase();
-    if (!_isModule(ext)) return _sl.loadAsset(assetKey);
+    if (!_isModule(ext)) {
+      // AssetSource prepends 'assets/'; our keys already start with it.
+      return AssetSource(assetKey.replaceFirst('assets/', ''));
+    }
     final data = await rootBundle.load(assetKey);
     final dir = await getTemporaryDirectory();
-    final src = File('${dir.path}/elyxr_asset_${assetKey.hashCode & 0x7fffffff}.$ext');
+    final src =
+        File('${dir.path}/elyxr_asset_${assetKey.hashCode & 0x7fffffff}.$ext');
     await src.writeAsBytes(data.buffer.asUint8List(), flush: true);
     final wav = await _renderModule(src.path, ext);
-    return _sl.loadFile(wav);
+    return DeviceFileSource(wav);
   }
 
-  /// Render a tracker module (.xm/.mod/.s3m/.it) to a temp WAV so SoLoud — which
-  /// only decodes mp3/ogg/wav/flac — can play it, with the FFT visualiser still
-  /// reacting since it's PCM by then. Prefers openmpt123 (a purpose-built module
-  /// renderer, installed by elyxr.sh); falls back to ffmpeg if it's present.
-  /// Cached by input path. If no renderer is available it returns the original
-  /// path unchanged (SoLoud then simply won't load it — no worse than before).
+  /// Render a tracker module to a temp WAV (openmpt123, ffmpeg as a fallback) so
+  /// it can be played like any other file. Cached by input path; returns the
+  /// original path if no renderer is available.
   Future<String> _renderModule(String inPath, String ext) async {
     final dir = await getTemporaryDirectory();
     final out = '${dir.path}/elyxr_mod_${inPath.hashCode & 0x7fffffff}.wav';
@@ -191,27 +147,61 @@ class MusicController extends ChangeNotifier {
     return inPath;
   }
 
-  void _startPoll() {
-    _poll?.cancel();
-    _poll = Timer.periodic(const Duration(milliseconds: 200), (_) {
-      final h = _handle;
-      if (h == null) return;
-      if (!_sl.getIsValidVoiceHandle(h)) {
-        _onComplete();
-        return;
-      }
-      _pos = _sl.getPosition(h);
-      if (_dur == Duration.zero && _source != null) _dur = _sl.getLength(_source!);
-      notifyListeners();
-    });
+  Future<void> playIndex(int i) async {
+    if (_tracks.isEmpty) return;
+    _index = i % _tracks.length;
+    if (_index < 0) _index += _tracks.length;
+    _override = null;
+    _pos = Duration.zero;
+    try {
+      final src = await _assetSource(_tracks[_index]);
+      await _player.stop();
+      await _player.play(src);
+      _hasSource = true;
+      _playing = true;
+    } catch (_) {
+      _playing = false;
+    }
+    notifyListeners();
+  }
+
+  /// Stream and play one audio file from the trove (long-press on a client file
+  /// row). Downloads it through the local proxy to a temp file, then plays it.
+  Future<void> playTroveFile(
+      LymnalClient client, String path, String name) async {
+    try {
+      final bytes = await client.downloadBytes(path);
+      final dir = await getTemporaryDirectory();
+      final dot = path.lastIndexOf('.');
+      final ext = dot >= 0 ? path.substring(dot + 1).toLowerCase() : '';
+      final f = File('${dir.path}/elyxr_stream.$ext');
+      await f.writeAsBytes(bytes, flush: true);
+      final playable = _isModule(ext) ? await _renderModule(f.path, ext) : f.path;
+      await _player.stop();
+      await _player.play(DeviceFileSource(playable));
+      _override = _pretty(name);
+      _hasSource = true;
+      _pos = Duration.zero;
+      _playing = true;
+    } catch (_) {
+      _playing = false;
+    }
+    notifyListeners();
   }
 
   Future<void> toggle() async {
-    if (_tracks.isEmpty || !_ready) return;
-    if (_handle == null) return playIndex(_index);
+    if (!_hasSource) {
+      if (_tracks.isNotEmpty) return playIndex(_index);
+      return;
+    }
     try {
-      _playing = !_playing;
-      _sl.setPause(_handle!, !_playing);
+      if (_playing) {
+        await _player.pause();
+        _playing = false;
+      } else {
+        await _player.resume();
+        _playing = true;
+      }
     } catch (_) {}
     notifyListeners();
   }
@@ -246,7 +236,7 @@ class MusicController extends ChangeNotifier {
     return playIndex(_shuffle && _tracks.length > 1 ? _pickNext() : _index - 1);
   }
 
-  // A track ended on its own (handle went invalid): honour repeat/shuffle.
+  // A track ended on its own: honour repeat/shuffle.
   void _onComplete() {
     if (_repeat == MusicRepeat.one) {
       playIndex(_index);
@@ -255,8 +245,6 @@ class MusicController extends ChangeNotifier {
     } else if (_index < _tracks.length - 1) {
       next();
     } else {
-      _poll?.cancel();
-      _handle = null;
       _playing = false;
       _pos = Duration.zero;
       notifyListeners();
@@ -264,9 +252,8 @@ class MusicController extends ChangeNotifier {
   }
 
   Future<void> seek(Duration to) async {
-    if (_handle == null || !_ready) return;
     try {
-      _sl.seek(_handle!, to);
+      await _player.seek(to);
       _pos = to;
       notifyListeners();
     } catch (_) {}
@@ -274,13 +261,7 @@ class MusicController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _poll?.cancel();
-    final h = _handle;
-    if (h != null && _ready) {
-      try {
-        _sl.stop(h);
-      } catch (_) {}
-    }
+    _player.dispose();
     super.dispose();
   }
 }

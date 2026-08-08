@@ -3,14 +3,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'design/tokens.dart';
-import 'state/audio_status.dart';
 import 'state/session.dart';
 import 'state/settings.dart';
 import 'state/transfers.dart';
@@ -61,21 +59,8 @@ Future<void> main() async {
   await session.boot();
   await transfers.load();
 
-  // Start the audio engine once, with visualization on so the music player can
-  // read the live FFT. Guarded: a headless machine with no audio device just
-  // runs silent.
-  try {
-    await SoLoud.instance.init();
-    SoLoud.instance.setVisualizationEnabled(true);
-    audioError.value = null;
-  } catch (e, st) {
-    // The audio engine didn't start — the laugh, sound effects, and music would
-    // all be silent. Record it so the music player can show *why* (instead of a
-    // silent no-op), and log it for a terminal run.
-    audioError.value = '$e';
-    stderr.writeln('elyxr: audio engine failed to start — playback will be silent: $e');
-    stderr.writeln(st.toString());
-  }
+  // No global audio init needed — audioplayers creates players on demand and
+  // uses the system's GStreamer, so there's nothing to start up here.
 
   runApp(ShakeToClose(
     child: ElyxrApp(
