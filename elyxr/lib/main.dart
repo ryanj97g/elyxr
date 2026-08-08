@@ -45,6 +45,10 @@ Future<void> main() async {
     },
   );
 
+  // Register any dev-dropped fonts (assets/fonts/custom/) before settings apply
+  // the saved terminal face — otherwise a saved custom face wouldn't exist yet.
+  await loadCustomFonts();
+
   final prefs = await SharedPreferences.getInstance();
   final settings = SettingsController(prefs);
   final session = SessionController(prefs, KeyringTokenStore());

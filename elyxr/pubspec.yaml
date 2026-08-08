@@ -36,6 +36,7 @@ flutter:
     - assets/branding/
     - assets/sounds/
     - assets/music/
+    - assets/fonts/custom/
     - assets/nonsense.txt
 
   fonts:

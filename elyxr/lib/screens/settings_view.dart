@@ -530,57 +530,61 @@ class _FacePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = palette;
     final settings = context.watch<SettingsController>();
-    // Many faces now, so they flow into a grid rather than one cramped row.
-    // Three across, sized to the tube width; extra rows scroll with the list.
-    return LayoutBuilder(builder: (context, constraints) {
-      const cols = 3;
-      const gap = 8.0;
-      final w = (constraints.maxWidth - gap * (cols - 1)) / cols;
-      return Wrap(
-        spacing: gap,
-        runSpacing: 10,
-        children: [
-          for (final face in kTermFaces)
-            SizedBox(
-              width: w,
-              child: GestureDetector(
-                onTap: () => settings.termFont = face.family,
-                behavior: HitTestBehavior.opaque,
-                child: Builder(builder: (context) {
-                  final on = settings.termFont == face.family;
-                  return Column(
-                    children: [
-                      Container(
-                        height: 44,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: p.dark ? const Color(0xFF030604) : const Color(0xFFf2f7f3),
-                          border: Border.all(color: on ? p.a : p.dim),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        // "Aa" rendered in the face itself — a live specimen.
-                        child: Text('Aa',
-                            style: TextStyle(
-                              fontFamily: face.family,
-                              fontSize: 24,
-                              color: on ? p.a : p.foot,
-                              shadows: on ? [Shadow(color: p.a, blurRadius: 10)] : null,
-                            )),
-                      ),
-                      const SizedBox(height: 5),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(face.label,
-                            style: chassis(9.5, on ? p.bright : p.mid, spacing: 0.08)),
-                      ),
-                    ],
-                  );
-                }),
+    // One fixed-height row that scrolls sideways — so however many faces there
+    // are (the built-ins plus any dev-dropped fonts in assets/fonts/custom/),
+    // the section keeps its shape and nothing below it moves. termFaces is the
+    // live list: built-ins + custom.
+    final faces = termFaces;
+    return SizedBox(
+      height: 67,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.hardEdge,
+        itemCount: faces.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final face = faces[i];
+          final on = settings.termFont == face.family;
+          return SizedBox(
+            width: 68,
+            child: GestureDetector(
+              onTap: () => settings.termFont = face.family,
+              behavior: HitTestBehavior.opaque,
+              child: Column(
+                children: [
+                  Container(
+                    height: 44,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: p.dark
+                          ? const Color(0xFF030604)
+                          : const Color(0xFFf2f7f3),
+                      border: Border.all(color: on ? p.a : p.dim),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    // "Aa" rendered in the face itself — a live specimen.
+                    child: Text('Aa',
+                        style: TextStyle(
+                          fontFamily: face.family,
+                          fontSize: 24,
+                          color: on ? p.a : p.foot,
+                          shadows:
+                              on ? [Shadow(color: p.a, blurRadius: 10)] : null,
+                        )),
+                  ),
+                  const SizedBox(height: 5),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(face.label,
+                        style: chassis(9.5, on ? p.bright : p.mid, spacing: 0.08)),
+                  ),
+                ],
               ),
             ),
-        ],
-      );
-    });
+          );
+        },
+      ),
+    );
   }
 }
 
