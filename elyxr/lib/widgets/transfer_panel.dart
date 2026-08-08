@@ -11,8 +11,6 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/actions.dart';
 import '../state/browse.dart';
-import '../state/music.dart';
-import '../state/session.dart';
 import '../state/settings.dart';
 import '../state/transfers.dart';
 import '../util/format.dart';
@@ -52,9 +50,9 @@ class _SelectionBarState extends State<SelectionBar> {
         ? fmtCount(browse.selection.length, 'item')
         : '${fmtCount(_res!.fileCount, 'file')} · ${fmtSize(_res!.totalBytes)}';
 
-    // When exactly one thing is selected, the box shows single-file actions:
-    // PLAY (for audio, into the in-app player) and RENAME — the two things that
-    // used to hide on a long-press before click-and-hold became multi-select.
+    // When exactly one thing is selected, the box also offers RENAME (the one
+    // action that lost its long-press when click-and-hold became multi-select;
+    // playing audio moved onto a single click, in the file list itself).
     Entry? single;
     if (browse.selection.length == 1) {
       final name = browse.selection.first;
@@ -65,8 +63,6 @@ class _SelectionBarState extends State<SelectionBar> {
         }
       }
     }
-    final canPlay =
-        single != null && !single.isDir && isAudioName(single.name);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(13, 8, 13, 6),
@@ -81,8 +77,6 @@ class _SelectionBarState extends State<SelectionBar> {
               spacing: 12,
               runSpacing: 2,
               children: [
-                if (canPlay)
-                  _action(p, 'PLAY', () => _play(context, browse, single!)),
                 if (single != null)
                   _action(p, 'RENAME',
                       () => _rename(context, browse, p, single!.name)),
@@ -98,16 +92,6 @@ class _SelectionBarState extends State<SelectionBar> {
         ],
       ),
     );
-  }
-
-  /// Stream the selected audio file from the trove into the in-app player.
-  void _play(BuildContext context, BrowseController browse, Entry entry) {
-    final client = context.read<SessionController>().client;
-    if (client == null) return;
-    final path = browse.path.isEmpty
-        ? entry.name
-        : '${browse.path}/${entry.name}';
-    context.read<MusicController>().playTroveFile(client, path, entry.name);
   }
 
   /// Rename with the taken-name flow: Replace / Keep both as (1) / Cancel.
