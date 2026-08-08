@@ -30,9 +30,11 @@ class MusicPlayerPanel extends StatelessWidget {
     final m = context.watch<MusicController>();
 
     if (!m.hasTracks && !m.active) {
-      return Text(
-          'Drop tracks in assets/music/, or long-press an audio file to stream it.',
-          style: glass(15, p.foot));
+      // Idle — the deck is always present; it just has nothing loaded yet.
+      return Row(children: [
+        Text('♪ ', style: glass(16, p.foot)),
+        Text('—', style: glass(15, p.foot)),
+      ]);
     }
 
     final total = m.duration.inMilliseconds;

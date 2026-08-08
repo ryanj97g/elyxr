@@ -22,6 +22,7 @@ import '../state/settings.dart';
 import '../util/drag_out.dart';
 import '../util/format.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/nostalgia/music_player.dart';
 import '../widgets/tactile.dart';
 import '../widgets/transfer_panel.dart';
 import 'preview.dart';
@@ -46,6 +47,17 @@ class FilesView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _Console(palette: p),
+            // The music player is a permanent fixture of the top area, above the
+            // FIND/NAME row — always visible, in every mode. Nostalgia Mode is
+            // just one thing that drives it (auto-starting the built-in tracks);
+            // it is not a gate on the player.
+            Container(
+              padding: const EdgeInsets.fromLTRB(13, 8, 13, 8),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: p.dim)),
+              ),
+              child: MusicPlayerPanel(palette: p),
+            ),
             _FindRow(palette: p),
             _Breadcrumbs(palette: p),
             Expanded(
