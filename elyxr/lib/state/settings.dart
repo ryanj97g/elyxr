@@ -77,7 +77,9 @@ class SettingsController extends ChangeNotifier {
     _accentSat = _prefs.getDouble('accentSat') ?? 1.0;
     _monoL = _prefs.getDouble('monoL') ?? 0.72;
     _termFont = _prefs.getString('termFont') ?? 'VT323';
-    _nostalgia = _prefs.getBool('nostalgia') ?? false;
+    // Nostalgia Mode always starts off — it's a session toy, never a saved
+    // preference. (Deliberately not read back from prefs.)
+    _nostalgia = false;
     _sound = _prefs.getBool('sound') ?? true;
     // Apply the chosen terminal face before the first frame builds. It governs
     // everything on the glass — the body text and the ticker/readouts alike —
@@ -118,7 +120,12 @@ class SettingsController extends ChangeNotifier {
         Fonts.glass = v;
         Fonts.mono = v;
       }, () => _prefs.setString('termFont', v));
-  set nostalgia(bool v) => _set('nostalgia', () => _nostalgia = v, () => _prefs.setBool('nostalgia', v));
+  // Toggled in-session only; never written to prefs, so it's off on every launch.
+  set nostalgia(bool v) {
+    if (_nostalgia == v) return;
+    _nostalgia = v;
+    notifyListeners();
+  }
   set sound(bool v) => _set('sound', () => _sound = v, () => _prefs.setBool('sound', v));
   set density(Density v) => _set('density', () => _density = v, () => _prefs.setString('density', v.name));
   set dark(bool v) => _set('dark', () => _dark = v, () => _prefs.setBool('dark', v));
