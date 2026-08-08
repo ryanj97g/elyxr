@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 
 import '../../design/text.dart';
 import '../../design/tokens.dart';
+import '../../state/audio_status.dart';
 import '../../state/music.dart';
 import 'marquee.dart';
 
@@ -26,6 +27,26 @@ class MusicPlayerPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // If the audio engine never started, say so right here — the buttons, the
+    // laugh, and the tracks all depend on it, so "nothing plays" has one cause.
+    return ValueListenableBuilder<String?>(
+      valueListenable: audioError,
+      builder: (context, err, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (err != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text('♪ audio engine off — playback is silent\n$err',
+                  style: glass(12, const Color(0xFFf5b942))),
+            ),
+          _deck(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _deck(BuildContext context) {
     final p = palette;
     final m = context.watch<MusicController>();
 

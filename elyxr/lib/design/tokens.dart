@@ -229,6 +229,17 @@ class Palette {
   Color aAlpha(double f) => a.withValues(alpha: f);
 }
 
-/// Fixed window size (DESIGN.md): portrait, not resizable in v1.
+/// The visible chassis: portrait, not resizable. Its aspect matches a modern
+/// phone screen (1440×3088) so the same layout ports cleanly to a phone later.
 const double kAppWidth = 440;
-const double kAppHeight = 884;
+const double kAppHeight = 944; // 440 × (3088/1440) ≈ phone aspect
+
+/// The transparent room left around the chassis for the max-saturation glow to
+/// bleed into. The window (below) is the chassis plus this margin on every side;
+/// because the window is transparent, that extra area shows only the glow and
+/// the desktop behind it — the chassis stays full size, never shrunk to fit.
+const double kGlowMargin = 76;
+
+/// The actual OS window — larger than the visible chassis by the glow margin.
+const double kWindowWidth = kAppWidth + kGlowMargin * 2; // 592
+const double kWindowHeight = kAppHeight + kGlowMargin * 2; // 1096

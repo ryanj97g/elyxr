@@ -112,8 +112,12 @@ class _Console extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(width: 1, height: 56, color: p.dim),
-              const SizedBox(width: 11),
+              // Symmetric breathing room on BOTH sides of the divider — the
+              // left gap was missing, so the right-aligned HOST/LINK/FREE values
+              // ran right into the line.
+              const SizedBox(width: 14),
+              Container(width: 1, height: 66, color: p.dim),
+              const SizedBox(width: 14),
               Expanded(
                 flex: 1,
                 child: Column(
@@ -145,7 +149,7 @@ class _Console extends StatelessWidget {
   Widget _stat(String label, String value) {
     final p = palette;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 1),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
           Text(label, style: glass(15, p.mid)),

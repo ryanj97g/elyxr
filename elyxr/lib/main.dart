@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'design/tokens.dart';
+import 'state/audio_status.dart';
 import 'state/session.dart';
 import 'state/settings.dart';
 import 'state/transfers.dart';
@@ -29,7 +30,7 @@ Future<void> main() async {
       ? const WindowOptions(titleBarStyle: TitleBarStyle.hidden)
       : const WindowOptions(
           titleBarStyle: TitleBarStyle.hidden,
-          size: Size(kAppWidth, kAppHeight),
+          size: Size(kWindowWidth, kWindowHeight),
           center: true,
         );
   await windowManager.waitUntilReadyToShow(
@@ -66,10 +67,12 @@ Future<void> main() async {
   try {
     await SoLoud.instance.init();
     SoLoud.instance.setVisualizationEnabled(true);
+    audioError.value = null;
   } catch (e, st) {
     // The audio engine didn't start — the laugh, sound effects, and music would
-    // all be silent. Surface it (visible in a terminal run) instead of hiding it,
-    // so a "no sound" report has a cause to look at rather than a silent no-op.
+    // all be silent. Record it so the music player can show *why* (instead of a
+    // silent no-op), and log it for a terminal run.
+    audioError.value = '$e';
     stderr.writeln('elyxr: audio engine failed to start — playback will be silent: $e');
     stderr.writeln(st.toString());
   }
