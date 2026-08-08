@@ -329,12 +329,57 @@ if [ "$APP" = 1 ]; then
   if [ "$(cat "$DART_STAMP" 2>/dev/null || true)" != "$ELYXR_COMMIT" ]; then
     ( cd elyxr && sh_ flutter clean )
   fi
-  # The app carries the same build number lymnal does (computed once above), so a
-  # client can tell when it's behind the server and offer to update.
-  ( cd elyxr && sh_ flutter config --enable-linux-desktop && sh_ flutter pub get \
-      && sh_ flutter build linux --release \
-           --dart-define=ELYXR_BUILD="$ELYXR_BUILD" \
-           --dart-define=ELYXR_COMMIT="$ELYXR_COMMIT" )
+  # Build the app (carrying the same build number lymnal does). If it fails only
+  # because a plugin needs a system -dev header that isn't installed, don't let a
+  # hand-maintained package list be the thing that breaks: a plugin bump changes
+  # what's needed, and a stale list dies with a cryptic "file not found". Instead,
+  # on that specific failure, find the package that owns the missing header with
+  # apt-file, install it, and retry — the dependency heals itself. (The toolchain
+  # baseline still has to be present up front; you need a compiler before you can
+  # compile. This covers the per-plugin libraries on top of it.)
+  BUILD_LOG="$(mktemp -t elyxr-appbuild.XXXXXX.log)"
+  build_app() {
+    local rc
+    ( cd elyxr && flutter config --enable-linux-desktop && flutter pub get \
+        && flutter build linux --release \
+             --dart-define=ELYXR_BUILD="$ELYXR_BUILD" \
+             --dart-define=ELYXR_COMMIT="$ELYXR_COMMIT" ) >"$BUILD_LOG" 2>&1
+    rc=$?
+    cat "$BUILD_LOG" >>"$LOG"
+    return $rc
+  }
+  app_tries=0
+  until build_app; do
+    app_tries=$((app_tries + 1))
+    # Headers this attempt's compile couldn't find (clang and gcc word it
+    # differently); empty if it failed for some other reason.
+    miss="$(grep -oE "'[A-Za-z0-9_./+-]+\.h' file not found|[A-Za-z0-9_./+-]+\.h: No such file" "$BUILD_LOG" 2>/dev/null \
+             | grep -oE "[A-Za-z0-9_./+-]+\.h" | sort -u || true)"
+    if [ -z "$miss" ] || [ "$app_tries" -gt 3 ]; then
+      echo "${RED}the app build failed — full output at $BUILD_LOG${RST}"
+      false  # hand off to the error trap; the log is kept
+    fi
+    # apt-file maps a file path back to the package that ships it. Install it (and
+    # its index) the first time we need it.
+    if ! command -v apt-file >/dev/null 2>&1; then
+      sudo -v || { echo "${RED}need sudo to install a missing build dependency${RST}"; false; }
+      sh_ $SUDO apt-get install -y apt-file
+      sh_ $SUDO apt-file update
+    fi
+    pkgs=""
+    for h in $miss; do
+      p="$(apt-file search --package-only "$h" 2>/dev/null | head -n1 || true)"
+      [ -n "$p" ] && pkgs="$pkgs $p"
+    done
+    if [ -z "$pkgs" ]; then
+      echo "${RED}couldn't find a package providing:$miss${RST}"
+      false
+    fi
+    echo "  a plugin needs a system library — installing:$pkgs"
+    sudo -v || { echo "${RED}need sudo to install:$pkgs${RST}"; false; }
+    sh_ $SUDO apt-get install -y $pkgs
+  done
+  rm -f "$BUILD_LOG"
   mkdir -p "$(dirname "$DART_STAMP")"
   printf '%s\n' "$ELYXR_COMMIT" > "$DART_STAMP"
   done_
