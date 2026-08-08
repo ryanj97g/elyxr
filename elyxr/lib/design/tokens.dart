@@ -5,6 +5,7 @@
 // sits in one phosphor colour and stays that colour. A new accent is one row.
 
 import 'package:flutter/painting.dart';
+import 'package:flutter/services.dart' show AssetManifest, FontLoader, rootBundle;
 
 import 'oklch.dart';
 
@@ -52,6 +53,46 @@ const List<TermFace> kTermFaces = [
   TermFace('Holo Edge Four', 'HOLO EDGE'),
   TermFace('Digital Moneter', 'DIGITAL'),
 ];
+
+/// Fonts the dev drops into assets/fonts/custom/ (a tracked folder, like the
+/// music). Empty until loadCustomFonts() fills it once at startup.
+final List<TermFace> customTermFaces = [];
+
+/// Every selectable terminal face: the built-ins, then any custom fonts found in
+/// assets/fonts/custom/. The TYPEFACE picker reads this.
+List<TermFace> get termFaces => [...kTermFaces, ...customTermFaces];
+
+/// Register, at runtime, every .ttf/.otf sitting in assets/fonts/custom/ so they
+/// become usable by family name and show up in the picker — no pubspec edit per
+/// font. Call once at startup, before the first frame and before the saved face
+/// is applied. The family name is the filename without its extension; a file
+/// that fails to load is skipped, never fatal.
+Future<void> loadCustomFonts() async {
+  try {
+    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    final files = manifest.listAssets().where((a) {
+      final l = a.toLowerCase();
+      return a.startsWith('assets/fonts/custom/') &&
+          (l.endsWith('.ttf') || l.endsWith('.otf'));
+    }).toList()
+      ..sort();
+    for (final a in files) {
+      final name = a.split('/').last;
+      final dot = name.lastIndexOf('.');
+      final family = dot > 0 ? name.substring(0, dot) : name;
+      if (termFaces.any((f) => f.family == family)) continue; // no duplicates
+      try {
+        final loader = FontLoader(family)..addFont(rootBundle.load(a));
+        await loader.load();
+        customTermFaces.add(TermFace(family, family.toUpperCase()));
+      } catch (_) {
+        // Unreadable / invalid font file — skip it.
+      }
+    }
+  } catch (_) {
+    // No manifest or no custom folder — nothing to load.
+  }
+}
 
 /// The switchable phosphor accents, in spectrum order. `mono` is the white
 /// phosphor (its intensity is a lightness, not a saturation).
