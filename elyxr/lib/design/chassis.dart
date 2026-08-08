@@ -41,19 +41,6 @@ class Chassis extends StatelessWidget {
         ),
         border: Border.all(color: p.mb, width: 1),
         borderRadius: BorderRadius.circular(9),
-        // At max saturation the accent throws a real glow past the metal edge —
-        // an intense halo that bleeds into the transparent margin around the
-        // chassis (see the padding in app.dart) and out toward the screen. Off
-        // entirely until the colour has maxed and edgeGlow ramps in.
-        boxShadow: p.edgeGlow > 0.001
-            ? [
-                BoxShadow(
-                  color: p.a.withValues(alpha: (0.85 * p.edgeGlow).clamp(0.0, 1.0)),
-                  blurRadius: 12 + 44 * p.edgeGlow,
-                  spreadRadius: 2 + 6 * p.edgeGlow,
-                ),
-              ]
-            : null,
       ),
       child: Column(
         children: [

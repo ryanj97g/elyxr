@@ -141,14 +141,13 @@ BIN_DIR="$HOME/.local/bin"
 # go on first, before the Tailscale step. The heavier build tools follow it.
 BASE_PKGS=(curl ca-certificates)
 BUILD_PKGS=(build-essential pkg-config git fuse3 libfuse3-dev)
-# libasound2-dev is the ALSA development headers flutter_soloud (the app's audio
-# engine) compiles its ALSA backend against — the build fails with
-# "alsa/asoundlib.h file not found" without it. libasound2-plugins provides the
-# ALSA→PulseAudio/PipeWire bridge (the `pulse`/`pipewire` PCMs), so SoLoud's ALSA
-# backend can open the system's default device on a modern desktop instead of
-# failing and falling back to a silent null device. openmpt123 is a runtime tool
-# the player shells out to, to render tracker modules (.xm/.mod/.s3m/.it) to PCM.
-[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libasound2-dev libasound2-plugins openmpt123)
+# The app plays audio through audioplayers, which on Linux uses the system's
+# GStreamer: the -dev packages are needed to build the plugin, and the runtime
+# plugin sets (base/good + libav) provide the codecs so mp3/ogg/flac/etc. play
+# with the OS's own libraries — no bundled codec libs, so none of the glibc
+# mismatch that made the previous engine fail to load. openmpt123 is a runtime
+# tool the player shells out to, to render tracker modules (.xm/.mod/.s3m/.it).
+[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav openmpt123)
 BASE_NEED=(); BUILD_NEED=()
 if command -v dpkg >/dev/null 2>&1; then
   for p in "${BASE_PKGS[@]}";  do dpkg -s "$p" >/dev/null 2>&1 || BASE_NEED+=("$p"); done

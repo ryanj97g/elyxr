@@ -18,7 +18,11 @@ dependencies:
   desktop_drop: ^0.5.0
   cross_file: ^0.3.4
   window_manager: ^0.4.2
-  flutter_soloud: ^4.1.0
+  # Audio via the system's GStreamer on Linux — uses the OS codecs (built for the
+  # OS's own glibc), so no bundled-library incompatibilities. Replaced
+  # flutter_soloud, whose precompiled codec libs required a newer glibc than most
+  # systems have and failed to load entirely.
+  audioplayers: ^6.0.0
 
 dev_dependencies:
   flutter_test:

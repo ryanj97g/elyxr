@@ -234,12 +234,10 @@ class Palette {
 const double kAppWidth = 440;
 const double kAppHeight = 944; // 440 × (3088/1440) ≈ phone aspect
 
-/// The transparent room left around the chassis for the max-saturation glow to
-/// bleed into. The window (below) is the chassis plus this margin on every side;
-/// because the window is transparent, that extra area shows only the glow and
-/// the desktop behind it — the chassis stays full size, never shrunk to fit.
-const double kGlowMargin = 76;
-
-/// The actual OS window — larger than the visible chassis by the glow margin.
-const double kWindowWidth = kAppWidth + kGlowMargin * 2; // 592
-const double kWindowHeight = kAppHeight + kGlowMargin * 2; // 1096
+/// The window is the chassis, full size — no margin. (A transparent glow margin
+/// made the whole app scale down to fit the screen, which read as "the app got
+/// smaller," so it's gone. The max-saturation glow is painted OVER the chassis
+/// edges instead, which needs no extra room.)
+const double kGlowMargin = 0;
+const double kWindowWidth = kAppWidth;
+const double kWindowHeight = kAppHeight;

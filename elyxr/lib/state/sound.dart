@@ -1,44 +1,38 @@
-// Retro sound effects for Nostalgia Mode, played through the SoLoud engine
-// (initialised in main). Each event routes through here, gated on Nostalgia
-// Mode + the Sound switch. Sources are loaded once and cached; a missing file
-// (none dropped in yet) is swallowed, so it never affects the app. See
-// assets/sounds/README.md for the file names.
+// Retro sound effects for Nostalgia Mode, played through audioplayers (the
+// system's GStreamer on Linux). Each shot uses a fresh one-shot player so rapid
+// events stack instead of cutting each other off; the player disposes itself
+// when the clip finishes. A missing file or absent audio device is swallowed, so
+// it never affects the app. See assets/sounds/README.md for the file names.
 
-import 'package:flutter_soloud/flutter_soloud.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import 'settings.dart';
 
 class SoundController {
   final SettingsController settings;
-  final Map<String, AudioSource> _cache = {};
-  AudioSource? _laugh;
-
   SoundController(this.settings);
 
   bool get _on => settings.nostalgia && settings.sound;
 
   /// The laugh that fires every time Nostalgia Mode is switched on. It is *not*
-  /// part of the gated sound-effects set — it plays regardless of the Sound
-  /// switch — and each call starts a new voice, so rapid toggles stack rather
-  /// than cut each other off.
-  Future<void> laugh() async {
-    final soloud = SoLoud.instance;
-    if (!soloud.isInitialized) return;
-    try {
-      _laugh ??= await soloud.loadAsset('assets/sounds/laugh.mp3');
-      soloud.play(_laugh!, volume: 0.9);
-    } catch (_) {}
+  /// gated by the Sound switch, and each call is its own player, so rapid toggles
+  /// stack rather than cut each other off.
+  Future<void> laugh() => _shoot('sounds/laugh.mp3');
+
+  Future<void> _play(String name) {
+    if (!_on) return Future<void>.value();
+    return _shoot('sounds/$name');
   }
 
-  Future<void> _play(String name) async {
-    if (!_on) return;
-    final soloud = SoLoud.instance;
-    if (!soloud.isInitialized) return;
+  // Fire a one-shot clip on a throwaway player, disposed when it completes.
+  Future<void> _shoot(String assetPath) async {
+    final p = AudioPlayer();
     try {
-      final src = _cache[name] ??= await soloud.loadAsset('assets/sounds/$name');
-      soloud.play(src, volume: 0.7);
+      p.onPlayerComplete.listen((_) => p.dispose());
+      // AssetSource prepends 'assets/'; pass the path without it.
+      await p.play(AssetSource(assetPath));
     } catch (_) {
-      // No file yet, or no audio device — never let a chirp affect anything.
+      await p.dispose();
     }
   }
 

@@ -1,18 +1,14 @@
-// The Nostalgia Mode music player — a keygen-style deck: now-playing title, a
-// draggable seek bar, shuffle/repeat, a tracklist, and play/pause + skip. Every
-// element reflects real playback state (no decorative fakery). Reads whatever's
-// in assets/music/ (see MusicController).
-
-import 'dart:math' as math;
+// The music player deck: now-playing title, a draggable seek bar, shuffle/repeat,
+// a tracklist, and play/pause + skip. Every control drives real playback
+// (audioplayers). No visualizer here — playback is the point, and a real
+// spectrum needs to tap the actual audio output, which is a separate concern
+// deliberately kept off the player's critical path.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart' show Ticker;
-import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:provider/provider.dart';
 
 import '../../design/text.dart';
 import '../../design/tokens.dart';
-import '../../state/audio_status.dart';
 import '../../state/music.dart';
 import 'marquee.dart';
 
@@ -27,26 +23,6 @@ class MusicPlayerPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // If the audio engine never started, say so right here — the buttons, the
-    // laugh, and the tracks all depend on it, so "nothing plays" has one cause.
-    return ValueListenableBuilder<String?>(
-      valueListenable: audioError,
-      builder: (context, err, _) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (err != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text('♪ audio engine off — playback is silent\n$err',
-                  style: glass(12, const Color(0xFFf5b942))),
-            ),
-          _deck(context),
-        ],
-      ),
-    );
-  }
-
-  Widget _deck(BuildContext context) {
     final p = palette;
     final m = context.watch<MusicController>();
 
@@ -86,11 +62,7 @@ class MusicPlayerPanel extends StatelessWidget {
                 style: mono(11, p.mid)),
           ],
         ),
-        const SizedBox(height: 6),
-        // Real spectrum — live FFT off the audio engine, only while music plays
-        // (so one-off sounds like the toggle laugh don't drive it).
-        SizedBox(height: 26, child: _Visualizer(palette: p, playing: m.playing)),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         // Seek bar — tap or drag to scrub.
         LayoutBuilder(builder: (context, c) {
           void seekTo(double dx) {
@@ -224,98 +196,6 @@ class MusicPlayerPanel extends StatelessWidget {
       ),
     );
   }
-}
-
-/// A live spectrum: reads the audio engine's FFT each frame and draws bars. Real
-/// audio data — nothing animates unless sound is actually playing.
-class _Visualizer extends StatefulWidget {
-  final Palette palette;
-  final bool playing;
-  const _Visualizer({required this.palette, required this.playing});
-
-  @override
-  State<_Visualizer> createState() => _VisualizerState();
-}
-
-class _VisualizerState extends State<_Visualizer>
-    with SingleTickerProviderStateMixin {
-  AudioData? _audio;
-  final ValueNotifier<int> _tick = ValueNotifier(0);
-  late final Ticker _ticker;
-
-  @override
-  void initState() {
-    super.initState();
-    try {
-      _audio = AudioData(GetSamplesKind.linear);
-    } catch (_) {}
-    _ticker = createTicker((_) {
-      final ad = _audio;
-      if (ad != null) {
-        try {
-          ad.updateSamples();
-        } catch (_) {}
-      }
-      _tick.value++;
-    })..start();
-  }
-
-  @override
-  void dispose() {
-    _ticker.dispose();
-    _audio?.dispose();
-    _tick.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: _FftPainter(_audio, _tick, widget.palette.a, widget.playing),
-      ),
-    );
-  }
-}
-
-class _FftPainter extends CustomPainter {
-  final AudioData? audio;
-  final Color a;
-  final bool playing;
-  _FftPainter(this.audio, Listenable repaint, this.a, this.playing)
-      : super(repaint: repaint);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final ad = audio;
-    if (ad == null || !playing) return;
-    List<double> data;
-    try {
-      data = ad.getAudioData();
-    } catch (_) {
-      return;
-    }
-    if (data.isEmpty) return;
-    const bars = 28;
-    final bw = size.width / bars;
-    final paint = Paint()..color = a.withValues(alpha: 0.9);
-    for (var i = 0; i < bars; i++) {
-      // The first 256 values are FFT bins; music energy sits in the low-mid, so
-      // sample the lower bins (skipping DC).
-      final bin = 2 + i * 2;
-      final v = (bin < 256 && bin < data.length) ? data[bin].abs() : 0.0;
-      final mag = math.sqrt((v * 3.5).clamp(0.0, 1.0));
-      final h = (size.height * mag).clamp(1.0, size.height);
-      canvas.drawRect(
-        Rect.fromLTWH(i * bw + bw * 0.18, size.height - h, bw * 0.64, h),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _FftPainter old) => true;
 }
 
 class _SeekPainter extends CustomPainter {

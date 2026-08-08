@@ -184,12 +184,10 @@ static void my_application_activate(GApplication* application) {
     gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);
   }
 
-  // The window is the chassis (440x944) plus a transparent glow margin on every
-  // side — 592x1096 (kWindowWidth/kWindowHeight in Dart). The extra is
-  // transparent room the max-saturation glow bleeds into; the Flutter side draws
-  // the chassis full-size inside it. If the screen is too short, open smaller
-  // (keeping the shape); the Flutter side scales to whatever the window ends up.
-  gint win_w = 592, win_h = 1096;
+  // The window is the chassis, full size (440x944, kWindowWidth/Height in Dart).
+  // If the screen is too short, open smaller (keeping the shape); the Flutter
+  // side scales the chassis to whatever the window ends up.
+  gint win_w = 440, win_h = 944;
   GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
   GdkMonitor* monitor = gdk_display_get_primary_monitor(display);
   if (monitor == nullptr && gdk_display_get_n_monitors(display) > 0) {
@@ -201,7 +199,7 @@ static void my_application_activate(GApplication* application) {
     gint max_h = area.height - 60;  // leave room for the panel/taskbar
     if (max_h > 0 && win_h > max_h) {
       win_h = max_h;
-      win_w = (gint)(win_h * (592.0 / 1096.0) + 0.5);
+      win_w = (gint)(win_h * (440.0 / 944.0) + 0.5);
     }
   }
   gtk_window_set_default_size(window, win_w, win_h);
