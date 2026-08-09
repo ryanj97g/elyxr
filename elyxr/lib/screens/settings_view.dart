@@ -12,6 +12,7 @@ import 'package:window_manager/window_manager.dart';
 import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/session.dart';
+import '../util/build_info.dart';
 import '../state/settings.dart';
 import '../state/music.dart';
 import '../state/sound.dart';
@@ -845,13 +846,22 @@ class _DeviceRows extends StatelessWidget {
   Widget _updateRow(BuildContext context, Palette p, UpdateController u) {
     final busy = u.stage == UpdateStage.updating || u.stage == UpdateStage.waitingForUpload;
     final failed = u.stage == UpdateStage.failed;
+    // The server's build vs this app's — when the fleet has moved ahead, the row
+    // says so and invites the install (on Android that's a downloaded APK).
+    final serverBuild = context.watch<SessionController>().health?.build ?? 0;
+    final behind = appBuild > 0 && serverBuild > appBuild;
+    final idleText = behind ? '▸ INSTALL UPDATE' : '▸ UPDATE THIS DEVICE';
     final text = switch (u.stage) {
-      UpdateStage.idle => '▸ UPDATE THIS DEVICE',
-      UpdateStage.updating => '▸ UPDATING…',
+      UpdateStage.idle => idleText,
+      UpdateStage.updating => Caps.isMobile ? '▸ DOWNLOADING UPDATE…' : '▸ UPDATING…',
       UpdateStage.waitingForUpload => '▸ FINISHING UPLOAD, THEN UPDATING…',
       UpdateStage.failed => '▸ RETRY UPDATE',
     };
-    final color = failed ? const Color(0xFFf5b942) : (busy ? p.mid : p.a);
+    final color = failed
+        ? const Color(0xFFf5b942)
+        : busy
+            ? p.mid
+            : (behind ? p.bright : p.a);
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: Column(

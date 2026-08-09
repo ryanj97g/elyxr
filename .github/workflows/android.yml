@@ -17,6 +17,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # publish the APK as the android-latest release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -95,7 +97,7 @@ jobs:
           # Single-line sed only (GNU sed turns \n in the replacement into real
           # newlines); heredocs would break this YAML block scalar.
           manifest=android/app/src/main/AndroidManifest.xml
-          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application#' "$manifest"
+          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application#' "$manifest"
           # elyxr speaks plain http:// — to the server for pairing and to the
           # local lymnal proxy on loopback. Android blocks cleartext by default
           # (targetSdk >= 28), so without this every connection fails and the app
@@ -148,9 +150,21 @@ jobs:
           # safe zone). Prebuilt so the job needs no ImageMagick.
           dart run flutter_launcher_icons
 
+          # Sign every build with the SAME committed debug keystore (standard
+          # debug creds) so the app can update itself in place — a new APK signed
+          # with a different key would be rejected by Android as a signature
+          # mismatch, forcing an uninstall. Overwriting ~/.android/debug.keystore
+          # makes `--debug` use ours.
+          mkdir -p ~/.android
+          cp packaging/android/debug.keystore ~/.android/debug.keystore
+
           flutter build apk --debug \
             --dart-define=ELYXR_BUILD=$build \
             --dart-define=ELYXR_COMMIT=$commit
+
+          # A stable filename for the in-app updater to fetch.
+          cp build/app/outputs/flutter-apk/app-debug.apk \
+             build/app/outputs/flutter-apk/elyxr.apk
 
       - name: Upload the APK
         uses: actions/upload-artifact@v4
@@ -158,3 +172,16 @@ jobs:
           name: elyxr-android
           path: elyxr/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
+
+      # On main, publish the APK as a stable release the in-app updater can fetch
+      # anonymously (github.com/ryanj97g/elyxr/releases/download/android-latest/
+      # elyxr.apk). make_latest:false so it never shadows the Windows installer's
+      # own "latest" release.
+      - name: Publish the APK release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: elyxr Android (latest)
+          make_latest: false
+          files: elyxr/build/app/outputs/flutter-apk/elyxr.apk
