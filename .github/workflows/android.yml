@@ -1,0 +1,84 @@
+name: android-build
+
+# Builds an Android APK on a Linux runner that already has the Android SDK, so no
+# one needs Android Studio locally. The repo only carries the Linux desktop
+# runner, so — exactly like the Windows job — we scaffold the Android project in
+# CI with `flutter create --platforms=android .`, then build.
+#
+# Every platform-coupling problem (desktop-only plugins, unsupported APIs) shows
+# up here as a build failure, and the produced app-debug.apk is what gets
+# sideloaded onto a real phone to check features by hand.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the build number is `git rev-list --count HEAD`
+          # (matches the Windows job and lymnal's ELYXR_BUILD).
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build the Android APK
+        working-directory: elyxr
+        run: |
+          build=$(git rev-list --count HEAD)
+          commit=$(git rev-parse --short HEAD)
+          # The repo only carries the Linux runner; scaffold the Android one.
+          flutter create --platforms=android .
+
+          # The app's own SDK levels: minSdk 23 covers flutter_secure_storage's
+          # Keystore backend; target 34.
+          app_kts=android/app/build.gradle.kts
+          if [ -f "$app_kts" ]; then
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/' "$app_kts"
+            sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/' "$app_kts"
+          fi
+
+          # Force compileSdk 36 on EVERY Android module. Plugins (desktop_drop
+          # especially) ship stubs compiled against android-33, but androidx now
+          # requires 34+. We PREPEND an afterEvaluate override to the root project
+          # so it (a) registers before Flutter's evaluationDependsOn forces
+          # evaluation, and (b) runs after each plugin's own build script — so our
+          # compileSdk wins over the stub's 33. (printf, not heredoc: heredoc
+          # terminators break YAML block scalars.)
+          root_groovy=android/build.gradle
+          root_kts=android/build.gradle.kts
+          if [ -f "$root_kts" ]; then
+            tmp=$(mktemp)
+            printf 'subprojects {\n    afterEvaluate {\n        val a = extensions.findByName("android")\n        if (a is com.android.build.gradle.BaseExtension) { a.compileSdkVersion(36) }\n    }\n}\n\n' > "$tmp"
+            cat "$root_kts" >> "$tmp"; mv "$tmp" "$root_kts"
+            echo "--- root kts head ---"; head -14 "$root_kts"
+          elif [ -f "$root_groovy" ]; then
+            tmp=$(mktemp)
+            printf 'subprojects {\n    afterEvaluate { p ->\n        if (p.hasProperty("android")) { p.android { compileSdkVersion 36 } }\n    }\n}\n\n' > "$tmp"
+            cat "$root_groovy" >> "$tmp"; mv "$tmp" "$root_groovy"
+            echo "--- root groovy head ---"; head -14 "$root_groovy"
+          fi
+          flutter pub get
+          flutter build apk --debug \
+            --dart-define=ELYXR_BUILD=$build \
+            --dart-define=ELYXR_COMMIT=$commit
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: elyxr-android
+          path: elyxr/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error

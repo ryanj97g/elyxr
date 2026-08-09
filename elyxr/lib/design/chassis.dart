@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../util/platform_caps.dart';
 import '../widgets/edge_light.dart';
 import '../widgets/speakers.dart';
 import 'tokens.dart';
@@ -105,6 +106,9 @@ class _DragArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Dragging the metal moves the OS window — only meaningful with a managed
+    // window. On a phone there's nothing to drag, so the rails are just rails.
+    if (!Caps.hasWindowManager) return child;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onPanStart: (_) => windowManager.startDragging(),

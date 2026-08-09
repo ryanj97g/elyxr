@@ -11,6 +11,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../util/platform_caps.dart';
 import 'nostalgia/nonsense_button.dart';
 
 /// The top rail: screw · ELYXR · hold-bar · vent · v0.9 · screw.
@@ -156,8 +157,11 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
       padding: const EdgeInsets.fromLTRB(3, 1, 3, 0),
       child: Row(
         children: [
-          // Left screw quietly minimizes the window.
-          _screw(p, onTap: () => windowManager.minimize(), tip: 'Minimize'),
+          // Left screw quietly minimizes the window (desktop only — no window to
+          // minimize on a phone).
+          _screw(p,
+              onTap: Caps.hasWindowManager ? () => windowManager.minimize() : null,
+              tip: 'Minimize'),
           const SizedBox(width: 9),
           GestureDetector(
             onTapDown: (_) => _press(),
@@ -217,8 +221,10 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
           // it stays put when the terminal (screen) face is swapped.
           Text('v0.9', style: chassis(9, p.mt)),
           const SizedBox(width: 9),
-          // Right screw quietly closes the window.
-          _screw(p, onTap: () => windowManager.close(), tip: 'Close'),
+          // Right screw quietly closes the window (desktop only).
+          _screw(p,
+              onTap: Caps.hasWindowManager ? () => windowManager.close() : null,
+              tip: 'Close'),
         ],
       ),
     );

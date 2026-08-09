@@ -13,37 +13,41 @@ import 'state/session.dart';
 import 'state/settings.dart';
 import 'state/transfers.dart';
 import 'util/open_external.dart';
+import 'util/platform_caps.dart';
 import 'util/shake_to_close.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // On Linux the native launcher owns the window's geometry (frameless,
-  // chassis-sized, transparent — see linux/runner/my_application.cc). Other
-  // platforms have no such launcher, so give window_manager the chassis' own
-  // size here; without it the runner opens at its default size with the chassis
-  // floating in the middle. window_manager also handles the interactive parts:
-  // dragging by the rail and the screw controls.
-  await windowManager.ensureInitialized();
-  final opts = Platform.isLinux
-      ? const WindowOptions(titleBarStyle: TitleBarStyle.hidden)
-      : const WindowOptions(
-          titleBarStyle: TitleBarStyle.hidden,
-          size: Size(kWindowWidth, kWindowHeight),
-          center: true,
-        );
-  await windowManager.waitUntilReadyToShow(
-    opts,
-    () async {
-      await windowManager.setAsFrameless();
-      // The window is a fixed size, so it must never maximize — otherwise a
-      // double-click on the rail (e.g. tapping the wordmark) snaps it fullscreen.
-      await windowManager.setResizable(false);
-      await windowManager.setMaximizable(false);
-      await windowManager.show();
-      await windowManager.focus();
-    },
-  );
+  // Desktop only: give the app a managed window. On Linux the native launcher
+  // owns the window's geometry (frameless, chassis-sized, transparent — see
+  // linux/runner/my_application.cc); Windows/macOS have no such launcher, so
+  // window_manager sizes the window to the chassis here. window_manager also
+  // handles the interactive parts: dragging by the rail and the screw controls.
+  // A phone has no window to manage — the app is simply full-screen — so this is
+  // skipped there (calling it would throw at startup).
+  if (Caps.hasWindowManager) {
+    await windowManager.ensureInitialized();
+    final opts = Platform.isLinux
+        ? const WindowOptions(titleBarStyle: TitleBarStyle.hidden)
+        : const WindowOptions(
+            titleBarStyle: TitleBarStyle.hidden,
+            size: Size(kWindowWidth, kWindowHeight),
+            center: true,
+          );
+    await windowManager.waitUntilReadyToShow(
+      opts,
+      () async {
+        await windowManager.setAsFrameless();
+        // The window is a fixed size, so it must never maximize — otherwise a
+        // double-click on the rail (e.g. tapping the wordmark) snaps it fullscreen.
+        await windowManager.setResizable(false);
+        await windowManager.setMaximizable(false);
+        await windowManager.show();
+        await windowManager.focus();
+      },
+    );
+  }
 
   // Register any dev-dropped fonts (assets/fonts/custom/) before settings apply
   // the saved terminal face — otherwise a saved custom face wouldn't exist yet.

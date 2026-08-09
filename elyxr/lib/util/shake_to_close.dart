@@ -9,6 +9,8 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'platform_caps.dart';
+
 class ShakeToClose extends StatefulWidget {
   final Widget child;
   const ShakeToClose({super.key, required this.child});
@@ -32,7 +34,11 @@ class _ShakeToCloseState extends State<ShakeToClose> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(_poll, (_) => _tick());
+    // Shake-to-close watches the OS window position — there's no such thing on a
+    // phone, so the poll only runs where there's a managed window.
+    if (Caps.hasWindowManager) {
+      _timer = Timer.periodic(_poll, (_) => _tick());
+    }
   }
 
   Future<void> _tick() async {
