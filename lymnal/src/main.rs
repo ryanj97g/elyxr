@@ -95,13 +95,19 @@ async fn run_proxy(link: agent::Link) -> anyhow::Result<()> {
         link.token.clone(),
         limbo,
     ));
-    // Keep pushing anything stranded in limbo (a save made during a lapse) until
-    // it lands and can be unpinned.
+    // The outbound push queue. A commit lands the file in limbo (held) and wakes
+    // this loop, which pushes it to the trove and unpins it. It also runs every
+    // 10s as a backstop, and — because the interval fires immediately on its
+    // first tick — flushes anything the last run left held the moment we start.
+    // One drain runs at a time, so many commits can't stampede the trove.
     let pusher = proxy.clone();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(Duration::from_secs(10));
         loop {
-            tick.tick().await;
+            tokio::select! {
+                _ = tick.tick() => {}
+                _ = pusher.wait_for_kick() => {}
+            }
             let p = pusher.clone();
             let _ = tokio::task::spawn_blocking(move || p.retry_held()).await;
         }

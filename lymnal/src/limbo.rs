@@ -69,6 +69,12 @@ impl Limbo {
         self.dir.join(safe)
     }
 
+    /// A path for lymnal's own bookkeeping (e.g. the persisted held queue), kept
+    /// in a hidden subdir so it can never collide with a flattened cache key.
+    pub fn aux_path(&self, name: &str) -> PathBuf {
+        self.dir.join(".lymnal").join(name)
+    }
+
     /// Is this key present? Touches its recency if so.
     pub fn contains(&self, key: &str) -> bool {
         let mut inner = self.inner.lock().unwrap();
@@ -80,11 +86,12 @@ impl Limbo {
         }
     }
 
-    /// Read a cached key's bytes, touching recency. `None` if it isn't present.
+    /// Read a cached key's bytes, touching recency if it's in the index. Falls
+    /// back to disk when it isn't — right after a restart the in-memory index is
+    /// empty, but a held file's bytes are still on disk, and the push queue needs
+    /// to read them to finish landing it on the trove.
     pub fn read(&self, key: &str) -> Option<Vec<u8>> {
-        if !self.contains(key) {
-            return None;
-        }
+        self.contains(key); // touch recency if present
         std::fs::read(self.local_path(key)).ok()
     }
 

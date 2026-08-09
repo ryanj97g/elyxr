@@ -172,18 +172,26 @@ class LymnalClient {
 
   // ---- uploads (§04, §05) ----
 
+  /// Uploads talk to the *local* proxy, but a chunk carries real bytes and a
+  /// commit waits on limbo — both can take longer than an ordinary call, so they
+  /// get a roomy fuse. (Too tight a fuse here is what once made a big file's
+  /// commit "time out" while it was in fact still landing.)
+  static const _uploadTimeout = Duration(seconds: 120);
+
   Future<UploadSession> uploadInit(String path, int sizeBytes,
       {String? checksum, int? mtime}) async {
-    final r = await _send(() => _http.post(
-          _uri('/v1/upload/init'),
-          headers: _headers(json: true),
-          body: jsonEncode({
-            'path': path,
-            'size_bytes': sizeBytes,
-            if (checksum != null) 'checksum': checksum,
-            if (mtime != null) 'mtime': mtime,
-          }),
-        ));
+    final r = await _send(
+        () => _http.post(
+              _uri('/v1/upload/init'),
+              headers: _headers(json: true),
+              body: jsonEncode({
+                'path': path,
+                'size_bytes': sizeBytes,
+                if (checksum != null) 'checksum': checksum,
+                if (mtime != null) 'mtime': mtime,
+              }),
+            ),
+        deadline: _uploadTimeout);
     return UploadSession.fromJson(_ok(r));
   }
 
@@ -191,22 +199,26 @@ class LymnalClient {
   Future<(int, bool)> uploadChunk(
       String id, int offset, List<int> bytes, int total) async {
     final end = offset + bytes.length - 1;
-    final r = await _send(() => _http.put(
-          _uri('/v1/upload/$id'),
-          headers: {
-            ..._headers(),
-            'Content-Range': 'bytes $offset-$end/$total',
-            'Content-Type': 'application/octet-stream',
-          },
-          body: bytes,
-        ));
+    final r = await _send(
+        () => _http.put(
+              _uri('/v1/upload/$id'),
+              headers: {
+                ..._headers(),
+                'Content-Range': 'bytes $offset-$end/$total',
+                'Content-Type': 'application/octet-stream',
+              },
+              body: bytes,
+            ),
+        deadline: _uploadTimeout);
     final j = _ok(r);
     return ((j['received_bytes'] as num).toInt(), j['complete'] as bool? ?? false);
   }
 
   /// Progress for resume: (received, size, missing ranges, expiresAt).
   Future<(int, int, List<List<int>>, int)> uploadStatus(String id) async {
-    final r = await _send(() => _http.get(_uri('/v1/upload/$id'), headers: _headers()));
+    final r = await _send(
+        () => _http.get(_uri('/v1/upload/$id'), headers: _headers()),
+        deadline: _uploadTimeout);
     final j = _ok(r);
     final missing = (j['missing'] as List? ?? [])
         .map((e) => (e as List).map((n) => (n as num).toInt()).toList())
@@ -220,13 +232,16 @@ class LymnalClient {
   }
 
   Future<Map<String, dynamic>> uploadCommit(String id) async {
-    final r = await _send(() => _http.post(_uri('/v1/upload/$id/commit'),
-        headers: _headers(json: true), body: '{}'));
+    final r = await _send(
+        () => _http.post(_uri('/v1/upload/$id/commit'),
+            headers: _headers(json: true), body: '{}'),
+        deadline: _uploadTimeout);
     return _ok(r);
   }
 
   Future<void> uploadCancel(String id) async {
-    await _send(() => _http.delete(_uri('/v1/upload/$id'), headers: _headers()));
+    await _send(() => _http.delete(_uri('/v1/upload/$id'), headers: _headers()),
+        deadline: _uploadTimeout);
   }
 
   // ---- downloads (§04, §05) ----

@@ -15,6 +15,7 @@
 //!                            never talks to the remote directly.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -27,6 +28,7 @@ use axum::{
     Json, Router,
 };
 use serde_json::{json, Value};
+use tokio::sync::Notify;
 
 use crate::limbo::{Limbo, StoreErr};
 
@@ -34,6 +36,7 @@ use crate::limbo::{Limbo, StoreErr};
 struct Pending {
     path: String,
     mtime: i64,
+    size: usize,
     buf: Vec<u8>,
 }
 
@@ -45,8 +48,15 @@ pub struct Proxy {
     limbo: Limbo,
     /// Uploads mid-assembly, keyed by the id we handed the app.
     pending: Mutex<HashMap<String, Pending>>,
-    /// Paths currently held (unsynced), with the mtime to push them under.
+    /// Paths currently held (unsynced), with the mtime to push them under. This
+    /// is the outbound push queue; it's persisted so a restart mid-batch never
+    /// strands a held file (the bytes live in limbo on disk).
     held: Mutex<HashMap<String, i64>>,
+    /// Where the held queue is persisted, inside the limbo dir.
+    held_state: PathBuf,
+    /// Wakes the background pusher the instant a commit lands, so a file doesn't
+    /// wait for the next timer tick to start heading for the trove.
+    pusher: Notify,
     /// For ordinary calls (a list, a stat): fail the connect fast and cap the
     /// whole call, so a slow or vanished trove can't hang the request forever
     /// and exhaust the blocking pool — the cause of the app sitting on "READING…".
@@ -65,12 +75,18 @@ impl Proxy {
         let stream = ureq::AgentBuilder::new()
             .timeout_connect(Duration::from_secs(5))
             .build();
+        // The held queue survives a restart: reload whatever hadn't finished
+        // pushing last time. The bytes are still in limbo on disk.
+        let held_state = limbo.aux_path("held.json");
+        let held = load_held(&held_state);
         Proxy {
             remote,
             token,
             limbo,
             pending: Mutex::new(HashMap::new()),
-            held: Mutex::new(HashMap::new()),
+            held: Mutex::new(held),
+            held_state,
+            pusher: Notify::new(),
             quick,
             stream,
         }
@@ -84,25 +100,89 @@ impl Proxy {
         format!("http://{}{}", self.remote, path_and_query)
     }
 
-    /// Retry every held file: push it to the trove, and unpin on success. Called
-    /// on a timer and whenever the app asks to reconcile. Returns how many are
+    /// Wake the background pusher now (a commit just added work).
+    fn kick_pusher(&self) {
+        self.pusher.notify_one();
+    }
+
+    /// Block until the pusher is kicked (used by the background drain loop).
+    pub async fn wait_for_kick(&self) {
+        self.pusher.notified().await;
+    }
+
+    /// Write the held queue to disk (best effort). Called whenever it changes so
+    /// a restart resumes exactly where it left off.
+    fn persist_held(&self) {
+        let snapshot: HashMap<String, i64> = self.held.lock().unwrap().clone();
+        if let Some(parent) = self.held_state.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(bytes) = serde_json::to_vec(&snapshot) {
+            let _ = std::fs::write(&self.held_state, bytes);
+        }
+    }
+
+    /// How many files are still waiting to reach the trove. The updater reads this
+    /// so a restart never fires while limbo still holds unsynced work.
+    pub fn held_count(&self) -> usize {
+        self.held.lock().unwrap().len()
+    }
+
+    /// Retry every held file: push it to the trove, and unpin on success. A file
+    /// that can't be pushed (trove unreachable or refusing) stays held and is
+    /// tried again — it is never dropped, so nothing is lost. Called on a timer,
+    /// on a commit, and whenever the app asks to reconcile. Returns how many are
     /// still held afterwards.
     pub fn retry_held(self: &Arc<Self>) -> usize {
-        let keys: Vec<String> = self.held.lock().unwrap().keys().cloned().collect();
+        // Oldest first, so the file that has waited longest goes first.
+        let keys: Vec<String> = self.limbo.held_keys();
+        // Fall back to the queue's own order if limbo has forgotten its in-memory
+        // index (e.g. right after a restart) — the persisted queue is the truth.
+        let keys = if keys.is_empty() {
+            self.held.lock().unwrap().keys().cloned().collect()
+        } else {
+            keys
+        };
+        let mut changed = false;
         for path in keys {
-            let mtime = self.held.lock().unwrap().get(&path).copied().unwrap_or_else(now);
+            // Only push things the queue still wants pushed.
+            let Some(mtime) = self.held.lock().unwrap().get(&path).copied() else {
+                continue;
+            };
             let Some(bytes) = self.limbo.read(&path) else {
-                // The bytes are gone; drop the stale queue entry.
+                // The bytes are genuinely gone; drop the stale queue entry.
                 self.held.lock().unwrap().remove(&path);
+                changed = true;
                 continue;
             };
             if remote_upload(&self.stream, &self.remote, &self.token, &path, &bytes, mtime).is_ok() {
-                self.limbo.set_held(&path, false); // now passing-through
-                self.held.lock().unwrap().remove(&path);
+                // Unpin only if the same version is still the one queued. If the
+                // file was re-uploaded while this push was in flight (a newer
+                // mtime), leave it held so the newer bytes get pushed next round —
+                // don't mark it synced on the strength of the older push.
+                let mut h = self.held.lock().unwrap();
+                if h.get(&path).copied() == Some(mtime) {
+                    h.remove(&path);
+                    drop(h);
+                    self.limbo.set_held(&path, false); // now passing-through
+                    changed = true;
+                }
             }
+        }
+        if changed {
+            self.persist_held();
         }
         self.held.lock().unwrap().len()
     }
+}
+
+/// Load the persisted held queue, or an empty one if there's nothing (or it's
+/// unreadable — the timer will rebuild it as work lands).
+fn load_held(path: &std::path::Path) -> HashMap<String, i64> {
+    std::fs::read(path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
 }
 
 pub fn router(proxy: Arc<Proxy>) -> Router {
@@ -110,7 +190,10 @@ pub fn router(proxy: Arc<Proxy>) -> Router {
         .route("/v1/download", any(download))
         .route("/v1/events", any(events))
         .route("/v1/upload/init", post(upload_init))
-        .route("/v1/upload/:id", put(upload_chunk))
+        .route(
+            "/v1/upload/:id",
+            put(upload_chunk).get(upload_status).delete(upload_discard),
+        )
         .route("/v1/upload/:id/commit", post(upload_commit))
         .route("/v1/reconcile", post(reconcile))
         .fallback(forward)
@@ -132,12 +215,57 @@ async fn upload_init(State(px): State<Arc<Proxy>>, Json(body): Json<Value>) -> R
         return coded(400, "BAD_PATH", "The upload needs a path.");
     }
     let mtime = body.get("mtime").and_then(|v| v.as_i64()).unwrap_or_else(now);
+    let size = body
+        .get("size_bytes")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as usize;
     let id = format!("up_{}", ulid::Ulid::new());
-    px.pending
-        .lock()
-        .unwrap()
-        .insert(id.clone(), Pending { path, mtime, buf: Vec::new() });
+    px.pending.lock().unwrap().insert(
+        id.clone(),
+        Pending { path, mtime, size, buf: Vec::new() },
+    );
     Json(json!({ "upload_id": id, "chunk_bytes": 8 * 1024 * 1024 })).into_response()
+}
+
+/// Progress for an in-flight upload, so a retry can resume rather than restart.
+/// The app writes chunks in order, so what's buffered is what's contiguously
+/// received. An unknown id (already committed, or never opened here) reports
+/// nothing received and nothing missing, so the app moves on to commit — which
+/// is idempotent and won't error on it.
+async fn upload_status(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>) -> Response {
+    let pending = px.pending.lock().unwrap();
+    match pending.get(&id) {
+        Some(p) => {
+            let received = p.buf.len() as u64;
+            let size = p.size as u64;
+            let missing = if size > received {
+                json!([[received, size]])
+            } else {
+                json!([])
+            };
+            Json(json!({
+                "received_bytes": received,
+                "size_bytes": size,
+                "missing": missing,
+                "expires_at": 0,
+            }))
+            .into_response()
+        }
+        None => Json(json!({
+            "received_bytes": 0,
+            "size_bytes": 0,
+            "missing": [],
+            "expires_at": 0,
+        }))
+        .into_response(),
+    }
+}
+
+/// Abandon an in-flight upload, freeing its buffer. Idempotent — an unknown id is
+/// already gone, which is the desired end state, so it still reports success.
+async fn upload_discard(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>) -> Response {
+    px.pending.lock().unwrap().remove(&id);
+    Json(json!({ "ok": true })).into_response()
 }
 
 async fn upload_chunk(
@@ -169,9 +297,15 @@ async fn upload_chunk(
 
 async fn upload_commit(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>) -> Response {
     let Some(p) = px.pending.lock().unwrap().remove(&id) else {
-        return coded(404, "NOT_FOUND", "That upload isn't open.");
+        // Unknown id: the upload was already committed here (a retried commit whose
+        // first response the app didn't get), so the file is already safe in limbo.
+        // Don't fail it — a false error here is exactly what stranded uploads
+        // before, reporting failures for files that had actually landed.
+        return Json(json!({ "held": true })).into_response();
     };
-    // Hold the whole file in limbo first — it's the only copy until it lands.
+    // Land the whole file in limbo, held — it's the only copy until it reaches the
+    // trove. This is a local disk write, so commit returns fast and can't time the
+    // app out while a large file crosses the network.
     match px.limbo.store(&p.path, &p.buf, true) {
         Ok(()) => {}
         Err(StoreErr::NoRoomHeldBlocks) => {
@@ -184,36 +318,16 @@ async fn upload_commit(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>)
         Err(StoreErr::Io(_)) => return coded(500, "IO_ERROR", "The edit couldn't be saved locally."),
     }
     px.held.lock().unwrap().insert(p.path.clone(), p.mtime);
+    px.persist_held();
 
-    // Try to push it right now.
-    let agent = px.stream.clone();
-    let remote = px.remote.clone();
-    let token = px.token.clone();
-    let path = p.path.clone();
-    let buf = p.buf.clone();
-    let mtime = p.mtime;
-    let pushed = tokio::task::spawn_blocking(move || {
-        remote_upload(&agent, &remote, &token, &path, &buf, mtime)
-    })
-    .await;
-
-    match pushed {
-        Ok(Ok(resp)) => {
-            px.limbo.set_held(&p.path, false); // synced → passing-through
-            px.held.lock().unwrap().remove(&p.path);
-            Json(resp).into_response()
-        }
-        // The trove refused it (full, denied, …): don't queue it, drop the limbo
-        // copy, and surface the coded error so the save doesn't look done.
-        Ok(Err(PushErr::Rejected(parts))) => {
-            px.limbo.drop(&p.path);
-            px.held.lock().unwrap().remove(&p.path);
-            parts.into_response()
-        }
-        // Couldn't reach the trove: it stays held, the pusher keeps trying, and
-        // the save still reads as done so the user isn't left hanging.
-        _ => Json(json!({ "path": p.path, "held": true })).into_response(),
-    }
+    // Hand it to the background pusher and return now. The file is safe in limbo,
+    // so from the app's side the save is done; the pusher lands it on the trove and
+    // unpins it, retrying through any lapse. Pushing here inline (as it once did)
+    // is what made a big file's commit outrun the app's timeout, so it retried,
+    // hit an already-consumed upload, and reported a failure for a file that had
+    // in fact landed. It no longer waits.
+    px.kick_pusher();
+    Json(json!({ "path": p.path, "held": true })).into_response()
 }
 
 /// `/v1/reconcile` — the refresh control. Push anything stranded in limbo now.
@@ -222,25 +336,26 @@ async fn reconcile(State(px): State<Arc<Proxy>>) -> Response {
     Json(json!({ "held": still_held })).into_response()
 }
 
-/// Why a push to the trove failed.
+/// Why a push to the trove failed. Either way the file stays held and is tried
+/// again — a push failure never drops it — so the two cases only differ in
+/// intent, not handling; the pusher checks success and moves on.
 enum PushErr {
-    /// The trove couldn't be reached — keep the file held and retry.
+    /// The trove couldn't be reached.
     Unreachable,
-    /// The trove answered with a refusal (full, denied, …) — don't queue it,
-    /// surface the coded error to whoever's waiting.
-    Rejected(Parts),
+    /// The trove answered with a refusal (full, denied, …).
+    Rejected,
 }
 
 fn push_map(e: ureq::Error) -> PushErr {
     match e {
         ureq::Error::Transport(_) => PushErr::Unreachable,
-        ureq::Error::Status(_, _) => PushErr::Rejected(ureq_err_parts(e)),
+        ureq::Error::Status(_, _) => PushErr::Rejected,
     }
 }
 
 /// Push a whole file to the trove with the upload protocol (init, chunks,
-/// commit). Blocking; call inside spawn_blocking. A transport failure is
-/// `Unreachable` (retryable); an HTTP refusal is `Rejected` (surface it).
+/// commit). Blocking; call inside spawn_blocking. Any failure leaves the file
+/// held for a later retry.
 fn remote_upload(
     agent: &ureq::Agent,
     remote: &str,
@@ -248,7 +363,7 @@ fn remote_upload(
     path: &str,
     bytes: &[u8],
     mtime: i64,
-) -> Result<Value, PushErr> {
+) -> Result<(), PushErr> {
     let auth = format!("Bearer {token}");
     let base = format!("http://{remote}");
     let init: Value = agent
@@ -284,9 +399,8 @@ fn remote_upload(
         .post(&format!("{base}/v1/upload/{id}/commit"))
         .set("Authorization", &auth)
         .send_json(json!({}))
-        .map_err(push_map)?
-        .into_json()
-        .map_err(|_| PushErr::Unreachable)
+        .map_err(push_map)?;
+    Ok(())
 }
 
 // --- reads & pass-through ----------------------------------------------------

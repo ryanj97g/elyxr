@@ -114,8 +114,6 @@ class TransferController extends ChangeNotifier {
   final File _store;
   final int Function() _maxConcurrent;
 
-  /// How the upload chunk size is chosen when a session doesn't declare one.
-  static const int _defaultChunk = 8 * 1024 * 1024;
   static const int _maxAttempts = 5;
 
   final List<Transfer> _queue = [];
@@ -312,6 +310,17 @@ class TransferController extends ChangeNotifier {
       // A connection blip retries on its own, backing off, up to five attempts.
       t.attempts++;
       if (t.attempts < _maxAttempts && !t.cancelRequested) {
+        // An upload retry starts a clean session, so drop the old one first (best
+        // effort) rather than leaving its buffer dangling in the proxy, then clear
+        // our resume state so _upload re-inits from scratch.
+        if (t.direction == Direction.upload && t.uploadId != null) {
+          final old = t.uploadId!;
+          t.uploadId = null;
+          t.doneBytes = 0;
+          try {
+            await client.uploadCancel(old);
+          } catch (_) {}
+        }
         await Future.delayed(_backoff(t.attempts));
         t.state = TransferState.waiting;
       } else {
@@ -373,44 +382,38 @@ class TransferController extends ChangeNotifier {
     final size = await file.length();
     t.totalBytes = size;
 
-    int chunkBytes = _defaultChunk;
-    List<List<int>> missing;
-    if (t.uploadId == null) {
-      final s = await client.uploadInit(t.remotePath, size,
-          mtime: (await file.lastModified()).millisecondsSinceEpoch ~/ 1000);
-      t.uploadId = s.uploadId;
-      chunkBytes = s.chunkBytes;
-      missing = [
-        [0, size]
-      ];
-    } else {
-      // Resume from what lymnal already holds.
-      final (received, _, miss, _) = await client.uploadStatus(t.uploadId!);
-      t.doneBytes = received;
-      missing = miss.isEmpty ? [] : miss;
-    }
+    // Every attempt opens a fresh session and sends the whole file. lymnal holds
+    // upload state in memory and the app talks to it over loopback, so re-sending
+    // on a retry is cheap and — unlike trying to resume a half-known session —
+    // can't strand on an id the proxy no longer has. A retry that reaches here has
+    // already discarded the previous session (see _run).
+    final s = await client.uploadInit(t.remotePath, size,
+        mtime: (await file.lastModified()).millisecondsSinceEpoch ~/ 1000);
+    t.uploadId = s.uploadId;
+    final chunkBytes = s.chunkBytes;
+    t.doneBytes = 0;
 
     final raf = await file.open();
     try {
-      for (final range in missing) {
-        var offset = range[0];
-        final end = range[1];
-        while (offset < end) {
-          if (t.cancelRequested || t.pauseRequested) return;
-          final len = (end - offset) < chunkBytes ? (end - offset) : chunkBytes;
-          await raf.setPosition(offset);
-          final bytes = await raf.read(len);
-          final (received, _) =
-              await client.uploadChunk(t.uploadId!, offset, bytes, size);
-          t.doneBytes = received;
-          notifyListeners();
-          offset += len;
-        }
+      var offset = 0;
+      while (offset < size) {
+        if (t.cancelRequested || t.pauseRequested) return;
+        final len = (size - offset) < chunkBytes ? (size - offset) : chunkBytes;
+        await raf.setPosition(offset);
+        final bytes = await raf.read(len);
+        final (received, _) =
+            await client.uploadChunk(t.uploadId!, offset, bytes, size);
+        t.doneBytes = received;
+        notifyListeners();
+        offset += len;
       }
     } finally {
       await raf.close();
     }
     if (t.cancelRequested || t.pauseRequested) return;
+    // Commit returns as soon as the file is safely held in limbo; lymnal lands it
+    // on the trove from there, retrying through any lapse. "Saved" means "in
+    // limbo", so the app is done the moment this returns.
     final res = await client.uploadCommit(t.uploadId!);
     t.replacement = res['replaced'] as bool? ?? t.replacement;
     t.doneBytes = t.totalBytes;
