@@ -151,6 +151,9 @@ class _HomeScreenState extends State<HomeScreen> {
           onMode: (m) => settings.mode = m,
           inSettings: settings.inSettings,
           nostalgia: settings.nostalgia,
+          // Hide the TEXT/GRID rocker while the screensaver lightshow is up — it
+          // was the one control left sitting out of place over the saver.
+          saver: showSaver,
         ),
       ),
     );

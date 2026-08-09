@@ -293,6 +293,9 @@ class BottomRail extends StatelessWidget {
   final bool inSettings;
   // In Nostalgia Mode a small unmarked nonsense button appears on the metal.
   final bool nostalgia;
+  // The screensaver lightshow is up: hide the TEXT/GRID rocker so nothing sits
+  // out of place over it.
+  final bool saver;
 
   const BottomRail({
     super.key,
@@ -302,6 +305,7 @@ class BottomRail extends StatelessWidget {
     required this.onMode,
     this.inSettings = false,
     this.nostalgia = false,
+    this.saver = false,
   });
 
   @override
@@ -313,8 +317,9 @@ class BottomRail extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(72, 1, 72, 2),
       child: Row(
         children: [
-          // TEXT / GRID rocker — only meaningful on the file list.
-          if (!inSettings)
+          // TEXT / GRID rocker — only meaningful on the file list, and hidden
+          // while settings or the screensaver is showing.
+          if (!inSettings && !saver)
             Container(
               padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
