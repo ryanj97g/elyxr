@@ -55,6 +55,16 @@ Future<void> main() async {
 
   final prefs = await SharedPreferences.getInstance();
   final settings = SettingsController(prefs);
+  // A phone can't write ~/Downloads; give it a real app-writable folder the
+  // first time (a path the user sets later is respected).
+  if (Caps.isMobile && settings.downloadDir == '~/Downloads') {
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      final dl = Directory('${docs.path}/downloads');
+      await dl.create(recursive: true);
+      settings.downloadDir = dl.path;
+    } catch (_) {}
+  }
   final session = SessionController(prefs, KeyringTokenStore());
 
   // The queue is written here so it survives a close mid-transfer.

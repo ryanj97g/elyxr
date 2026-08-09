@@ -10,7 +10,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:open_filex/open_filex.dart';
+
 import '../api/lymnal_client.dart';
+import 'platform_caps.dart';
 
 class OpenExternal {
   /// Files being watched, keyed by trove path, so a second open doesn't stack a
@@ -39,6 +42,12 @@ class OpenExternal {
   /// Hand a file to the OS "open with the default program", the platform way:
   /// `xdg-open` on Linux, `start` on Windows, `open` on macOS.
   static Future<void> _openInDefaultApp(String path) async {
+    if (!Caps.canExec) {
+      // Mobile: hand the file to the OS "open with" via a content-URI intent,
+      // since there's no shell to xdg-open/start.
+      await OpenFilex.open(path);
+      return;
+    }
     if (Platform.isWindows) {
       // `start` is a cmd builtin; the empty "" is its title argument, so a
       // quoted path isn't mistaken for the window title.
