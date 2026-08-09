@@ -1,8 +1,9 @@
-// A music-reactive glow that runs around the inside edge of the tube — the
-// curved-phone "edge lighting" look, but for fun. It's driven by the same live
-// spectrum the visualizer and woofers read (MusicController.visualizerBars, off
-// the play head), so bright arcs chase around the border in time with the track.
-// When nothing's playing it fades to nothing and stops repainting.
+// A music-reactive glow around the inside edge of the tube — the curved-phone
+// "edge lighting" look, but for fun. It's driven by the same live spectrum the
+// visualizer and woofers read (MusicController.visualizerBars, off the play
+// head): the whole edge strobes on the beat — snap bright on the hit, fall fast
+// — rather than a bright spot travelling around. When nothing's playing it fades
+// to nothing and stops repainting.
 
 import 'dart:math' as math;
 
@@ -24,11 +25,10 @@ class EdgeLight extends StatefulWidget {
 class _EdgeLightState extends State<EdgeLight>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
-  // Smoothed per-band levels, an overall energy envelope, and a slowly turning
-  // phase so the lit arcs travel around the ring instead of sitting still.
-  List<double> _smooth = List<double>.filled(MusicController.kVisBars, 0);
+  // A strobe level (bass, instant attack + fast decay) and an overall energy
+  // envelope (is anything playing at all).
+  double _flash = 0;
   double _energy = 0;
-  double _phase = 0;
   // Bumped only while there's something to show, so a resting tube isn't
   // repainting every frame for nothing.
   final _rev = ValueNotifier<int>(0);
@@ -39,23 +39,27 @@ class _EdgeLightState extends State<EdgeLight>
     _ticker = createTicker(_tick)..start();
   }
 
-  void _tick(Duration elapsed) {
-    _phase = elapsed.inMicroseconds / 1000000.0;
+  void _tick(Duration _) {
     final m = context.read<MusicController>();
     final bars = m.playing ? m.visualizerBars() : const <double>[];
+    var bass = 0.0;
     var sum = 0.0;
-    for (var i = 0; i < _smooth.length; i++) {
-      final target = i < bars.length ? bars[i] : 0.0;
-      // Snap up instantly, ease down — the lit edge tracks the beat but trails
-      // off smoothly rather than flickering.
-      _smooth[i] =
-          target > _smooth[i] ? target : _smooth[i] * 0.80 + target * 0.20;
-      sum += _smooth[i];
+    if (bars.isNotEmpty) {
+      final n = math.min(4, bars.length); // the low bands carry the beat
+      for (var i = 0; i < n; i++) {
+        bass += bars[i];
+      }
+      bass /= n;
+      for (final b in bars) {
+        sum += b;
+      }
     }
-    final avg = _smooth.isEmpty ? 0.0 : sum / _smooth.length;
+    bass = (bass * 1.6).clamp(0.0, 1.0);
+    // Strobe: snap to the hit, then fall fast so each beat reads as a flash.
+    _flash = bass > _flash ? bass : _flash * 0.70;
+    final avg = bars.isEmpty ? 0.0 : sum / bars.length;
     _energy = avg > _energy ? avg : _energy * 0.86 + avg * 0.14;
-    // Only drive repaints while the ring is (or is still fading) visible.
-    if (_energy > 0.002) _rev.value++;
+    if (_flash > 0.002 || _energy > 0.002) _rev.value++;
   }
 
   @override
@@ -73,8 +77,7 @@ class _EdgeLightState extends State<EdgeLight>
           valueListenable: _rev,
           builder: (_, __, ___) => CustomPaint(
             size: Size.infinite,
-            painter: _EdgeLightPainter(
-                widget.palette, List<double>.of(_smooth), _energy, _phase),
+            painter: _EdgeLightPainter(widget.palette, _flash, _energy),
           ),
         ),
       ),
@@ -84,70 +87,47 @@ class _EdgeLightState extends State<EdgeLight>
 
 class _EdgeLightPainter extends CustomPainter {
   final Palette p;
-  final List<double> bars; // smoothed band levels, 0..1
-  final double energy; // overall envelope, 0..1
-  final double phase; // seconds, drives the travelling arcs
-  const _EdgeLightPainter(this.p, this.bars, this.energy, this.phase);
+  final double flash; // 0..1 beat strobe
+  final double energy; // 0..1 overall envelope
+  const _EdgeLightPainter(this.p, this.flash, this.energy);
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Master fade: silent → nothing, so it only lives while music plays. Boosted
-    // so ordinary music lights it well before it needs to be blaring.
-    final fade = (energy * 4.2).clamp(0.0, 1.0);
-    if (fade <= 0.01 || bars.isEmpty) return;
+    // Only alive while music plays; a faint baseline so the edge is present
+    // between beats, then the strobe drives it hard on each hit.
+    final fade = (energy * 4.0).clamp(0.0, 1.0);
+    final hit = flash.clamp(0.0, 1.0);
+    final show = ((0.14 + 0.86 * hit) * fade).clamp(0.0, 1.0);
+    if (show <= 0.01) return;
 
     // The ring hugs just inside the tube's rounded content edge (radius 12).
     final rect = (Offset.zero & size).deflate(2);
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(11));
 
-    // Build the colour ring: sample the spectrum around the perimeter with a
-    // slow rotation so bright arcs chase around. Each stop's alpha is its band
-    // level; the hottest hits lift toward the bright phosphor for a white-hot
-    // core. First and last stop match so the sweep closes seamlessly.
-    const n = 60;
-    final nb = bars.length;
-    final colors = <Color>[];
-    final stops = <double>[];
-    for (var j = 0; j <= n; j++) {
-      final t = j / n;
-      final fpos = t * nb + phase * 6.0; // ~6 bands/sec of travel
-      final i0 = fpos.floor();
-      final frac = fpos - i0;
-      final a0 = bars[((i0 % nb) + nb) % nb];
-      final a1 = bars[(((i0 + 1) % nb) + nb) % nb];
-      final level = (a0 + (a1 - a0) * frac).clamp(0.0, 1.0);
-      final col = Color.lerp(p.a, p.bright, (level * 0.6).clamp(0.0, 1.0))!;
-      final alpha = ((0.10 + 0.90 * level) * fade).clamp(0.0, 1.0);
-      colors.add(col.withValues(alpha: alpha));
-      stops.add(t);
-    }
-
-    final shader = SweepGradient(
-      colors: colors,
-      stops: stops,
-      transform: const GradientRotation(-math.pi / 2), // start at the top
-    ).createShader(rect);
+    // Uniform accent all the way round, lifting toward the bright phosphor on
+    // the hardest hits for a white-hot flash.
+    final col = Color.lerp(p.a, p.bright, (hit * 0.7).clamp(0.0, 1.0))!;
 
     // A wide blurred pass for the bloom that spills onto the glass, then a crisp
-    // brighter line right on the edge. Both ride the same rotating spectrum.
+    // brighter line right on the edge. Both flash together.
     canvas.drawRRect(
       rrect,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 6 + 14 * energy
-        ..shader = shader
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 6 + 16 * energy),
+        ..strokeWidth = 5 + 20 * hit
+        ..color = col.withValues(alpha: (show * 0.9).clamp(0.0, 1.0))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 + 22 * hit),
     );
     canvas.drawRRect(
       rrect,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5 + 2.5 * energy
-        ..shader = shader,
+        ..strokeWidth = 1.5 + 3 * hit
+        ..color = col.withValues(alpha: show),
     );
   }
 
   @override
   bool shouldRepaint(covariant _EdgeLightPainter old) =>
-      old.phase != phase || old.energy != energy || old.p != p;
+      old.flash != flash || old.energy != energy || old.p != p;
 }
