@@ -63,17 +63,24 @@ class MusicController extends ChangeNotifier {
   double _volume = 1.0;
   double _preMute = 1.0;
 
-  // ---- real-time visualizer data ----
-  // The spectrum bars are NOT captured from the speakers (that path always lags
-  // by a capture buffer). Instead the *actual audio of the current track* is
-  // analysed once into a spectrogram (see _startSpectro), and the bars are read
-  // straight off the live play head. Zero capture race — it's the real FFT of
-  // the real audio, shown at the exact playback instant, so it locks to the beat
-  // and updates as fast as the screen refreshes. Row-major [frame * kVisBars].
-  Float32List? _spectro;
-  int _spectroFrames = 0;
-  double _spectroFps = 60.0;
-  int _spectroToken = 0; // bumps per track so a stale async build is discarded
+  // ---- real-time visualizer ----
+  // The bars are the real FFT of the real audio at the exact play instant —
+  // computed ON DEMAND, one window at a time, straight from the playing track's
+  // PCM at the play head. Nothing is precomputed and nothing is kept: just an
+  // open handle to the current track's samples (a WAV) and the single most
+  // recent frame of bars (shared by the deck, the woofers and the edge light).
+  // So a new track has bars on its first frame, and only the moment being played
+  // is ever touched — it fits streaming. Not a speaker capture (that lags a
+  // buffer); the real samples, read at the position they're being heard.
+  RandomAccessFile? _pcm; // current track's decoded audio (a WAV), open for reads
+  int _pcmDataOffset = 0; // byte offset of the 'data' chunk
+  int _pcmRate = 44100;
+  int _pcmChannels = 2;
+  int _pcmFrames = 0; // total sample-frames
+  File? _pcmTemp; // a WAV we decoded just for this (delete on close); null if reusing one
+  int _analysisToken = 0; // so a slow decode for an old track can't open over a newer one
+  int _lastBarsBucket = -1; // memoise the window so 3 widgets share one FFT per frame
+  List<double> _lastBars = const <double>[];
 
   // A wall-clock play-head for the visualizer. audioplayers' position events can
   // go sparse or stall on Android — if the bars sampled `_pos` directly they'd
@@ -178,61 +185,112 @@ class MusicController extends ChangeNotifier {
   static const int kVisBars = _kVisBars;
 
   /// The spectrum bars (0..1) for the current play position — the real FFT of
-  /// the real audio at exactly this instant. Empty until the current track's
-  /// spectrogram has been analysed (the visualizer just rests flat until then).
+  /// the real audio at exactly this instant, computed on the spot from the
+  /// window of samples at the play head. Empty (bars rest) when there's nothing
+  /// to read. Memoised per ~5ms so the deck, woofers and edge light share one
+  /// FFT per frame instead of each doing their own.
   List<double> visualizerBars() {
-    final s = _spectro;
-    final n = _spectroFrames;
-    if (s == null || n == 0) return const <double>[];
-    var f = (_visPos.inMicroseconds * _spectroFps / 1000000.0).floor();
-    if (f < 0) f = 0;
-    if (f >= n) f = n - 1;
-    final base = f * kVisBars;
-    return List<double>.generate(kVisBars, (b) => s[base + b].toDouble());
+    final raf = _pcm;
+    final n = _pcmFrames;
+    if (raf == null || n <= 0) return const <double>[];
+    var start = (_visPos.inMicroseconds * _pcmRate / 1000000.0).floor();
+    if (start < 0) start = 0;
+    if (start >= n) start = n - 1;
+    final bucket = start >> 8; // ~256 samples ≈ 5ms at 48k
+    if (bucket == _lastBarsBucket) return _lastBars;
+    _lastBarsBucket = bucket;
+    _lastBars = _frameBars(raf, start);
+    return _lastBars;
   }
 
-  // Spectrograms already analysed this session, keyed by the analysed file path.
-  // The soundtrack shuffles and replays tracks, so a hit here means the bars are
-  // live the instant a track starts again — no re-analysis, no gap. Bounded so it
-  // can't grow without limit.
-  final Map<String, _SpectroResult> _spectroCache = {};
-  final List<String> _spectroCacheOrder = [];
-  static const int _spectroCacheMax = 8;
+  /// Read the [_win]-sample window at [startSample] straight from the open WAV,
+  /// down-mix to mono, and turn it into the bar levels. Synchronous — a couple of
+  /// KB read plus one small FFT, cheap enough to run per frame on the UI thread.
+  List<double> _frameBars(RandomAccessFile raf, int startSample) {
+    final ch = _pcmChannels;
+    final bytesPerFrame = ch * 2;
+    try {
+      raf.setPositionSync(_pcmDataOffset + startSample * bytesPerFrame);
+      final raw = raf.readSync(_win * bytesPerFrame);
+      if (raw.length < bytesPerFrame) return const <double>[];
+      final avail = raw.length ~/ bytesPerFrame;
+      final bd = ByteData.sublistView(raw);
+      final re = Float64List(_win);
+      final im = Float64List(_win);
+      for (var i = 0; i < _win; i++) {
+        if (i < avail) {
+          var sum = 0;
+          for (var c = 0; c < ch; c++) {
+            sum += bd.getInt16((i * ch + c) * 2, Endian.little);
+          }
+          re[i] = (sum / ch) / 32768.0 * _hann[i];
+        } else {
+          re[i] = 0.0; // zero-pad the tail at end of file
+        }
+        im[i] = 0.0;
+      }
+      _fft(re, im);
+      return _bands(re, im);
+    } catch (_) {
+      return const <double>[];
+    }
+  }
 
-  /// Analyse the actual audio file into a spectrogram on a background isolate,
-  /// then hold it for the visualizer to sample by play position. Never blocks or
-  /// affects playback: if analysis fails (no ffmpeg, odd file), the bars simply
-  /// stay flat. Each call invalidates any earlier build via the token.
-  Future<void> _startSpectro(String path) async {
-    final token = ++_spectroToken;
-    // Already analysed → apply instantly, so a new (or repeated) track's bars
-    // don't drop out while it re-analyses.
-    final cached = _spectroCache[path];
-    if (cached != null) {
-      _spectro = cached.data;
-      _spectroFrames = cached.frames;
-      _spectroFps = cached.fps;
+  /// Point the visualizer at a track's PCM. A WAV is opened directly; anything
+  /// else is decoded to a throwaway WAV first where a decoder exists (desktop
+  /// ffmpeg) — on a phone compressed audio just rests the bars. Holds nothing but
+  /// the open handle; the previous track's handle (and any temp) is released.
+  Future<void> _openAnalysis(String path) async {
+    await _closeAnalysis(); // bumps the token; capture ours after
+    final token = ++_analysisToken;
+    String wavPath = path;
+    File? temp;
+    if (!path.toLowerCase().endsWith('.wav')) {
+      if (Platform.isAndroid) return; // no on-device decoder for compressed audio
+      final dir = await getTemporaryDirectory();
+      final out = '${dir.path}/elyxr_vis_${path.hashCode & 0x7fffffff}.wav';
+      try {
+        final r = await Process.run(_mediaBin('ffmpeg'),
+            ['-y', '-v', 'error', '-i', path, '-ac', '2', '-ar', '44100', out]);
+        if (r.exitCode != 0 || !File(out).existsSync()) return;
+      } catch (_) {
+        return;
+      }
+      wavPath = out;
+      temp = File(out);
+    }
+    if (token != _analysisToken) {
+      temp?.delete().ignore();
+      return; // a newer track already took over
+    }
+    final info = _wavHeader(wavPath);
+    if (info == null) {
+      temp?.delete().ignore();
       return;
     }
-    _spectro = null;
-    _spectroFrames = 0;
+    _pcm = File(wavPath).openSync();
+    _pcmDataOffset = info.dataOffset;
+    _pcmRate = info.rate;
+    _pcmChannels = info.channels;
+    _pcmFrames = info.frames;
+    _pcmTemp = temp;
+    _lastBarsBucket = -1;
+    _lastBars = const <double>[];
+  }
+
+  /// Close the current analysis handle and delete any temp WAV we made for it.
+  Future<void> _closeAnalysis() async {
+    _analysisToken++;
     try {
-      final res = await compute(_analyzeSpectrogram, path);
-      if (token != _spectroToken) return; // track changed mid-analysis
-      _spectro = res.data;
-      _spectroFrames = res.frames;
-      _spectroFps = res.fps;
-      _spectroCache[path] = res;
-      _spectroCacheOrder.add(path);
-      if (_spectroCacheOrder.length > _spectroCacheMax) {
-        _spectroCache.remove(_spectroCacheOrder.removeAt(0));
-      }
-    } catch (_) {
-      if (token == _spectroToken) {
-        _spectro = null;
-        _spectroFrames = 0;
-      }
-    }
+      _pcm?.closeSync();
+    } catch (_) {}
+    _pcm = null;
+    _pcmFrames = 0;
+    _lastBarsBucket = -1;
+    _lastBars = const <double>[];
+    final t = _pcmTemp;
+    _pcmTemp = null;
+    if (t != null) t.delete().ignore();
   }
 
   Future<void> _load() async {
@@ -300,6 +358,7 @@ class MusicController extends ChangeNotifier {
     _hasSource = false;
     _override = null;
     _pos = Duration.zero;
+    _closeAnalysis(); // release the visualizer handle; bars rest
     notifyListeners();
   }
 
@@ -390,7 +449,7 @@ class MusicController extends ChangeNotifier {
       _hasSource = true;
       _playing = true;
       _anchorVis(Duration.zero); // restart the visualizer play-head
-      _startSpectro(analysisPath); // fire-and-forget; never blocks playback
+      _openAnalysis(analysisPath); // point the on-demand visualizer at this track
     } catch (_) {
       _playing = false;
     }
@@ -416,7 +475,7 @@ class MusicController extends ChangeNotifier {
       _pos = Duration.zero;
       _playing = true;
       _anchorVis(Duration.zero); // restart the visualizer play-head
-      _startSpectro(playable); // real spectrum for the streamed file too
+      _openAnalysis(playable); // point the on-demand visualizer at this track
     } catch (_) {
       _playing = false;
     }
@@ -500,24 +559,52 @@ class MusicController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _spectroToken++; // orphan any in-flight analysis
+    _closeAnalysis(); // close the visualizer handle, drop any temp
     _nostalgiaStop?.cancel();
     _player.dispose();
     super.dispose();
   }
 }
 
-// ---- spectrogram analysis (runs on a background isolate) ----
+// ---- on-demand visualizer analysis ----
 
 const int _kVisBars = 28;
+const int _win = 1024; // FFT window (power of two)
 
-/// A precomputed spectrogram: [frames * _kVisBars] bar levels (0..1), row-major,
-/// at [fps] frames per second. Sampled by play position for the visualizer.
-class _SpectroResult {
-  final Float32List data;
-  final int frames;
-  final double fps;
-  const _SpectroResult(this.data, this.frames, this.fps);
+/// Hann window over one FFT frame, computed once.
+final Float64List _hann = () {
+  final h = Float64List(_win);
+  for (var i = 0; i < _win; i++) {
+    h[i] = 0.5 - 0.5 * math.cos(2 * math.pi * i / (_win - 1));
+  }
+  return h;
+}();
+
+/// The log-spaced FFT-bin edges each bar spans, computed once.
+final List<int> _edges = () {
+  const half = _win ~/ 2;
+  const loBin = 2;
+  final hiBin = (half - 1).clamp(loBin + 1, half);
+  return List<int>.generate(_kVisBars + 1, (b) {
+    final v = (loBin * math.pow(hiBin / loBin, b / _kVisBars)).round();
+    return v.clamp(loBin, half);
+  });
+}();
+
+/// One FFT frame (re/im of length [_win]) → the [_kVisBars] bar levels (0..1).
+List<double> _bands(Float64List re, Float64List im) {
+  return List<double>.generate(_kVisBars, (b) {
+    final lo = _edges[b];
+    final hi = math.max(_edges[b + 1], lo + 1);
+    var peak = 0.0;
+    for (var k = lo; k < hi; k++) {
+      // Magnitude normalized by window so it's scale-independent (0..~1).
+      final m = math.sqrt(re[k] * re[k] + im[k] * im[k]) / (_win / 2);
+      if (m > peak) peak = m;
+    }
+    // sqrt curve lifts ordinary (sub-full-scale) music into a visible swing.
+    return math.sqrt((peak / 0.22).clamp(0.0, 1.0)).toDouble();
+  });
 }
 
 /// The path to a media helper (ffmpeg / openmpt123). On Windows they ship beside
@@ -531,150 +618,58 @@ String _mediaBin(String name) {
   return name;
 }
 
-/// Read a 16-bit PCM WAV into mono samples (−1..1) plus its sample rate, or null
-/// if it isn't a PCM WAV this can parse. Used on Android, where module playback
-/// renders to WAV and there's no ffmpeg to lean on. Walks the RIFF chunks rather
-/// than assuming a fixed 44-byte header.
-(Float64List, int)? _readWavMono(String path) {
+/// Where a 16-bit PCM WAV's audio starts and its shape — without reading the
+/// audio body, so the visualizer can seek to any window on demand. Walks the
+/// RIFF chunks (the header + chunk table live in the first few KB).
+class _WavInfo {
+  final int dataOffset;
+  final int rate;
+  final int channels;
+  final int frames;
+  const _WavInfo(this.dataOffset, this.rate, this.channels, this.frames);
+}
+
+_WavInfo? _wavHeader(String path) {
   try {
-    final bytes = File(path).readAsBytesSync();
-    if (bytes.length < 44) return null;
-    final bd = ByteData.sublistView(bytes);
-    String tag(int o) => String.fromCharCodes(bytes.sublist(o, o + 4));
-    if (tag(0) != 'RIFF' || tag(8) != 'WAVE') return null;
+    final raf = File(path).openSync();
+    try {
+      final head = raf.readSync(4096);
+      if (head.length < 12) return null;
+      final bd = ByteData.sublistView(head);
+      String tag(int o) => String.fromCharCodes(head.sublist(o, o + 4));
+      if (tag(0) != 'RIFF' || tag(8) != 'WAVE') return null;
 
-    int channels = 0, rate = 0, bits = 0, dataOff = -1, dataLen = 0, fmt = 0;
-    var p = 12;
-    while (p + 8 <= bytes.length) {
-      final id = tag(p);
-      final sz = bd.getUint32(p + 4, Endian.little);
-      final body = p + 8;
-      if (id == 'fmt ' && body + 16 <= bytes.length) {
-        fmt = bd.getUint16(body, Endian.little);
-        channels = bd.getUint16(body + 2, Endian.little);
-        rate = bd.getUint32(body + 4, Endian.little);
-        bits = bd.getUint16(body + 14, Endian.little);
-      } else if (id == 'data') {
-        dataOff = body;
-        dataLen = sz;
+      int channels = 0, rate = 0, bits = 0, dataOff = -1, dataLen = 0, fmt = 0;
+      var p = 12;
+      while (p + 8 <= head.length) {
+        final id = tag(p);
+        final sz = bd.getUint32(p + 4, Endian.little);
+        final body = p + 8;
+        if (id == 'fmt ' && body + 16 <= head.length) {
+          fmt = bd.getUint16(body, Endian.little);
+          channels = bd.getUint16(body + 2, Endian.little);
+          rate = bd.getUint32(body + 4, Endian.little);
+          bits = bd.getUint16(body + 14, Endian.little);
+        } else if (id == 'data') {
+          dataOff = body;
+          dataLen = sz;
+          break; // the audio body follows; stop walking
+        }
+        p = body + sz + (sz & 1); // chunks are word-aligned
       }
-      p = body + sz + (sz & 1); // chunks are word-aligned
-    }
-    if (fmt != 1 || bits != 16 || channels < 1 || rate <= 0 || dataOff < 0) {
-      return null;
-    }
-
-    final end = math.min(dataOff + dataLen, bytes.length);
-    final frameBytes = channels * 2;
-    final frames = (end - dataOff) ~/ frameBytes;
-    final samples = Float64List(frames);
-    var o = dataOff;
-    for (var i = 0; i < frames; i++) {
-      var sum = 0;
-      for (var c = 0; c < channels; c++) {
-        sum += bd.getInt16(o, Endian.little);
-        o += 2;
+      if (fmt != 1 || bits != 16 || channels < 1 || rate <= 0 || dataOff < 0) {
+        return null;
       }
-      samples[i] = (sum / channels) / 32768.0;
+      final fileLen = raf.lengthSync();
+      final end = dataLen > 0 ? math.min(dataOff + dataLen, fileLen) : fileLen;
+      final frames = (end - dataOff) ~/ (channels * 2);
+      return _WavInfo(dataOff, rate, channels, frames);
+    } finally {
+      raf.closeSync();
     }
-    return (samples, rate);
   } catch (_) {
     return null;
   }
-}
-
-/// Decode the actual audio at [path] to PCM (via ffmpeg) and turn it into a
-/// spectrogram — a real FFT per video-frame-sized hop across the whole track.
-/// Runs on a background isolate (see compute), so the heavy work never touches
-/// the UI thread. On any failure it throws and the caller leaves the bars flat.
-Future<_SpectroResult> _analyzeSpectrogram(String path) async {
-  const double fps = 30.0; // spectra per second (30 is plenty; halves the work)
-  const int win = 1024; // FFT window (power of two)
-
-  late final int rate;
-  late final Float64List samples;
-
-  if (Platform.isAndroid) {
-    // No ffmpeg on a phone. Module playback already renders to a WAV (see
-    // _renderModule), so read that PCM directly; any other (compressed) source
-    // has no decoder here and simply leaves the bars flat.
-    final wav = _readWavMono(path);
-    if (wav == null) throw StateError('no decoder for this source on android');
-    samples = wav.$1;
-    rate = wav.$2;
-  } else {
-    rate = 22050; // plenty for a bar visualizer, quick to process
-    // ffmpeg decodes anything GStreamer can play to raw mono s16le on stdout.
-    final res = await Process.run(
-      _mediaBin('ffmpeg'),
-      [
-        '-v', 'error',
-        '-i', path,
-        '-f', 's16le',
-        '-acodec', 'pcm_s16le',
-        '-ac', '1',
-        '-ar', '$rate',
-        'pipe:1',
-      ],
-      stdoutEncoding: null, // raw bytes, not text
-    );
-    final raw = res.stdout as List<int>;
-    final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
-    final n = bytes.length ~/ 2;
-    final bd = ByteData.sublistView(bytes, 0, n * 2);
-    final s = Float64List(n);
-    for (var i = 0; i < n; i++) {
-      s[i] = bd.getInt16(i * 2, Endian.little) / 32768.0;
-    }
-    samples = s;
-  }
-
-  final int hop = (rate / fps).round();
-  final nSamples = samples.length;
-  if (nSamples < win) throw StateError('too short to analyse');
-
-  // Log-spaced band edges (shared across frames): ~85Hz .. ~11kHz.
-  final half = win ~/ 2;
-  const int loBin = 2;
-  final int hiBin = (half - 1).clamp(loBin + 1, half);
-  final edges = List<int>.generate(_kVisBars + 1, (b) {
-    final v = (loBin * math.pow(hiBin / loBin, b / _kVisBars)).round();
-    return v.clamp(loBin, half);
-  });
-
-  // Precompute the Hann window once.
-  final hann = Float64List(win);
-  for (var i = 0; i < win; i++) {
-    hann[i] = 0.5 - 0.5 * math.cos(2 * math.pi * i / (win - 1));
-  }
-
-  final frames = ((nSamples - win) ~/ hop) + 1;
-  final out = Float32List(frames * _kVisBars);
-  final re = Float64List(win);
-  final im = Float64List(win);
-
-  for (var f = 0; f < frames; f++) {
-    final start = f * hop;
-    for (var i = 0; i < win; i++) {
-      re[i] = samples[start + i] * hann[i];
-      im[i] = 0.0;
-    }
-    _fft(re, im);
-    final base = f * _kVisBars;
-    for (var b = 0; b < _kVisBars; b++) {
-      final lo = edges[b];
-      final hi = math.max(edges[b + 1], lo + 1);
-      var peak = 0.0;
-      for (var k = lo; k < hi; k++) {
-        // Magnitude normalized by window so it's scale-independent (0..~1).
-        final m = math.sqrt(re[k] * re[k] + im[k] * im[k]) / (win / 2);
-        if (m > peak) peak = m;
-      }
-      // sqrt curve lifts ordinary (sub-full-scale) music into a visible swing.
-      out[base + b] = math.sqrt((peak / 0.22).clamp(0.0, 1.0)).toDouble();
-    }
-  }
-  return _SpectroResult(out, frames, fps);
 }
 
 // In-place iterative radix-2 Cooley–Tukey FFT. Length must be a power of two.
