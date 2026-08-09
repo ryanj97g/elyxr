@@ -11,12 +11,10 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/actions.dart';
 import '../state/browse.dart';
-import '../state/music.dart';
 import '../state/settings.dart';
 import '../state/transfers.dart';
 import '../util/format.dart';
 import 'dialogs.dart';
-import 'video_preview.dart';
 
 class SelectionBar extends StatefulWidget {
   final Palette palette;
@@ -66,64 +64,30 @@ class _SelectionBarState extends State<SelectionBar> {
       }
     }
 
-    // A single selected video turns the box into a player, streaming the clip
-    // from the local proxy — the same one-click-to-play as audio, but on screen.
-    // Only when the client speaks HTTP (the proxy); a local-filesystem session
-    // just shows the details row.
-    final client = browse.session.client;
-    final path = browse.selectionPaths.length == 1 ? browse.selectionPaths.first : null;
-    Widget? preview;
-    if (single != null &&
-        path != null &&
-        isVideoName(single.name) &&
-        client != null &&
-        client.baseUrl.startsWith('http')) {
-      final url = Uri.parse('${client.baseUrl}/v1/download')
-          .replace(queryParameters: {'path': path})
-          .toString();
-      preview = Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: VideoPreview(
-          // Keyed by the file so switching selection rebuilds the player onto
-          // the new clip instead of leaving the old one up.
-          key: ValueKey('video:$path'),
-          palette: p,
-          url: url,
-          headers: client.token != null ? {'Authorization': 'Bearer ${client.token}'} : null,
-        ),
-      );
-    }
-
     return Container(
       padding: const EdgeInsets.fromLTRB(13, 8, 13, 6),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          if (preview != null) preview,
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Flexible(child: Text(figures, style: glass(16, p.bright), overflow: TextOverflow.ellipsis)),
-              Flexible(
-                child: Wrap(
-                  alignment: WrapAlignment.end,
-                  spacing: 12,
-                  runSpacing: 2,
-                  children: [
-                    if (single != null)
-                      _action(p, 'RENAME',
-                          () => _rename(context, browse, p, single!.name)),
-                    _action(p, 'DOWNLOAD', () => _download(context, browse, actions)),
-                    _action(p, 'DELETE', () => _delete(context, browse, p)),
-                    GestureDetector(
-                      onTap: browse.clearSelection,
-                      child: Text('CLEAR', style: glass(16, p.mid)),
-                    ),
-                  ],
+          Flexible(child: Text(figures, style: glass(16, p.bright), overflow: TextOverflow.ellipsis)),
+          Flexible(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 12,
+              runSpacing: 2,
+              children: [
+                if (single != null)
+                  _action(p, 'RENAME',
+                      () => _rename(context, browse, p, single!.name)),
+                _action(p, 'DOWNLOAD', () => _download(context, browse, actions)),
+                _action(p, 'DELETE', () => _delete(context, browse, p)),
+                GestureDetector(
+                  onTap: browse.clearSelection,
+                  child: Text('CLEAR', style: glass(16, p.mid)),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

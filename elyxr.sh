@@ -148,10 +148,8 @@ BUILD_PKGS=(build-essential pkg-config git fuse3 libfuse3-dev)
 # mismatch that made the previous engine fail to load. openmpt123 renders tracker
 # modules (.xm/.mod/.s3m/.it) to PCM. ffmpeg decodes the current track to raw PCM
 # so the visualizer can analyse it into a spectrogram (the bars are read off the
-# play head — the real FFT of the real audio, with no capture lag). libmpv is the
-# engine behind the video preview (media_kit): -dev to build the plugin, and the
-# runtime library it pulls in to actually play a clip.
-[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav openmpt123 ffmpeg libmpv-dev)
+# play head — the real FFT of the real audio, with no capture lag).
+[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav openmpt123 ffmpeg)
 BASE_NEED=(); BUILD_NEED=()
 if command -v dpkg >/dev/null 2>&1; then
   for p in "${BASE_PKGS[@]}";  do dpkg -s "$p" >/dev/null 2>&1 || BASE_NEED+=("$p"); done

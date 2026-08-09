@@ -3,7 +3,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:media_kit/media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
@@ -18,13 +17,6 @@ import 'util/shake_to_close.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Bring up libmpv for the video preview. If it can't initialize (e.g. libmpv
-  // isn't installed on this Linux box yet), swallow it — the preview just won't
-  // show, and nothing else is affected.
-  try {
-    MediaKit.ensureInitialized();
-  } catch (_) {}
 
   // On Linux the native launcher owns the window's geometry (frameless,
   // chassis-sized, transparent — see linux/runner/my_application.cc). Other
