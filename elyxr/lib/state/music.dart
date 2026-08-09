@@ -27,6 +27,16 @@ const kAudioExts = {
 bool isAudioName(String name) =>
     kAudioExts.contains(name.split('.').last.toLowerCase());
 
+/// Video extensions the preview player accepts (played by libmpv via media_kit,
+/// separate from the audio player above).
+const kVideoExts = {
+  'mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v', 'wmv', 'flv',
+  'mpeg', 'mpg', '3gp', 'ts', 'm2ts', 'ogv',
+};
+
+bool isVideoName(String name) =>
+    kVideoExts.contains(name.split('.').last.toLowerCase());
+
 /// Loop nothing, the whole list, or the one track.
 enum MusicRepeat { off, all, one }
 

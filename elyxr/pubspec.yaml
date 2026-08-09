@@ -23,6 +23,14 @@ dependencies:
   # flutter_soloud, whose precompiled codec libs required a newer glibc than most
   # systems have and failed to load entirely.
   audioplayers: ^6.0.0
+  # Video preview only (the SelectionBar player). media_kit is libmpv-backed —
+  # the maintained successor to the Flutter libVLC binding — and streams a file
+  # straight from the local proxy. Linux needs libmpv present (added to
+  # elyxr.sh); Windows/macOS libs are bundled by media_kit_libs_video. Audio
+  # stays on audioplayers; this is additive.
+  media_kit: ^1.1.10
+  media_kit_video: ^1.2.4
+  media_kit_libs_video: ^1.0.4
 
 dev_dependencies:
   flutter_test:
