@@ -237,24 +237,32 @@ class MusicController extends ChangeNotifier {
   }
 
   /// Point the visualizer at a track's PCM. A WAV is opened directly; anything
-  /// else is decoded to a throwaway WAV first where a decoder exists (desktop
-  /// ffmpeg) — on a phone compressed audio just rests the bars. Holds nothing but
-  /// the open handle; the previous track's handle (and any temp) is released.
+  /// else is decoded to a throwaway WAV first — ffmpeg on desktop, the native
+  /// MediaCodec decoder on Android — so the bars have real samples on every
+  /// platform. Holds nothing but the open handle; the previous track's handle
+  /// (and any temp) is released.
   Future<void> _openAnalysis(String path) async {
     await _closeAnalysis(); // bumps the token; capture ours after
     final token = ++_analysisToken;
     String wavPath = path;
     File? temp;
     if (!path.toLowerCase().endsWith('.wav')) {
-      if (Platform.isAndroid) return; // no on-device decoder for compressed audio
       final dir = await getTemporaryDirectory();
       final out = '${dir.path}/elyxr_vis_${path.hashCode & 0x7fffffff}.wav';
-      try {
-        final r = await Process.run(_mediaBin('ffmpeg'),
-            ['-y', '-v', 'error', '-i', path, '-ac', '2', '-ar', '44100', out]);
-        if (r.exitCode != 0 || !File(out).existsSync()) return;
-      } catch (_) {
-        return;
+      if (Platform.isAndroid) {
+        // No ffmpeg on a phone — decode to PCM natively so the bars have real
+        // samples to read (m4a trove streams already arrive as WAV via
+        // _audioOnly, but mp3/ogg/etc. reach here compressed).
+        final ok = await LymnalHost.decodeToWav(path, out);
+        if (!ok) return;
+      } else {
+        try {
+          final r = await Process.run(_mediaBin('ffmpeg'),
+              ['-y', '-v', 'error', '-i', path, '-ac', '2', '-ar', '44100', out]);
+          if (r.exitCode != 0 || !File(out).existsSync()) return;
+        } catch (_) {
+          return;
+        }
       }
       wavPath = out;
       temp = File(out);
@@ -385,18 +393,23 @@ class MusicController extends ChangeNotifier {
   /// Return a path with the video track removed for a container that might carry
   /// one, so the player never has a picture to show; anything else is returned
   /// untouched. Desktop copies the audio track out with ffmpeg (no re-encode,
-  /// falling back to a WAV decode); Android remuxes it natively via
-  /// MediaExtractor/MediaMuxer. If no stripper is available or it fails, the
-  /// original path is returned (audio still plays — a video window may appear).
+  /// falling back to a WAV decode); Android decodes it to a PCM WAV natively
+  /// (MediaExtractor/MediaCodec), which carries no video and also feeds the
+  /// visualizer. If no decoder is available or it fails, the original path is
+  /// returned (audio still plays — a video window may appear).
   Future<String> _audioOnly(String path, String ext) async {
     if (!_videoCapableExts.contains(ext.toLowerCase())) return path;
     final dir = await getTemporaryDirectory();
     // One stream plays at a time; a single reused slot, regenerated each call.
-    final m4aOut = '${dir.path}/elyxr_aud.m4a';
     if (Platform.isAndroid) {
-      final ok = await LymnalHost.extractAudio(path, m4aOut);
-      return ok ? m4aOut : path;
+      // No ffmpeg on a phone: decode natively to a PCM WAV. It has no video
+      // track (nothing to render) and doubles as the visualizer's input, so the
+      // lightshow works too. Falls back to the original if the decode fails.
+      final wavOut = '${dir.path}/elyxr_aud.wav';
+      final ok = await LymnalHost.decodeToWav(path, wavOut);
+      return ok ? wavOut : path;
     }
+    final m4aOut = '${dir.path}/elyxr_aud.m4a';
     try {
       final r = await Process.run(_mediaBin('ffmpeg'),
           ['-y', '-v', 'error', '-i', path, '-vn', '-c:a', 'copy', m4aOut]);

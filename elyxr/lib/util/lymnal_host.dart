@@ -51,15 +51,15 @@ class LymnalHost {
     } catch (_) {}
   }
 
-  /// Losslessly copy just the audio track of [inPath] (an MP4/M4A that may carry
-  /// video) into a new audio-only file at [outPath], using the platform's
-  /// MediaExtractor/MediaMuxer — no re-encode. Returns true on success. Android
-  /// only; false (and no file) everywhere else, or if the input has no audio.
-  static Future<bool> extractAudio(String inPath, String outPath) async {
+  /// Decode a compressed audio file [inPath] (m4a/aac/mp3/…) to a 16-bit PCM WAV
+  /// at [outPath] natively (MediaExtractor + MediaCodec). The WAV plays as pure
+  /// audio (no video track) and is what the visualizer reads. Returns true on
+  /// success. Android only; false (and no file) elsewhere or if it can't decode.
+  static Future<bool> decodeToWav(String inPath, String outPath) async {
     if (!Caps.isAndroid) return false;
     try {
       final ok = await _ch.invokeMethod<bool>(
-          'extractAudio', {'in': inPath, 'out': outPath});
+          'decodeToWav', {'in': inPath, 'out': outPath});
       return ok ?? false;
     } catch (_) {
       return false;

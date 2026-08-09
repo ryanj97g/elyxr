@@ -1,10 +1,10 @@
 package com.elyxr.elyxr
 
 import android.content.pm.PackageManager
+import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
-import android.media.MediaMuxer
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -15,7 +15,9 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 // The Flutter entry point plus the bridge Dart uses to run the on-device lymnal.
 // Android can't shell out from Dart, so the app asks the native side to start the
@@ -83,12 +85,13 @@ class MainActivity : FlutterActivity() {
                         LymnalService.stop(this)
                         result.success(null)
                     }
-                    // Strip an MP4/M4A down to its audio track. These "audio"
-                    // files can carry video, which the media backend would render
-                    // — the app only ever wants sound. Copy just the audio track
-                    // (no re-encode) into a new audio-only file. Off the main
-                    // thread; the file can be large.
-                    "extractAudio" -> {
+                    // Decode a compressed audio file (m4a/aac/mp3/…) to a 16-bit
+                    // PCM WAV. The phone has no ffmpeg, so this is how the app gets
+                    // real samples: the WAV plays as pure audio (no video track to
+                    // render) AND is what the visualizer's FFT reads off the play
+                    // head, so the lightshow works on Android too. Off the main
+                    // thread — decoding a whole track takes a moment.
+                    "decodeToWav" -> {
                         val inPath = call.argument<String>("in")
                         val outPath = call.argument<String>("out")
                         if (inPath == null || outPath == null) {
@@ -96,7 +99,7 @@ class MainActivity : FlutterActivity() {
                         } else {
                             Thread {
                                 val ok = try {
-                                    extractAudioTrack(inPath, outPath)
+                                    decodeToWav(inPath, outPath)
                                 } catch (e: Exception) {
                                     false
                                 }
@@ -109,61 +112,139 @@ class MainActivity : FlutterActivity() {
             }
     }
 
-    // Remux the first audio track of [inPath] into a fresh audio-only MP4/M4A at
-    // [outPath] via MediaExtractor + MediaMuxer — a lossless copy of the encoded
-    // samples, no decode/re-encode. Returns false if there's no audio track.
-    private fun extractAudioTrack(inPath: String, outPath: String): Boolean {
+    // Decode the first audio track of [inPath] to a 16-bit little-endian PCM WAV
+    // at [outPath] using MediaExtractor + MediaCodec. Streams decoded chunks
+    // straight to disk (never holds the whole song in memory) and back-patches
+    // the 44-byte header once the true sample-rate/channels and length are known.
+    // Returns false if there's no audio track or nothing decoded.
+    private fun decodeToWav(inPath: String, outPath: String): Boolean {
         File(outPath).delete()
         val extractor = MediaExtractor()
+        var codec: MediaCodec? = null
+        var raf: RandomAccessFile? = null
         try {
             extractor.setDataSource(inPath)
-            var audioTrack = -1
-            var format: MediaFormat? = null
+            var trackIndex = -1
+            var trackFormat: MediaFormat? = null
             for (i in 0 until extractor.trackCount) {
                 val f = extractor.getTrackFormat(i)
                 val mime = f.getString(MediaFormat.KEY_MIME) ?: continue
                 if (mime.startsWith("audio/")) {
-                    audioTrack = i
-                    format = f
+                    trackIndex = i
+                    trackFormat = f
                     break
                 }
             }
-            val fmt = format ?: return false
-            extractor.selectTrack(audioTrack)
+            val fmt = trackFormat ?: return false
+            val mime = fmt.getString(MediaFormat.KEY_MIME) ?: return false
+            extractor.selectTrack(trackIndex)
 
-            val muxer = MediaMuxer(outPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            val outIndex = muxer.addTrack(fmt)
-            muxer.start()
-            try {
-                val cap = if (fmt.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
-                    maxOf(fmt.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE), 256 * 1024)
-                } else {
-                    1 * 1024 * 1024
-                }
-                val buffer = ByteBuffer.allocate(cap)
-                val info = MediaCodec.BufferInfo()
-                while (true) {
-                    val size = extractor.readSampleData(buffer, 0)
-                    if (size < 0) break
-                    info.offset = 0
-                    info.size = size
-                    info.presentationTimeUs = extractor.sampleTime
-                    info.flags =
-                        if (extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) {
-                            MediaCodec.BUFFER_FLAG_KEY_FRAME
-                        } else {
-                            0
-                        }
-                    muxer.writeSampleData(outIndex, buffer, info)
-                    extractor.advance()
-                }
-            } finally {
-                muxer.stop()
-                muxer.release()
+            // Sample rate / channels from the input format; corrected below if the
+            // decoder reports different values once it starts producing output.
+            var sampleRate = if (fmt.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            } else {
+                44100
             }
-            return File(outPath).length() > 0
+            var channels = if (fmt.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            } else {
+                2
+            }
+
+            // Ask the decoder for 16-bit PCM specifically — our WAV header
+            // declares 16-bit, so a device that defaulted to float output would
+            // otherwise play back as noise. Supported API 24+.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                fmt.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
+            }
+
+            codec = MediaCodec.createDecoderByType(mime)
+            codec.configure(fmt, null, null, 0)
+            codec.start()
+
+            raf = RandomAccessFile(outPath, "rw")
+            raf.setLength(0)
+            raf.write(ByteArray(44)) // reserve the header; back-patched at the end
+            var dataBytes = 0L
+
+            val info = MediaCodec.BufferInfo()
+            val timeoutUs = 10_000L
+            var sawInputEOS = false
+            var sawOutputEOS = false
+            while (!sawOutputEOS) {
+                if (!sawInputEOS) {
+                    val inIndex = codec.dequeueInputBuffer(timeoutUs)
+                    if (inIndex >= 0) {
+                        val inBuf = codec.getInputBuffer(inIndex)!!
+                        val size = extractor.readSampleData(inBuf, 0)
+                        if (size < 0) {
+                            codec.queueInputBuffer(
+                                inIndex, 0, 0, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            sawInputEOS = true
+                        } else {
+                            codec.queueInputBuffer(inIndex, 0, size, extractor.sampleTime, 0)
+                            extractor.advance()
+                        }
+                    }
+                }
+                val outIndex = codec.dequeueOutputBuffer(info, timeoutUs)
+                if (outIndex >= 0) {
+                    if (info.size > 0) {
+                        val outBuf = codec.getOutputBuffer(outIndex)!!
+                        val chunk = ByteArray(info.size)
+                        outBuf.position(info.offset)
+                        outBuf.get(chunk, 0, info.size)
+                        raf.write(chunk)
+                        dataBytes += info.size
+                    }
+                    codec.releaseOutputBuffer(outIndex, false)
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        sawOutputEOS = true
+                    }
+                } else if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    val out = codec.outputFormat
+                    if (out.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                        sampleRate = out.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    }
+                    if (out.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                        channels = out.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                    }
+                }
+            }
+
+            writeWavHeader(raf, dataBytes, sampleRate, channels)
+            return dataBytes > 0
         } finally {
+            try { raf?.close() } catch (e: Exception) {}
+            try { codec?.stop() } catch (e: Exception) {}
+            try { codec?.release() } catch (e: Exception) {}
             extractor.release()
         }
+    }
+
+    // Seek to the front and write a standard 44-byte 16-bit PCM WAV header for a
+    // body of [dataLen] bytes. Little-endian, as the format requires.
+    private fun writeWavHeader(
+        raf: RandomAccessFile, dataLen: Long, sampleRate: Int, channels: Int
+    ) {
+        val byteRate = sampleRate * channels * 2
+        val blockAlign = channels * 2
+        val bb = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+        bb.put("RIFF".toByteArray(Charsets.US_ASCII))
+        bb.putInt((36 + dataLen).toInt())
+        bb.put("WAVE".toByteArray(Charsets.US_ASCII))
+        bb.put("fmt ".toByteArray(Charsets.US_ASCII))
+        bb.putInt(16)                       // PCM fmt chunk size
+        bb.putShort(1.toShort())            // audio format 1 = PCM
+        bb.putShort(channels.toShort())
+        bb.putInt(sampleRate)
+        bb.putInt(byteRate)
+        bb.putShort(blockAlign.toShort())
+        bb.putShort(16.toShort())           // bits per sample
+        bb.put("data".toByteArray(Charsets.US_ASCII))
+        bb.putInt(dataLen.toInt())
+        raf.seek(0)
+        raf.write(bb.array())
     }
 }
