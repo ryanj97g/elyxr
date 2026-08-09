@@ -35,6 +35,14 @@ jobs:
         with:
           channel: stable
 
+      - name: Set up Rust (Android target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
       - name: Build the Android APK
         working-directory: elyxr
         run: |
@@ -71,6 +79,18 @@ jobs:
             cat "$root_groovy" >> "$tmp"; mv "$tmp" "$root_groovy"
             echo "--- root groovy head ---"; head -14 "$root_groovy"
           fi
+
+          # Bundle lymnal INSIDE the app so the phone runs its own local daemon
+          # with lymbo — the same client -> local-lymnal -> trove model as desktop.
+          # Android allows executing a binary named lib*.so from the app's native
+          # lib dir, so ship lymnal as liblymnal.so and keep native libs extracted
+          # (useLegacyPackaging) so it lands on disk where it can be run.
+          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$(ls -d $ANDROID_HOME/ndk/* | tail -1)}"
+          ( cd .. && cargo ndk -t arm64-v8a build --release -p lymnal )
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp ../target/aarch64-linux-android/release/lymnal android/app/src/main/jniLibs/arm64-v8a/liblymnal.so
+          sed -i 's/^android {/android {\n    packaging { jniLibs { useLegacyPackaging = true } }/' android/app/build.gradle.kts
+
           flutter pub get
           flutter build apk --debug \
             --dart-define=ELYXR_BUILD=$build \
