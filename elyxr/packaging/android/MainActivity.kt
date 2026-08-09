@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.view.WindowManager
 import androidx.annotation.NonNull
 import androidx.core.app.ActivityCompat
+import androidx.core.view.WindowCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -25,16 +26,27 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Let the app render INTO the display cutout band — the camera notch /
-        // punch-hole strip at the very top of the screen. By default Android
-        // reserves that strip and paints it solid black even in immersive
-        // fullscreen: that is the "black bar at the top". SHORT_EDGES tells the
-        // window to extend into it, so the chassis reaches the literal top pixel,
-        // camera and all. Window-level only — no Dart/SafeArea change can do this.
+        // Edge-to-edge: lay the window's content out behind the system bars, all
+        // the way to the screen's physical edges (pixel 0 at the top), instead of
+        // fitting it inside the status/nav insets. Pairs with the cutout mode
+        // below and the immersive bar-hiding in main.dart.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Render UNDER the camera punch-hole, exactly like every other full-screen
+        // app on the device. A punch-hole needs no letterbox — the app just draws
+        // to the top pixel and the hole floats over its pixels — BUT only if the
+        // window declares it handles the cutout. Without this declaration Android
+        // pushes our content below the cutout and paints that strip black: the
+        // "black bar at the top". ALWAYS = draw into the cutout in every case
+        // (SHORT_EDGES on the couple of API 28-29 devices that lack ALWAYS). This
+        // is a native window flag; nothing on the Dart/SafeArea side can set it.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes = window.attributes.apply {
                 layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    } else {
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    }
             }
         }
     }
