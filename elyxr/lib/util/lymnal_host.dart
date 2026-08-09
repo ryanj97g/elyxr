@@ -50,4 +50,19 @@ class LymnalHost {
       await _ch.invokeMethod('stop');
     } catch (_) {}
   }
+
+  /// Losslessly copy just the audio track of [inPath] (an MP4/M4A that may carry
+  /// video) into a new audio-only file at [outPath], using the platform's
+  /// MediaExtractor/MediaMuxer — no re-encode. Returns true on success. Android
+  /// only; false (and no file) everywhere else, or if the input has no audio.
+  static Future<bool> extractAudio(String inPath, String outPath) async {
+    if (!Caps.isAndroid) return false;
+    try {
+      final ok = await _ch.invokeMethod<bool>(
+          'extractAudio', {'in': inPath, 'out': outPath});
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 }

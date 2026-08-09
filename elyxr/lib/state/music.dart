@@ -376,6 +376,46 @@ class MusicController extends ChangeNotifier {
   static const _moduleExts = {'xm', 'mod', 's3m', 'it'};
   bool _isModule(String ext) => _moduleExts.contains(ext.toLowerCase());
 
+  // Containers that can hide a video track behind an "audio" extension — an
+  // .m4a that's really an MP4 with video. Handed one, the platform's media
+  // backend renders the video too (a GStreamer video window on Linux; a surface
+  // on Android). We only ever want sound, so these get stripped to audio first.
+  static const _videoCapableExts = {'m4a', 'mp4', 'm4v', 'mov'};
+
+  /// Return a path with the video track removed for a container that might carry
+  /// one, so the player never has a picture to show; anything else is returned
+  /// untouched. Desktop copies the audio track out with ffmpeg (no re-encode,
+  /// falling back to a WAV decode); Android remuxes it natively via
+  /// MediaExtractor/MediaMuxer. If no stripper is available or it fails, the
+  /// original path is returned (audio still plays — a video window may appear).
+  Future<String> _audioOnly(String path, String ext) async {
+    if (!_videoCapableExts.contains(ext.toLowerCase())) return path;
+    final dir = await getTemporaryDirectory();
+    // One stream plays at a time; a single reused slot, regenerated each call.
+    final m4aOut = '${dir.path}/elyxr_aud.m4a';
+    if (Platform.isAndroid) {
+      final ok = await LymnalHost.extractAudio(path, m4aOut);
+      return ok ? m4aOut : path;
+    }
+    try {
+      final r = await Process.run(_mediaBin('ffmpeg'),
+          ['-y', '-v', 'error', '-i', path, '-vn', '-c:a', 'copy', m4aOut]);
+      if (r.exitCode == 0 && File(m4aOut).existsSync()) return m4aOut;
+    } catch (_) {
+      // ffmpeg missing — nothing to try below either; fall through.
+      return path;
+    }
+    // Copy failed (an audio codec MP4 can't hold): decode to a plain WAV, which
+    // also can't carry video. WAV feeds the visualizer directly too.
+    final wavOut = '${dir.path}/elyxr_aud.wav';
+    try {
+      final r = await Process.run(_mediaBin('ffmpeg'),
+          ['-y', '-v', 'error', '-i', path, '-vn', '-ac', '2', '-ar', '44100', wavOut]);
+      if (r.exitCode == 0 && File(wavOut).existsSync()) return wavOut;
+    } catch (_) {}
+    return path;
+  }
+
   /// Build a playable source for a bundled asset, plus a local file path the
   /// visualizer can analyse. A normal format plays straight from assets but is
   /// also copied to a temp file so its spectrum can be computed; a tracker
@@ -467,7 +507,14 @@ class MusicController extends ChangeNotifier {
       final ext = dot >= 0 ? path.substring(dot + 1).toLowerCase() : '';
       final f = File('${dir.path}/elyxr_stream.$ext');
       await f.writeAsBytes(bytes, flush: true);
-      final playable = _isModule(ext) ? await _renderModule(f.path, ext) : f.path;
+      final String playable;
+      if (_isModule(ext)) {
+        playable = await _renderModule(f.path, ext);
+      } else {
+        // Strip any video track (an .m4a that's really an MP4) so only sound
+        // plays — no picture window on any platform.
+        playable = await _audioOnly(f.path, ext);
+      }
       await _player.stop();
       await _player.play(DeviceFileSource(playable), volume: _volume);
       _override = _pretty(name);
