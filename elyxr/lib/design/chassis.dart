@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../widgets/edge_light.dart';
 import '../widgets/speakers.dart';
 import 'tokens.dart';
 
@@ -197,6 +198,14 @@ class Tube extends StatelessWidget {
                 child: overlay,
               ),
             ),
+          // Music-reactive edge lighting, framing everything else. Clipped to the
+          // glass so the bloom stays on-screen; invisible until music plays.
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: EdgeLight(palette: p),
+            ),
+          ),
         ],
       ),
     );
