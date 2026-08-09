@@ -165,7 +165,9 @@ BUILD_PKGS=(build-essential pkg-config git fuse3 libfuse3-dev)
 # libasound2-dev: Flutter builds every plugin in the resolved dependency tree,
 # and a transitive one (volume_controller) does find_package(ALSA) in its Linux
 # CMake, which fails without the ALSA dev headers even though we don't use it.
-[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav libasound2-dev openmpt123 ffmpeg)
+# libmpv-dev: media_kit (inline video preview) links the system libmpv on Linux
+# (it only bundles mpv on Windows/Android), so its plugin needs mpv's pkg-config.
+[ "$APP" = 1 ] && BUILD_PKGS+=(clang cmake ninja-build libgtk-3-dev liblzma-dev libsecret-1-dev libjsoncpp-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav libasound2-dev libmpv-dev openmpt123 ffmpeg)
 BASE_NEED=(); BUILD_NEED=()
 if command -v dpkg >/dev/null 2>&1; then
   for p in "${BASE_PKGS[@]}";  do dpkg -s "$p" >/dev/null 2>&1 || BASE_NEED+=("$p"); done
