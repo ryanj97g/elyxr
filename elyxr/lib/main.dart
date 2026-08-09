@@ -3,6 +3,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +21,13 @@ import 'util/shake_to_close.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+
+  // On a phone the chassis IS the device — go true fullscreen so it isn't boxed
+  // in by the status bar up top and the navigation bar at the bottom. Sticky:
+  // a swipe from an edge reveals the bars briefly, then they slide away again.
+  if (Caps.isMobile) {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
 
   // Desktop only: give the app a managed window. On Linux the native launcher
   // owns the window's geometry (frameless, chassis-sized, transparent — see

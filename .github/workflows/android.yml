@@ -141,6 +141,21 @@ jobs:
           cp modbuild/libs/arm64-v8a/modrender        android/app/src/main/jniLibs/arm64-v8a/libmodrender.so
 
           flutter pub get
+
+          # Launcher icon from the elyxr mark. Derive the two sources
+          # flutter_launcher_icons wants — a legacy square (mark on the dark void)
+          # and an adaptive foreground (mark alone, padded into the safe zone) —
+          # then generate every density + the adaptive icon. ImageMagick ships on
+          # the runner; the 512px master lives in branding/png/elyxr.
+          master=../branding/png/elyxr/elyxr-512.png
+          convert -size 1024x1024 xc:'#0B0E0C' \
+            \( "$master" -resize 825x825 \) -gravity center -composite \
+            assets/branding/elyxr_icon.png
+          convert -size 1024x1024 xc:none \
+            \( "$master" -resize 560x560 \) -gravity center -composite \
+            assets/branding/elyxr_icon_fg.png
+          dart run flutter_launcher_icons
+
           flutter build apk --debug \
             --dart-define=ELYXR_BUILD=$build \
             --dart-define=ELYXR_COMMIT=$commit
