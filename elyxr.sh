@@ -251,7 +251,7 @@ if [ "$NEED_SUDO" = 1 ]; then
     echo "elyxr needs your password for a one-time setup step — a system dialog will appear."
     _pk=( "${BASE_NEED[@]}" "${BUILD_NEED[@]}" )
     if [ "${#_pk[@]}" -gt 0 ]; then
-      if pkexec /bin/sh -c "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ${_pk[*]}"; then
+      if pkexec /bin/sh -c "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Use-Pty=0 ${_pk[*]}"; then
         CAN_SUDO=1; SUDO="pkexec"; BASE_NEED=(); BUILD_NEED=()   # packages done; later phases skip
       fi
     else
@@ -287,7 +287,7 @@ if [ "${#BASE_NEED[@]}" -gt 0 ] || [ "${#BUILD_NEED[@]}" -gt 0 ]; then
   sh_ $SUDO apt-get update
 fi
 if [ "${#BASE_NEED[@]}" -gt 0 ]; then
-  sh_ $SUDO apt-get install -y "${BASE_NEED[@]}"
+  sh_ $SUDO apt-get install -y -o Dpkg::Use-Pty=0 "${BASE_NEED[@]}"
 fi
 done_
 
@@ -330,7 +330,7 @@ fi
 # elyxr fully — the gate just won't build.
 phase "build tools"
 if [ "${#BUILD_NEED[@]}" -gt 0 ]; then
-  sh_ $SUDO apt-get install -y "${BUILD_NEED[@]}"
+  sh_ $SUDO apt-get install -y -o Dpkg::Use-Pty=0 "${BUILD_NEED[@]}"
 fi
 command -v cc >/dev/null 2>&1
 done_
@@ -441,7 +441,7 @@ if [ "$APP" = 1 ]; then
     # its index) the first time we need it.
     if ! command -v apt-file >/dev/null 2>&1; then
       sudo -v || { echo "${RED}need sudo to install a missing build dependency${RST}"; false; }
-      sh_ $SUDO apt-get install -y apt-file
+      sh_ $SUDO apt-get install -y -o Dpkg::Use-Pty=0 apt-file
       sh_ $SUDO apt-file update
     fi
     pkgs=""
@@ -455,7 +455,7 @@ if [ "$APP" = 1 ]; then
     fi
     echo "  a plugin needs a system library — installing:$pkgs"
     sudo -v || { echo "${RED}need sudo to install:$pkgs${RST}"; false; }
-    sh_ $SUDO apt-get install -y $pkgs
+    sh_ $SUDO apt-get install -y -o Dpkg::Use-Pty=0 $pkgs
   done
   rm -f "$BUILD_LOG"
   mkdir -p "$(dirname "$DART_STAMP")"
