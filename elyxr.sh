@@ -194,6 +194,22 @@ trap cleanup EXIT
 # detached with no terminal to type a password into, so it must never block on
 # sudo (that ~2-second hang was aborting every such update). We only prompt when
 # stdin is a real terminal — i.e. a direct `./elyxr.sh` run.
+# A terminal we can actually type into — not just one that's attached. A detached
+# update (tray button, `lymnal update`, fleet) can have a tty on its stdin yet not
+# be that tty's foreground process group, so a password read fails instantly with
+# an I/O error (the very thing that broke those updates: sudo printed a prompt it
+# could never read). Compare our process group to the terminal's foreground group;
+# only a match is safe to prompt on. If the groups can't be read, fall back to the
+# plain check rather than lock ourselves out of an SSH session.
+_fg_tty() {
+  [ -t 0 ] || return 1
+  local tpgid pgid
+  tpgid=$(ps -o tpgid= -p $$ 2>/dev/null | tr -d ' ')
+  pgid=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')
+  { [ -z "$tpgid" ] || [ -z "$pgid" ]; } && return 0
+  [ "$tpgid" = "$pgid" ]
+}
+
 SUDO=""
 CAN_SUDO=1
 if [ "$NEED_SUDO" = 1 ]; then
@@ -202,12 +218,26 @@ if [ "$NEED_SUDO" = 1 ]; then
     CAN_SUDO=1
   elif sudo -n true 2>/dev/null; then
     CAN_SUDO=1; SUDO="sudo"         # root with no prompt (cached creds / NOPASSWD)
-  elif [ -t 0 ]; then
+  elif _fg_tty; then
     echo "elyxr needs your password once for setup. Updates after this won't ask."
     if sudo -v; then
       CAN_SUDO=1; SUDO="sudo"
       ( while true; do sudo -n true 2>/dev/null; sleep 60; kill -0 "$$" 2>/dev/null || exit; done ) &
       SUDO_KEEPALIVE=$!
+    fi
+  elif command -v pkexec >/dev/null 2>&1 && { [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; }; then
+    # No usable terminal, but there's a graphical session: ask through polkit,
+    # which pops the real system password dialog. This is the path a detached
+    # update takes — it needs no tty. The one-time system packages go in as a
+    # single elevated step, so it asks once, not once per package.
+    echo "elyxr needs your password for a one-time setup step — a system dialog will appear."
+    _pk=( "${BASE_NEED[@]}" "${BUILD_NEED[@]}" )
+    if [ "${#_pk[@]}" -gt 0 ]; then
+      if pkexec /bin/sh -c "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y ${_pk[*]}"; then
+        CAN_SUDO=1; SUDO="pkexec"; BASE_NEED=(); BUILD_NEED=()   # packages done; later phases skip
+      fi
+    else
+      CAN_SUDO=1; SUDO="pkexec"     # root needed for a non-package step (service, linger)
     fi
   fi
   # A root step is needed but we couldn't get root here (a detached update, no
