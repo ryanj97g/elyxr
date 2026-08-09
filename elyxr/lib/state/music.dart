@@ -16,6 +16,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/lymnal_client.dart';
+import '../util/lymnal_host.dart';
 
 /// Audio extensions the player accepts — common formats GStreamer decodes
 /// directly, plus tracker modules (.xm/.mod/.s3m/.it) which are rendered to PCM
@@ -283,13 +284,31 @@ class MusicController extends ChangeNotifier {
     return (AssetSource(assetKey.replaceFirst('assets/', '')), local.path);
   }
 
-  /// Render a tracker module to a temp WAV (openmpt123, ffmpeg as a fallback) so
-  /// it can be played like any other file. Cached by input path; returns the
-  /// original path if no renderer is available.
+  /// Render a tracker module to a temp WAV so it can be played like any other
+  /// file (and analysed for the visualizer). Cached by input path; returns the
+  /// original path if no renderer is available. Desktop shells out to
+  /// openmpt123/ffmpeg; Android execs the bundled libopenmpt renderer
+  /// (libmodrender.so) from its native-lib dir — a phone has no system binaries.
   Future<String> _renderModule(String inPath, String ext) async {
     final dir = await getTemporaryDirectory();
     final out = '${dir.path}/elyxr_mod_${inPath.hashCode & 0x7fffffff}.wav';
     if (File(out).existsSync()) return out;
+    if (Platform.isAndroid) {
+      final libDir = await LymnalHost.nativeLibDir();
+      if (libDir != null) {
+        try {
+          final r = await Process.run(
+            '$libDir/libmodrender.so',
+            [inPath, out],
+            environment: {'LD_LIBRARY_PATH': libDir},
+          );
+          if (r.exitCode == 0 && File(out).existsSync()) return out;
+        } catch (_) {
+          // renderer missing/failed — fall through
+        }
+      }
+      return inPath;
+    }
     final attempts = <List<String>>[
       [_mediaBin('openmpt123'), '--quiet', '--force', '--render', '-o', out, inPath],
       [_mediaBin('ffmpeg'), '-y', '-loglevel', 'error', '-i', inPath, out],
@@ -456,41 +475,107 @@ String _mediaBin(String name) {
   return name;
 }
 
+/// Read a 16-bit PCM WAV into mono samples (−1..1) plus its sample rate, or null
+/// if it isn't a PCM WAV this can parse. Used on Android, where module playback
+/// renders to WAV and there's no ffmpeg to lean on. Walks the RIFF chunks rather
+/// than assuming a fixed 44-byte header.
+(Float64List, int)? _readWavMono(String path) {
+  try {
+    final bytes = File(path).readAsBytesSync();
+    if (bytes.length < 44) return null;
+    final bd = ByteData.sublistView(bytes);
+    String tag(int o) => String.fromCharCodes(bytes.sublist(o, o + 4));
+    if (tag(0) != 'RIFF' || tag(8) != 'WAVE') return null;
+
+    int channels = 0, rate = 0, bits = 0, dataOff = -1, dataLen = 0, fmt = 0;
+    var p = 12;
+    while (p + 8 <= bytes.length) {
+      final id = tag(p);
+      final sz = bd.getUint32(p + 4, Endian.little);
+      final body = p + 8;
+      if (id == 'fmt ' && body + 16 <= bytes.length) {
+        fmt = bd.getUint16(body, Endian.little);
+        channels = bd.getUint16(body + 2, Endian.little);
+        rate = bd.getUint32(body + 4, Endian.little);
+        bits = bd.getUint16(body + 14, Endian.little);
+      } else if (id == 'data') {
+        dataOff = body;
+        dataLen = sz;
+      }
+      p = body + sz + (sz & 1); // chunks are word-aligned
+    }
+    if (fmt != 1 || bits != 16 || channels < 1 || rate <= 0 || dataOff < 0) {
+      return null;
+    }
+
+    final end = math.min(dataOff + dataLen, bytes.length);
+    final frameBytes = channels * 2;
+    final frames = (end - dataOff) ~/ frameBytes;
+    final samples = Float64List(frames);
+    var o = dataOff;
+    for (var i = 0; i < frames; i++) {
+      var sum = 0;
+      for (var c = 0; c < channels; c++) {
+        sum += bd.getInt16(o, Endian.little);
+        o += 2;
+      }
+      samples[i] = (sum / channels) / 32768.0;
+    }
+    return (samples, rate);
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Decode the actual audio at [path] to PCM (via ffmpeg) and turn it into a
 /// spectrogram — a real FFT per video-frame-sized hop across the whole track.
 /// Runs on a background isolate (see compute), so the heavy work never touches
 /// the UI thread. On any failure it throws and the caller leaves the bars flat.
 Future<_SpectroResult> _analyzeSpectrogram(String path) async {
-  const int rate = 22050; // plenty for a bar visualizer, quick to process
   const double fps = 60.0; // one spectrum per screen frame
   const int win = 1024; // FFT window (power of two)
-  final int hop = (rate / fps).round();
 
-  // ffmpeg decodes anything GStreamer can play to raw mono s16le on stdout.
-  final res = await Process.run(
-    _mediaBin('ffmpeg'),
-    [
-      '-v', 'error',
-      '-i', path,
-      '-f', 's16le',
-      '-acodec', 'pcm_s16le',
-      '-ac', '1',
-      '-ar', '$rate',
-      'pipe:1',
-    ],
-    stdoutEncoding: null, // raw bytes, not text
-  );
-  final raw = res.stdout as List<int>;
-  final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
-  final nSamples = bytes.length ~/ 2;
-  if (nSamples < win) throw StateError('too short to analyse');
+  late final int rate;
+  late final Float64List samples;
 
-  // s16le bytes -> normalized samples.
-  final bd = ByteData.sublistView(bytes, 0, nSamples * 2);
-  final samples = Float64List(nSamples);
-  for (var i = 0; i < nSamples; i++) {
-    samples[i] = bd.getInt16(i * 2, Endian.little) / 32768.0;
+  if (Platform.isAndroid) {
+    // No ffmpeg on a phone. Module playback already renders to a WAV (see
+    // _renderModule), so read that PCM directly; any other (compressed) source
+    // has no decoder here and simply leaves the bars flat.
+    final wav = _readWavMono(path);
+    if (wav == null) throw StateError('no decoder for this source on android');
+    samples = wav.$1;
+    rate = wav.$2;
+  } else {
+    rate = 22050; // plenty for a bar visualizer, quick to process
+    // ffmpeg decodes anything GStreamer can play to raw mono s16le on stdout.
+    final res = await Process.run(
+      _mediaBin('ffmpeg'),
+      [
+        '-v', 'error',
+        '-i', path,
+        '-f', 's16le',
+        '-acodec', 'pcm_s16le',
+        '-ac', '1',
+        '-ar', '$rate',
+        'pipe:1',
+      ],
+      stdoutEncoding: null, // raw bytes, not text
+    );
+    final raw = res.stdout as List<int>;
+    final bytes = raw is Uint8List ? raw : Uint8List.fromList(raw);
+    final n = bytes.length ~/ 2;
+    final bd = ByteData.sublistView(bytes, 0, n * 2);
+    final s = Float64List(n);
+    for (var i = 0; i < n; i++) {
+      s[i] = bd.getInt16(i * 2, Endian.little) / 32768.0;
+    }
+    samples = s;
   }
+
+  final int hop = (rate / fps).round();
+  final nSamples = samples.length;
+  if (nSamples < win) throw StateError('too short to analyse');
 
   // Log-spaced band edges (shared across frames): ~85Hz .. ~11kHz.
   final half = win ~/ 2;

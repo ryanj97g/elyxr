@@ -110,6 +110,29 @@ jobs:
           cp ../target/aarch64-linux-android/release/lymnal android/app/src/main/jniLibs/arm64-v8a/liblymnal.so
           sed -i 's/^android {/android {\n    packaging { jniLibs { useLegacyPackaging = true } }/' android/app/build.gradle.kts
 
+          # Bundle a tracker-module renderer. The whole built-in soundtrack is
+          # .xm/.mod/.s3m/.it; desktop renders them with openmpt123, which a
+          # phone can't exec. Build libopenmpt (the same engine) for arm64 plus a
+          # tiny C renderer (packaging/android/modrender.c) that writes WAV, and
+          # ship them beside lymnal — exec'd from nativeLibraryDir. The WAV also
+          # feeds the app's own FFT, so the visualizer works on Android too.
+          # ndk-build is the engine's documented Android path (build/android_ndk).
+          OMPT_TAG=libopenmpt-0.7.13
+          git clone --depth 1 --branch "$OMPT_TAG" https://github.com/OpenMPT/openmpt modbuild/jni/libopenmpt
+          cp modbuild/jni/libopenmpt/build/android_ndk/Android.mk    modbuild/jni/libopenmpt/Android.mk
+          cp modbuild/jni/libopenmpt/build/android_ndk/Application.mk modbuild/jni/libopenmpt/Application.mk
+          cp packaging/android/modrender.c modbuild/jni/modrender.c
+          # Top-level jni makefiles: build libopenmpt (the subdir module) and our
+          # modrender executable that links it. Capture jni's path first —
+          # my-dir shifts to the subdir after all-subdir-makefiles.
+          printf 'APP_ABI := arm64-v8a\nAPP_PLATFORM := android-23\nAPP_STL := c++_shared\nAPP_CFLAGS := -std=c11\nAPP_CPPFLAGS := -std=c++17 -fexceptions -frtti\n' > modbuild/jni/Application.mk
+          printf 'MY_LOCAL_PATH := $(call my-dir)\nLOCAL_PATH := $(MY_LOCAL_PATH)\ninclude $(call all-subdir-makefiles)\nLOCAL_PATH := $(MY_LOCAL_PATH)\ninclude $(CLEAR_VARS)\nLOCAL_MODULE := modrender\nLOCAL_SRC_FILES := modrender.c\nLOCAL_C_INCLUDES := $(MY_LOCAL_PATH)/libopenmpt\nLOCAL_SHARED_LIBRARIES := openmpt\ninclude $(BUILD_EXECUTABLE)\n' > modbuild/jni/Android.mk
+          "$ANDROID_NDK_HOME/ndk-build" -C modbuild NDK_PROJECT_PATH=. NDK_APPLICATION_MK=jni/Application.mk APP_BUILD_SCRIPT=jni/Android.mk -j"$(nproc)"
+          ls -la modbuild/libs/arm64-v8a
+          cp modbuild/libs/arm64-v8a/libopenmpt.so    android/app/src/main/jniLibs/arm64-v8a/libopenmpt.so
+          cp modbuild/libs/arm64-v8a/libc++_shared.so android/app/src/main/jniLibs/arm64-v8a/libc++_shared.so
+          cp modbuild/libs/arm64-v8a/modrender        android/app/src/main/jniLibs/arm64-v8a/libmodrender.so
+
           flutter pub get
           flutter build apk --debug \
             --dart-define=ELYXR_BUILD=$build \

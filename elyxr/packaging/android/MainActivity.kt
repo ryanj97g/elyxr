@@ -35,6 +35,10 @@ class MainActivity : FlutterActivity() {
                     // writes link.json here after pairing; the service points
                     // HOME/LYMNAL_CONFIG/XDG_CACHE_HOME at it.
                     "dataDir" -> result.success(filesDir.absolutePath)
+                    // Where the bundled native binaries land (liblymnal.so,
+                    // libmodrender.so + libopenmpt.so). Dart execs the module
+                    // renderer from here with LD_LIBRARY_PATH set to it.
+                    "nativeLibDir" -> result.success(applicationInfo.nativeLibraryDir)
                     "start" -> {
                         LymnalService.start(this)
                         result.success(null)

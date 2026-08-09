@@ -24,6 +24,17 @@ class LymnalHost {
     }
   }
 
+  /// The app's native-lib dir on Android, where the bundled binaries live
+  /// (liblymnal.so, libmodrender.so, libopenmpt.so). Null off Android.
+  static Future<String?> nativeLibDir() async {
+    if (!Caps.isAndroid) return null;
+    try {
+      return await _ch.invokeMethod<String>('nativeLibDir');
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Start the foreground service that runs lymnal. No-op off Android.
   static Future<void> start() async {
     if (!Caps.isAndroid) return;
