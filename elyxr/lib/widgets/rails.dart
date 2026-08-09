@@ -37,12 +37,26 @@ class TopRail extends StatefulWidget {
   State<TopRail> createState() => _TopRailState();
 }
 
-class _TopRailState extends State<TopRail> {
+class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
   bool _holding = false;
   Timer? _timer;
   // A quick-tap counter, distinct from the hold — seven in a row is the egg.
   int _taps = 0;
   Timer? _tapReset;
+
+  // The idle wordmark gleam: a short faint sweep, fired on a gentle repeat, as
+  // the only hint that ELYXR is pressable (hold it for settings).
+  late final AnimationController _shine =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
+  Timer? _shineTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _shineTimer = Timer.periodic(const Duration(milliseconds: 4500), (_) {
+      if (mounted && !widget.inSettings && !_holding) _shine.forward(from: 0);
+    });
+  }
 
   void _press() {
     setState(() => _holding = true);
@@ -73,7 +87,60 @@ class _TopRailState extends State<TopRail> {
   void dispose() {
     _timer?.cancel();
     _tapReset?.cancel();
+    _shineTimer?.cancel();
+    _shine.dispose();
     super.dispose();
+  }
+
+  /// The wordmark, with the periodic faint gleam layered on while idle. The
+  /// ShaderMask only wraps the letters during the brief sweep (0 < t < 1); at
+  /// rest it returns the plain mark, so its normal colour and drop shadow are
+  /// untouched between hints.
+  Widget _wordmark(Palette p, bool lit) {
+    final mark = AnimatedDefaultTextStyle(
+      duration: const Duration(milliseconds: 200),
+      style: TextStyle(
+        fontFamily: Fonts.chassis,
+        fontSize: 15,
+        fontWeight: FontWeight.w700,
+        letterSpacing: lit ? 15 * 0.24 : 15 * 0.4,
+        color: lit ? p.a : p.ml,
+        shadows: lit
+            ? [Shadow(color: p.a, blurRadius: 11)]
+            : const [Shadow(color: Color(0xFF0C0D0F), offset: Offset(0, 1))],
+      ),
+      child: const Padding(
+        padding: EdgeInsets.only(left: 6),
+        child: Text('ELYXR'),
+      ),
+    );
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (lit || reduceMotion) return mark;
+
+    final hi = Color.lerp(p.ml, p.a, 0.35)!; // barely brighter than idle
+    return AnimatedBuilder(
+      animation: _shine,
+      child: mark,
+      builder: (context, child) {
+        final t = _shine.value;
+        if (t <= 0.0 || t >= 1.0) return child!; // at rest: plain mark
+        final c = -0.3 + t * 1.6; // the bright band travels left→right and off
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (rect) => LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [p.ml, hi, p.ml],
+            stops: [
+              (c - 0.14).clamp(0.0, 1.0),
+              c.clamp(0.0, 1.0),
+              (c + 0.14).clamp(0.0, 1.0),
+            ],
+          ).createShader(rect),
+          child: child,
+        );
+      },
+    );
   }
 
   @override
@@ -93,23 +160,7 @@ class _TopRailState extends State<TopRail> {
             onTapCancel: _release,
             onTap: _tap,
             behavior: HitTestBehavior.opaque,
-            child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 200),
-              style: TextStyle(
-                fontFamily: Fonts.chassis,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                letterSpacing: lit ? 15 * 0.24 : 15 * 0.4,
-                color: lit ? p.a : p.ml,
-                shadows: lit
-                    ? [Shadow(color: p.a, blurRadius: 11)]
-                    : const [Shadow(color: Color(0xFF0C0D0F), offset: Offset(0, 1))],
-              ),
-              child: const Padding(
-                padding: EdgeInsets.only(left: 6),
-                child: Text('ELYXR'),
-              ),
-            ),
+            child: _wordmark(p, lit),
           ),
           const SizedBox(width: 9),
           // Hold progress bar, only visible while holding.
