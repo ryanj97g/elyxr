@@ -108,6 +108,23 @@ jobs:
           sed -i 's#</application>#    <service android:name=".LymnalService" android:foregroundServiceType="dataSync" android:exported="false"/>\n    </application>#' "$manifest"
           echo "--- AndroidManifest.xml ---"; cat "$manifest"
 
+          # Draw UNDER the camera cutout (punch-hole) from the very first frame.
+          # MainActivity also sets this programmatically, but declaring it in the
+          # NormalTheme means it's in effect when the window is created — before
+          # any pixel is drawn — which is the reliable path on OEM skins (Samsung
+          # One UI). Without it the window starts below the cutout and that strip
+          # is painted black: the "black bar at the top". shortEdges covers a top
+          # punch-hole in portrait; the code upgrades to `always` at runtime on
+          # API 30+. Target NormalTheme via its ?android:colorBackground line (the
+          # LaunchTheme uses a drawable, so it isn't touched).
+          for sf in android/app/src/main/res/values/styles.xml \
+                    android/app/src/main/res/values-night/styles.xml; do
+            if [ -f "$sf" ]; then
+              sed -i 's#<item name="android:windowBackground">?android:colorBackground</item>#<item name="android:windowBackground">?android:colorBackground</item>\n        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>#' "$sf"
+              echo "--- $sf ---"; cat "$sf"
+            fi
+          done
+
           # Bundle lymnal INSIDE the app so the phone runs its own local daemon
           # with lymbo — the same client -> local-lymnal -> trove model as desktop.
           # Android allows executing a binary named lib*.so from the app's native
