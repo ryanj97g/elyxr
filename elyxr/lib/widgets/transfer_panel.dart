@@ -81,6 +81,7 @@ class _SelectionBarState extends State<SelectionBar> {
                   _action(p, 'RENAME',
                       () => _rename(context, browse, p, single!.name)),
                 _action(p, 'DOWNLOAD', () => _download(context, browse, actions)),
+                _action(p, 'MOVE', () => _move(context, browse, p)),
                 _action(p, 'DELETE', () => _delete(context, browse, p)),
                 GestureDetector(
                   onTap: browse.clearSelection,
@@ -117,6 +118,53 @@ class _SelectionBarState extends State<SelectionBar> {
       } else if (context.mounted) {
         await showLymnalError(context, p, e);
       }
+    }
+  }
+
+  /// Move the selection into a folder chosen from a picker — into a subfolder,
+  /// or up and out. Name clashes in the destination are surfaced once, up front,
+  /// so a whole batch moves under one Replace / Keep both decision.
+  Future<void> _move(BuildContext context, BrowseController browse, Palette p) async {
+    final base = browse.path;
+    // Folders being moved can't receive themselves — mark their paths blocked.
+    final blocked = <String>{
+      for (final e in browse.entries)
+        if (e.isDir && browse.selection.contains(e.name))
+          base.isEmpty ? e.name : '$base/${e.name}',
+    };
+    final dest = await showMoveTo(
+      context,
+      p,
+      listFolders: browse.listFolders,
+      sourceFolder: base,
+      blocked: blocked,
+      itemCount: browse.selection.length,
+    );
+    if (dest == null || !context.mounted) return;
+
+    var onConflict = 'fail';
+    try {
+      final existing = await browse.namesIn(dest);
+      final clash = browse.selection.where(existing.contains).toList();
+      if (clash.isNotEmpty) {
+        if (!context.mounted) return;
+        final choice = await showConflict(
+            context, p, clash.length == 1 ? clash.first : '${clash.length} items');
+        if (!context.mounted) return;
+        switch (choice) {
+          case ConflictChoice.replace:
+            onConflict = 'replace';
+            break;
+          case ConflictChoice.keepBoth:
+            onConflict = 'suffix';
+            break;
+          case ConflictChoice.cancel:
+            return;
+        }
+      }
+      await browse.moveInto(browse.selectionPaths, dest, onConflict: onConflict);
+    } on LymnalError catch (e) {
+      if (context.mounted) await showLymnalError(context, p, e);
     }
   }
 

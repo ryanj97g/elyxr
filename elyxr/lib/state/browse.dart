@@ -381,6 +381,24 @@ class BrowseController extends ChangeNotifier {
     await refreshFolder();
   }
 
+  /// The subfolder names at [path] (folders only), for the move-destination
+  /// picker to walk the trove without disturbing the current listing.
+  Future<List<String>> listFolders(String path) async {
+    final client = session.client;
+    if (client == null) return const [];
+    final page = await client.list(path: path);
+    return page.entries.where((e) => e.isDir).map((e) => e.name).toList();
+  }
+
+  /// Every name (files and folders) directly in [path], for checking clashes
+  /// before a move so the person is asked once, not mid-batch.
+  Future<Set<String>> namesIn(String path) async {
+    final client = session.client;
+    if (client == null) return const {};
+    final page = await client.list(path: path);
+    return page.entries.map((e) => e.name).toSet();
+  }
+
   /// Delete a set of paths. Returns lymnal's per-path result so the UI can
   /// report what went, what did not, and why.
   Future<Map<String, dynamic>> deletePaths(List<String> paths) async {

@@ -156,6 +156,169 @@ Future<ConflictChoice> showConflict(BuildContext context, Palette p, String name
   return c ?? ConflictChoice.cancel;
 }
 
+/// Pick a folder to move the selection into. Walks the trove's folders and
+/// returns the chosen folder path ('' = root), or null on cancel. [blocked] is
+/// the set of folder paths that can't be entered or chosen (the folders being
+/// moved — nothing can go inside itself), and [sourceFolder] is where the items
+/// live now (choosing it would be a no-op, so MOVE HERE is disabled there).
+Future<String?> showMoveTo(
+  BuildContext context,
+  Palette p, {
+  required Future<List<String>> Function(String path) listFolders,
+  required String sourceFolder,
+  required Set<String> blocked,
+  required int itemCount,
+}) {
+  return showDialog<String>(
+    context: context,
+    builder: (context) => _MovePicker(
+      p: p,
+      listFolders: listFolders,
+      sourceFolder: sourceFolder,
+      blocked: blocked,
+      itemCount: itemCount,
+    ),
+  );
+}
+
+class _MovePicker extends StatefulWidget {
+  final Palette p;
+  final Future<List<String>> Function(String path) listFolders;
+  final String sourceFolder;
+  final Set<String> blocked;
+  final int itemCount;
+  const _MovePicker({
+    required this.p,
+    required this.listFolders,
+    required this.sourceFolder,
+    required this.blocked,
+    required this.itemCount,
+  });
+
+  @override
+  State<_MovePicker> createState() => _MovePickerState();
+}
+
+class _MovePickerState extends State<_MovePicker> {
+  late String _cwd = widget.sourceFolder;
+  bool _loading = true;
+  String? _error;
+  List<String> _folders = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final f = await widget.listFolders(_cwd);
+      f.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (mounted) setState(() {
+        _folders = f;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() {
+        _error = 'Could not read this folder';
+        _loading = false;
+      });
+    }
+  }
+
+  void _enter(String name) {
+    _cwd = _cwd.isEmpty ? name : '$_cwd/$name';
+    _load();
+  }
+
+  void _up() {
+    final i = _cwd.lastIndexOf('/');
+    _cwd = i < 0 ? '' : _cwd.substring(0, i);
+    _load();
+  }
+
+  String _fullPath(String name) => _cwd.isEmpty ? name : '$_cwd/$name';
+  bool _blocked(String name) => widget.blocked.contains(_fullPath(name));
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.p;
+    final crumbs = _cwd.isEmpty ? '/ELYXR' : '/ELYXR/${_cwd.toUpperCase()}';
+    final canMoveHere = _cwd != widget.sourceFolder && !widget.blocked.contains(_cwd);
+
+    final body = SizedBox(
+      width: 340,
+      height: 320,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(crumbs,
+                    style: glass(14, p.mid), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              if (_cwd.isNotEmpty)
+                GestureDetector(
+                  onTap: _up,
+                  behavior: HitTestBehavior.opaque,
+                  child: Text('▲ UP', style: chassis(10, p.a, spacing: 0.1)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Divider(color: p.dim, height: 1),
+          Expanded(
+            child: _loading
+                ? Center(child: Text('READING…', style: glass(15, p.mid)))
+                : _error != null
+                    ? Center(child: Text(_error!, style: glass(15, p.mid)))
+                    : _folders.isEmpty
+                        ? Center(child: Text('NO SUBFOLDERS HERE', style: glass(14, p.foot)))
+                        : ListView.builder(
+                            itemCount: _folders.length,
+                            itemBuilder: (context, i) {
+                              final name = _folders[i];
+                              final blocked = _blocked(name);
+                              return GestureDetector(
+                                onTap: blocked ? null : () => _enter(name),
+                                behavior: HitTestBehavior.opaque,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 7),
+                                  child: Row(
+                                    children: [
+                                      Text('█ ', style: glass(15, blocked ? p.dim : p.a)),
+                                      Expanded(
+                                        child: Text(name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: glass(15, blocked ? p.dim : p.bright)),
+                                      ),
+                                      Text('›', style: glass(15, blocked ? p.dim : p.mid)),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+          ),
+        ],
+      ),
+    );
+
+    return _frame(p, 'Move ${fmtCount(widget.itemCount, 'item')}', body, [
+      _btn(p, 'CANCEL', () => Navigator.pop(context)),
+      _btn(p, 'MOVE HERE', canMoveHere ? () => Navigator.pop(context, _cwd) : () {},
+          accent: canMoveHere),
+    ]);
+  }
+}
+
 /// Show a lymnal error word for word, with code/request-id behind a details
 /// toggle (§11).
 Future<void> showLymnalError(BuildContext context, Palette p, LymnalError e) async {
