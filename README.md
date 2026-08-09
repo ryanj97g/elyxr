@@ -41,9 +41,9 @@ Pick your platform — each has a short, exact guide:
 
 | Platform | How | Guide |
 |---|---|---|
-| **Linux** (Ubuntu / Zorin / Debian) | `git clone` + `./elyxr.sh` (builds from source) | [docs/QUICKSTART-LINUX.md](docs/QUICKSTART-LINUX.md) |
-| **Windows** | Run `elyxr-setup.exe` (per-user, no admin) | [docs/QUICKSTART-WINDOWS.md](docs/QUICKSTART-WINDOWS.md) |
-| **Android** | Install the Tailscale app, then sideload `elyxr.apk` | [docs/QUICKSTART-ANDROID.md](docs/QUICKSTART-ANDROID.md) |
+| **Linux** (Ubuntu / Zorin / Debian) | `git clone` + `./elyxr.sh` (builds from source) | [Quickstart → Linux](docs/QUICKSTART.md#linux) |
+| **Windows** | Run `elyxr-setup.exe` (per-user, no admin) | [Quickstart → Windows](docs/QUICKSTART.md#windows) |
+| **Android** | Install the Tailscale app, then install `elyxr.apk` | [Quickstart → Android](docs/QUICKSTART.md#android) |
 
 The short version on Linux:
 
@@ -184,7 +184,7 @@ lymnal trove set <path>       # change which folder is served
 
 ## Docs
 
-- **[docs/QUICKSTART-LINUX.md](docs/QUICKSTART-LINUX.md)** · **[Windows](docs/QUICKSTART-WINDOWS.md)** · **[Android](docs/QUICKSTART-ANDROID.md)** — set up any device.
+- **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — set up any device (Linux, Windows, Android).
 - **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — when something's off.
-- **[SPECS.md](SPECS.md)** — how it works under the hood (architecture, protocol, the HTTP API).
+- **[SPECS.md](SPECS.md)** — how it works (architecture, protocol, the HTTP API).
 - **[DESIGN.md](DESIGN.md)** — the look and interaction model.

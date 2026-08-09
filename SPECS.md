@@ -63,7 +63,7 @@ per-OS setup and fixes are in [docs/](docs/).
 
 ## lymbo — write-back only
 
-**lymbo is a write-back buffer, not a read cache.** This is load-bearing:
+**lymbo is a write-back buffer, not a read cache.** Concretely:
 
 - Opening/downloading a file streams straight from the trove and is **not** kept.
 - The *only* thing lymbo serves on a read is a file that is still **held** — one
@@ -137,10 +137,10 @@ Approval grants **owner** or **guest**, and a guest can be capped to a byte budg
   the only unauthenticated endpoints.
 - Two roles: **owner** and **guest** (a guest defaults to a 10 GB cap; the effective
   upload ceiling is `min(trove limit, device cap)`).
-- **Only an owner can trigger a fleet update.** Note that browsing, downloading,
-  uploading, and **mutations (move/delete/mkdir) are available to any approved
-  device**, owner or guest — role gates the fleet update, not day-to-day file
-  operations. Keep that in mind when granting guest access.
+- **Only an owner can trigger a fleet update.** Browsing, downloading, uploading,
+  and **mutations (move/delete/mkdir) work for any approved device**, owner or
+  guest — the role gates the fleet update, not day-to-day file operations. A guest
+  cap limits bytes, not what a guest can change or delete.
 - The **admin surface** (`/v1/admin/*`) is reached only with the machine-local admin
   token and is never exposed to the tailnet — it's how server-mode elyxr and the
   `lymnal bind` CLI manage the local service.
