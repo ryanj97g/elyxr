@@ -2,6 +2,7 @@
 // view inside the same tube, with the same scanlines and sweep. Numbered
 // sections, an inverted accent header, and HOLD ELYXR TO EXIT in the footer.
 
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -536,13 +537,67 @@ class _DensityPicker extends StatelessWidget {
 /// own font so you read the choice in the choice. Swapping re-skins the whole
 /// terminal live. Add a face by dropping a TTF in assets/fonts/, declaring it in
 /// pubspec.yaml, and adding a row to kTermFaces — it shows up here automatically.
-class _FacePicker extends StatelessWidget {
+class _FacePicker extends StatefulWidget {
   final Palette palette;
   const _FacePicker({required this.palette});
 
   @override
+  State<_FacePicker> createState() => _FacePickerState();
+}
+
+class _FacePickerState extends State<_FacePicker> {
+  final _scroll = ScrollController();
+  Timer? _hold;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_sync);
+    // After first layout the controller knows its extent, so the arrows can show
+    // whether there's anywhere to scroll.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _hold?.cancel();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _sync() {
+    if (mounted) setState(() {});
+  }
+
+  // A mouse can't drag a horizontal list and the wheel scrolls vertically, so
+  // the side arrows are the way across: tap to nudge, hold to glide.
+  void _press(int dir) {
+    _step(dir);
+    _hold?.cancel();
+    _hold = Timer.periodic(const Duration(milliseconds: 16), (_) => _step(dir));
+  }
+
+  void _release() {
+    _hold?.cancel();
+    _hold = null;
+  }
+
+  void _step(int dir) {
+    if (!_scroll.hasClients) return;
+    final target =
+        (_scroll.offset + dir * 14.0).clamp(0.0, _scroll.position.maxScrollExtent);
+    _scroll.jumpTo(target);
+  }
+
+  bool get _canLeft => _scroll.hasClients && _scroll.offset > 0.5;
+  bool get _canRight =>
+      _scroll.hasClients && _scroll.offset < _scroll.position.maxScrollExtent - 0.5;
+
+  @override
   Widget build(BuildContext context) {
-    final p = palette;
+    final p = widget.palette;
     final settings = context.watch<SettingsController>();
     // One fixed-height row that scrolls sideways — so however many faces there
     // are (the built-ins plus any dev-dropped fonts in assets/fonts/custom/),
@@ -552,89 +607,100 @@ class _FacePicker extends StatelessWidget {
     return SizedBox(
       height: 67,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Manual refresh: re-scan the fonts folder on disk for a face you've
           // dropped in but not committed/rebuilt yet — a live preview.
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => context.read<SettingsController>().reloadFonts(),
-            child: SizedBox(
-              width: 40,
-              child: Column(
-                children: [
-                  Container(
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: p.dark
-                          ? const Color(0xFF030604)
-                          : const Color(0xFFf2f7f3),
-                      border: Border.all(color: p.dim),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    child: Icon(Icons.refresh, size: 20, color: p.mid),
-                  ),
-                  const SizedBox(height: 5),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('SCAN',
-                        style: chassis(9.5, p.mid, spacing: 0.08)),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          _tile(p, 40, Icon(Icons.refresh, size: 20, color: p.mid), 'SCAN', false,
+              () => context.read<SettingsController>().reloadFonts()),
           const SizedBox(width: 8),
+          _arrow(p, left: true),
+          const SizedBox(width: 6),
           Expanded(
             child: ListView.separated(
+              controller: _scroll,
               scrollDirection: Axis.horizontal,
               clipBehavior: Clip.hardEdge,
               itemCount: faces.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, i) {
-          final face = faces[i];
-          final on = settings.termFont == face.family;
-          return SizedBox(
-            width: 68,
-            child: GestureDetector(
-              onTap: () => settings.termFont = face.family,
-              behavior: HitTestBehavior.opaque,
-              child: Column(
-                children: [
-                  Container(
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: p.dark
-                          ? const Color(0xFF030604)
-                          : const Color(0xFFf2f7f3),
-                      border: Border.all(color: on ? p.a : p.dim),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    // "Aa" rendered in the face itself — a live specimen.
-                    child: Text('Aa',
+                final face = faces[i];
+                final on = settings.termFont == face.family;
+                return SizedBox(
+                  width: 68,
+                  child: _tile(
+                    p,
+                    68,
+                    Text('Aa',
                         style: TextStyle(
                           fontFamily: face.family,
                           fontSize: 24,
                           color: on ? p.a : p.foot,
-                          shadows:
-                              on ? [Shadow(color: p.a, blurRadius: 10)] : null,
+                          shadows: on ? [Shadow(color: p.a, blurRadius: 10)] : null,
                         )),
+                    face.label,
+                    on,
+                    () => settings.termFont = face.family,
                   ),
-                  const SizedBox(height: 5),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(face.label,
-                        style: chassis(9.5, on ? p.bright : p.mid, spacing: 0.08)),
-                  ),
-                ],
-              ),
-            ),
-          );
+                );
               },
             ),
           ),
+          const SizedBox(width: 6),
+          _arrow(p, left: false),
         ],
+      ),
+    );
+  }
+
+  /// A specimen/utility tile: a 44-tall box over a caption, so SCAN, the faces,
+  /// and (visually) the arrows all share one shape.
+  Widget _tile(Palette p, double width, Widget glyph, String label, bool on,
+          VoidCallback onTap) =>
+      GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: width,
+          child: Column(
+            children: [
+              Container(
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: p.dark ? const Color(0xFF030604) : const Color(0xFFf2f7f3),
+                  border: Border.all(color: on ? p.a : p.dim),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                child: glyph,
+              ),
+              const SizedBox(height: 5),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(label, style: chassis(9.5, on ? p.bright : p.mid, spacing: 0.08)),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _arrow(Palette p, {required bool left}) {
+    final enabled = left ? _canLeft : _canRight;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: enabled ? (_) => _press(left ? -1 : 1) : null,
+      onTapUp: (_) => _release(),
+      onTapCancel: _release,
+      child: Container(
+        width: 24,
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: p.dark ? const Color(0xFF030604) : const Color(0xFFf2f7f3),
+          border: Border.all(color: enabled ? p.a : p.dim),
+          borderRadius: BorderRadius.circular(2),
+        ),
+        child: Text(left ? '‹' : '›', style: glass(22, enabled ? p.a : p.foot)),
       ),
     );
   }

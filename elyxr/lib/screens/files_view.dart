@@ -65,7 +65,6 @@ class FilesView extends StatelessWidget {
                   ? _FileList(palette: p)
                   : _FileGrid(palette: p),
             ),
-            SelectionBar(palette: p),
             Flexible(child: QueueStrip(palette: p)),
           ],
         ),
@@ -324,6 +323,10 @@ class _FindRowState extends State<_FindRow> {
   final _ctrl = TextEditingController();
   Timer? _debounce;
 
+  // For the selection figures (file count · size), resolved once per selection.
+  ResolveResult? _res;
+  List<String>? _forPaths;
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -335,41 +338,222 @@ class _FindRowState extends State<_FindRow> {
   Widget build(BuildContext context) {
     final p = widget.palette;
     final browse = context.watch<BrowseController>();
+    // The one thin row at the top does double duty: it's the FIND bar normally,
+    // and becomes the selection bar (figures + actions) while things are picked
+    // — so nothing pops up over the list. CLEAR returns it to FIND.
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
-      child: Row(
-        children: [
-          Text('FIND', style: glass(16, p.bright)),
-          const SizedBox(width: 6),
-          Expanded(
-            child: TextField(
-              controller: _ctrl,
-              style: glass(16, p.bright),
-              cursorColor: p.a,
-              cursorWidth: 8,
-              cursorHeight: 14,
-              decoration: const InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-              ),
-              onChanged: (v) {
-                _debounce?.cancel();
-                _debounce = Timer(const Duration(milliseconds: 250),
-                    () => browse.setQuery(v));
-              },
-            ),
-          ),
-          GestureDetector(
-            onTap: browse.cycleSort,
-            behavior: HitTestBehavior.opaque,
-            child: Text('${browse.sort.label} ▾',
-                style: chassis(10, p.mid, spacing: 0.09)),
-          ),
-        ],
-      ),
+      child: browse.hasSelection
+          ? _selectionRow(context, browse, p)
+          : _searchRow(context, browse, p),
     );
+  }
+
+  Widget _searchRow(BuildContext context, BrowseController browse, Palette p) {
+    return Row(
+      children: [
+        Text('FIND', style: glass(16, p.bright)),
+        const SizedBox(width: 6),
+        Expanded(
+          child: TextField(
+            controller: _ctrl,
+            style: glass(16, p.bright),
+            cursorColor: p.a,
+            cursorWidth: 8,
+            cursorHeight: 14,
+            decoration: const InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+            onChanged: (v) {
+              _debounce?.cancel();
+              _debounce = Timer(
+                  const Duration(milliseconds: 250), () => browse.setQuery(v));
+            },
+          ),
+        ),
+        GestureDetector(
+          onTap: browse.cycleSort,
+          behavior: HitTestBehavior.opaque,
+          child: Text('${browse.sort.label} ▾', style: chassis(10, p.mid, spacing: 0.09)),
+        ),
+      ],
+    );
+  }
+
+  Widget _selectionRow(BuildContext context, BrowseController browse, Palette p) {
+    final actions = context.read<FileActions>();
+    _ensureResolved(browse, actions);
+    final figures = _res == null
+        ? fmtCount(browse.selection.length, 'item')
+        : '${fmtCount(_res!.fileCount, 'file')} · ${fmtSize(_res!.totalBytes)}';
+
+    // RENAME shows only for a single pick (it lost its long-press when
+    // click-and-hold became multi-select).
+    Entry? single;
+    if (browse.selection.length == 1) {
+      final name = browse.selection.first;
+      for (final e in browse.entries) {
+        if (e.name == name) {
+          single = e;
+          break;
+        }
+      }
+    }
+
+    return Row(
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 150),
+          child: Text(figures,
+              style: glass(16, p.bright), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+        const SizedBox(width: 12),
+        // A Wrap, not a scroll: a mouse can't drag a scroll, so an off-screen
+        // action would be unreachable. This stays one thin line normally and
+        // only spills to a second line in the tightest case — never hiding an
+        // action. CLEAR is the ✕ at the end.
+        Expanded(
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 14,
+            runSpacing: 4,
+            children: [
+              if (single != null)
+                _action(p, 'RENAME', () => _rename(context, browse, p, single!.name)),
+              _action(p, 'DOWNLOAD', () => _download(context, browse, actions)),
+              _action(p, 'MOVE', () => _move(context, browse, p)),
+              _action(p, 'DELETE', () => _delete(context, browse, p)),
+              GestureDetector(
+                onTap: browse.clearSelection,
+                behavior: HitTestBehavior.opaque,
+                child: Text('✕', style: glass(16, p.mid)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _ensureResolved(BrowseController browse, FileActions actions) async {
+    final paths = browse.selectionPaths;
+    if (_forPaths != null &&
+        _forPaths!.length == paths.length &&
+        _forPaths!.toSet().containsAll(paths)) {
+      return;
+    }
+    _forPaths = paths;
+    final res = await actions.resolve(paths);
+    if (mounted) setState(() => _res = res);
+  }
+
+  Widget _action(Palette p, String label, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Text(label,
+            style: glass(16, p.a)
+                .copyWith(shadows: [Shadow(color: p.aAlpha(0.53), blurRadius: 7)])),
+      );
+
+  /// Rename with the taken-name flow: Replace / Keep both / Cancel.
+  Future<void> _rename(
+      BuildContext context, BrowseController browse, Palette p, String name) async {
+    final newName = await showRename(context, p, name);
+    if (newName == null || newName == name || !context.mounted) return;
+    try {
+      await browse.rename(name, newName);
+    } on LymnalError catch (e) {
+      if (e.code == 'TARGET_EXISTS' && context.mounted) {
+        final choice = await showConflict(context, p, newName);
+        switch (choice) {
+          case ConflictChoice.replace:
+            await browse.rename(name, newName, onConflict: 'replace');
+            break;
+          case ConflictChoice.keepBoth:
+            await browse.rename(name, newName, onConflict: 'suffix');
+            break;
+          case ConflictChoice.cancel:
+            break;
+        }
+      } else if (context.mounted) {
+        await showLymnalError(context, p, e);
+      }
+    }
+  }
+
+  Future<void> _download(
+      BuildContext context, BrowseController browse, FileActions actions) async {
+    final paths = browse.selectionPaths;
+    final res = _res ?? await actions.resolve(paths);
+    if (res == null) return;
+    actions.startDownload(paths, res);
+    browse.clearSelection();
+  }
+
+  /// Move the selection into a folder chosen from a picker — into a subfolder,
+  /// or up and out. Clashes are surfaced once so a whole batch moves under one
+  /// Replace / Keep both decision.
+  Future<void> _move(BuildContext context, BrowseController browse, Palette p) async {
+    final base = browse.path;
+    final blocked = <String>{
+      for (final e in browse.entries)
+        if (e.isDir && browse.selection.contains(e.name))
+          base.isEmpty ? e.name : '$base/${e.name}',
+    };
+    final dest = await showMoveTo(
+      context,
+      p,
+      listFolders: browse.listFolders,
+      sourceFolder: base,
+      blocked: blocked,
+      itemCount: browse.selection.length,
+    );
+    if (dest == null || !context.mounted) return;
+
+    var onConflict = 'fail';
+    try {
+      final existing = await browse.namesIn(dest);
+      final clash = browse.selection.where(existing.contains).toList();
+      if (clash.isNotEmpty) {
+        if (!context.mounted) return;
+        final choice = await showConflict(
+            context, p, clash.length == 1 ? clash.first : '${clash.length} items');
+        if (!context.mounted) return;
+        switch (choice) {
+          case ConflictChoice.replace:
+            onConflict = 'replace';
+            break;
+          case ConflictChoice.keepBoth:
+            onConflict = 'suffix';
+            break;
+          case ConflictChoice.cancel:
+            return;
+        }
+      }
+      await browse.moveInto(browse.selectionPaths, dest, onConflict: onConflict);
+    } on LymnalError catch (e) {
+      if (context.mounted) await showLymnalError(context, p, e);
+    }
+  }
+
+  Future<void> _delete(BuildContext context, BrowseController browse, Palette p) async {
+    final settings = context.read<SettingsController>();
+    final count = _res?.fileCount ?? browse.selection.length;
+    if (settings.confirmDelete) {
+      final r = await showDeleteConfirm(context, p, count);
+      if (!r.ok || !context.mounted) return;
+      if (r.dontAsk) settings.confirmDelete = false;
+    }
+    try {
+      final result = await browse.deletePaths(browse.selectionPaths);
+      if (context.mounted) await showDeleteResult(context, p, result);
+    } on LymnalError catch (e) {
+      if (context.mounted) await showLymnalError(context, p, e);
+    }
   }
 }
 
