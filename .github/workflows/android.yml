@@ -96,6 +96,13 @@ jobs:
           # newlines); heredocs would break this YAML block scalar.
           manifest=android/app/src/main/AndroidManifest.xml
           sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application#' "$manifest"
+          # elyxr speaks plain http:// — to the server for pairing and to the
+          # local lymnal proxy on loopback. Android blocks cleartext by default
+          # (targetSdk >= 28), so without this every connection fails and the app
+          # reports "couldn't find a server". The traffic is a private tailnet +
+          # localhost, so allowing cleartext is correct here. Targets the first
+          # (real) <application> tag only.
+          sed -i '0,/<application/s//<application android:usesCleartextTraffic="true"/' "$manifest"
           sed -i 's#</application>#    <service android:name=".LymnalService" android:foregroundServiceType="dataSync" android:exported="false"/>\n    </application>#' "$manifest"
           echo "--- AndroidManifest.xml ---"; cat "$manifest"
 
