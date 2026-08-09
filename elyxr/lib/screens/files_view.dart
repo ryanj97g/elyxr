@@ -1,6 +1,6 @@
-// The files terminal: console + ticker + capacity, the find row, breadcrumbs,
-// and the file list (TEXT) or tiles (GRID), with the selection bar and the
-// transfer footer beneath. Everything here is "behind the glass".
+// The files terminal: console + ticker + capacity, the action bar, breadcrumbs,
+// and the file list (TEXT) or tiles (GRID), with the transfer footer beneath.
+// Everything here is "behind the glass".
 
 import 'dart:async';
 
@@ -49,7 +49,7 @@ class FilesView extends StatelessWidget {
           children: [
             _Console(palette: p),
             // The music player is a permanent fixture of the top area, above the
-            // FIND/NAME row — always visible, in every mode. Nostalgia Mode is
+            // action bar — always visible, in every mode. Nostalgia Mode is
             // just one thing that drives it (auto-starting the built-in tracks);
             // it is not a gate on the player.
             Container(
@@ -59,7 +59,7 @@ class FilesView extends StatelessWidget {
               ),
               child: MusicPlayerPanel(palette: p),
             ),
-            _FindRow(palette: p),
+            _ActionBar(palette: p),
             _Breadcrumbs(palette: p),
             Expanded(
               child: settings.mode == ViewMode.text
@@ -346,89 +346,47 @@ class _TickerState extends State<_Ticker> with SingleTickerProviderStateMixin {
   }
 }
 
-// ------------------------------------------------------------- find row ---
+// ------------------------------------------------------------ action bar ---
 
-class _FindRow extends StatefulWidget {
+class _ActionBar extends StatefulWidget {
   final Palette palette;
-  const _FindRow({required this.palette});
+  const _ActionBar({required this.palette});
 
   @override
-  State<_FindRow> createState() => _FindRowState();
+  State<_ActionBar> createState() => _ActionBarState();
 }
 
-class _FindRowState extends State<_FindRow> {
-  final _ctrl = TextEditingController();
-  Timer? _debounce;
-
+class _ActionBarState extends State<_ActionBar> {
   // For the selection figures (file count · size), resolved once per selection.
   ResolveResult? _res;
   List<String>? _forPaths;
 
   @override
-  void dispose() {
-    _debounce?.cancel();
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final p = widget.palette;
     final browse = context.watch<BrowseController>();
-    // The one thin row at the top does double duty: it's the FIND bar normally,
-    // and becomes the selection bar (figures + actions) while things are picked
-    // — so nothing pops up over the list. CLEAR returns it to FIND.
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
-      child: browse.hasSelection
-          ? _selectionRow(context, browse, p)
-          : _searchRow(context, browse, p),
-    );
-  }
-
-  Widget _searchRow(BuildContext context, BrowseController browse, Palette p) {
-    return Row(
-      children: [
-        Text('FIND', style: glass(16, p.bright)),
-        const SizedBox(width: 6),
-        Expanded(
-          child: TextField(
-            controller: _ctrl,
-            style: glass(16, p.bright),
-            cursorColor: p.a,
-            cursorWidth: 8,
-            cursorHeight: 14,
-            decoration: const InputDecoration(
-              isDense: true,
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-            ),
-            onChanged: (v) {
-              _debounce?.cancel();
-              _debounce = Timer(
-                  const Duration(milliseconds: 250), () => browse.setQuery(v));
-            },
-          ),
-        ),
-        GestureDetector(
-          onTap: browse.cycleSort,
-          behavior: HitTestBehavior.opaque,
-          child: Text('${browse.sort.label} ▾', style: chassis(10, p.mid, spacing: 0.09)),
-        ),
-      ],
-    );
-  }
-
-  Widget _selectionRow(BuildContext context, BrowseController browse, Palette p) {
     final actions = context.read<FileActions>();
-    _ensureResolved(browse, actions);
-    final figures = _res == null
-        ? fmtCount(browse.selection.length, 'item')
-        : '${fmtCount(_res!.fileCount, 'file')} · ${fmtSize(_res!.totalBytes)}';
+    final has = browse.hasSelection;
 
-    // RENAME shows only for a single pick (it lost its long-press when
-    // click-and-hold became multi-select).
+    if (has) {
+      _ensureResolved(browse, actions);
+    } else {
+      _res = null;
+      _forPaths = null;
+    }
+
+    // The file actions LIVE here permanently — they are never a pop-up and never
+    // replace anything. With nothing picked they're greyed out; picking files
+    // lights them and swaps the left label for the selection figures, plus a ✕
+    // to clear. The sort chip is always on the right.
+    final figures = !has
+        ? 'FILES'
+        : _res == null
+            ? fmtCount(browse.selection.length, 'item')
+            : '${fmtCount(_res!.fileCount, 'file')} · ${fmtSize(_res!.totalBytes)}';
+
+    // RENAME acts on a single pick only (it lost its long-press when
+    // click-and-hold became multi-select); it stays greyed for none or many.
     Entry? single;
     if (browse.selection.length == 1) {
       final name = browse.selection.first;
@@ -440,44 +398,59 @@ class _FindRowState extends State<_FindRow> {
       }
     }
 
-    return Row(
-      children: [
-        Flexible(
-          child: Text(figures,
-              style: glass(16, p.bright), maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
-        const SizedBox(width: 12),
-        // Always one line: the actions ride a FittedBox that scales them down to
-        // fit rather than ever wrapping to a second row (and never a scroll — a
-        // mouse can't drag one, which would hide an action). CLEAR is the ✕.
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Row(
-                children: [
-                  if (single != null) ...[
-                    _action(p, 'RENAME', () => _rename(context, browse, p, single!.name)),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
+      child: Row(
+        children: [
+          Flexible(
+            child: Text(figures,
+                style: glass(16, has ? p.bright : p.foot),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 12),
+          // Always one line: the actions ride a FittedBox that scales them down to
+          // fit rather than ever wrapping to a second row (and never a scroll — a
+          // mouse can't drag one, which would hide an action).
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  children: [
+                    _action(p, 'RENAME',
+                        single == null ? null : () => _rename(context, browse, p, single!.name)),
                     const SizedBox(width: 14),
+                    _action(p, 'DOWNLOAD',
+                        has ? () => _download(context, browse, actions) : null),
+                    const SizedBox(width: 14),
+                    _action(p, 'MOVE', has ? () => _move(context, browse, p) : null),
+                    const SizedBox(width: 14),
+                    _action(p, 'DELETE', has ? () => _delete(context, browse, p) : null),
+                    if (has) ...[
+                      const SizedBox(width: 16),
+                      GestureDetector(
+                        onTap: browse.clearSelection,
+                        behavior: HitTestBehavior.opaque,
+                        child: Text('✕', style: glass(16, p.mid)),
+                      ),
+                    ],
+                    const SizedBox(width: 16),
+                    GestureDetector(
+                      onTap: browse.cycleSort,
+                      behavior: HitTestBehavior.opaque,
+                      child: Text('${browse.sort.label} ▾',
+                          style: chassis(10, p.mid, spacing: 0.09)),
+                    ),
                   ],
-                  _action(p, 'DOWNLOAD', () => _download(context, browse, actions)),
-                  const SizedBox(width: 14),
-                  _action(p, 'MOVE', () => _move(context, browse, p)),
-                  const SizedBox(width: 14),
-                  _action(p, 'DELETE', () => _delete(context, browse, p)),
-                  const SizedBox(width: 16),
-                  GestureDetector(
-                    onTap: browse.clearSelection,
-                    behavior: HitTestBehavior.opaque,
-                    child: Text('✕', style: glass(16, p.mid)),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -493,12 +466,16 @@ class _FindRowState extends State<_FindRow> {
     if (mounted) setState(() => _res = res);
   }
 
-  Widget _action(Palette p, String label, VoidCallback onTap) => GestureDetector(
+  // A null onTap means the action doesn't apply to the current selection: it
+  // stays in place, greyed and inert, so the bar never changes shape.
+  Widget _action(Palette p, String label, VoidCallback? onTap) => GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Text(label,
-            style: glass(16, p.a)
-                .copyWith(shadows: [Shadow(color: p.aAlpha(0.53), blurRadius: 7)])),
+            style: onTap == null
+                ? glass(16, p.dim)
+                : glass(16, p.a)
+                    .copyWith(shadows: [Shadow(color: p.aAlpha(0.53), blurRadius: 7)])),
       );
 
   /// Rename with the taken-name flow: Replace / Keep both / Cancel.
