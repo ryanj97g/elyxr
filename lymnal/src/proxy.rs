@@ -4,12 +4,16 @@
 //! gate) talk to, and forwards every call to the remote trove — with lymbo in
 //! front of it.
 //!
-//!   reads  (`/v1/download`)  are cached in lymbo and served from there next time.
-//!   writes (`/v1/upload/*`)  assemble into lymbo, push to the trove, and unpin
-//!                            on success. If the trove is unreachable the file
-//!                            stays *held*, and a background pusher keeps trying
-//!                            until it lands — so "save and you're done" holds
-//!                            even through a connection lapse.
+//!   reads  (`/v1/download`)  stream straight from the trove and are NOT kept —
+//!                            lymbo is a write-back buffer, never a read cache.
+//!                            The one exception: a file with an unsynced local
+//!                            write is served from lymbo until it's pushed, since
+//!                            its local bytes are the freshest.
+//!   writes (`/v1/upload/*`)  assemble into lymbo, push to the trove, and are
+//!                            evicted from lymbo the moment they land. If the
+//!                            trove is unreachable the file stays *held*, and a
+//!                            background pusher keeps trying until it lands — so
+//!                            "save and you're done" holds even through a lapse.
 //!   everything else          is forwarded straight through with the stored
 //!                            bearer token, so the app never holds a token and
 //!                            never talks to the remote directly.
@@ -178,7 +182,10 @@ impl Proxy {
                 if h.get(&path).copied() == Some(mtime) {
                     h.remove(&path);
                     drop(h);
-                    self.lymbo.set_held(&path, false); // now passing-through
+                    // Synced — evict it from lymbo right now. It has served its one
+                    // purpose (holding the change until it reached the trove); it
+                    // is NOT kept around as a read cache.
+                    self.lymbo.drop(&path);
                     changed = true;
                 }
             }
@@ -499,13 +506,19 @@ async fn download(State(px): State<Arc<Proxy>>, req: Request) -> Response {
         return coded(400, "BAD_PATH", "The download needs a path.");
     };
 
-    if let Some(bytes) = px.lymbo.read(&key) {
-        return ranged(bytes, range_from);
+    // The ONLY thing lymbo serves is a locally-HELD write — a file changed here
+    // that hasn't been pushed to the trove yet, so its local bytes are the
+    // freshest. Everything else streams from the trove and is never retained:
+    // lymbo is a write-back buffer, not a read cache. (Keeping read files hot for
+    // faster replay would be a cache we never designed — that's not elyxr.)
+    if px.held.lock().unwrap().contains_key(&key) {
+        if let Some(bytes) = px.lymbo.read(&key) {
+            return ranged(bytes, range_from);
+        }
     }
 
     // Fetch the whole file from the trove, forwarding the original query verbatim
-    // (so a path with spaces or other characters survives). Range is a header, so
-    // it isn't here — lymbo always caches the complete copy.
+    // (so a path with spaces or other characters survives).
     let url = px.url(uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/v1/download"));
     let auth = px.auth();
     let agent = px.stream.clone();
@@ -522,10 +535,9 @@ async fn download(State(px): State<Arc<Proxy>>, req: Request) -> Response {
     .await;
 
     match fetched {
-        Ok(Ok(bytes)) => {
-            let _ = px.lymbo.store(&key, &bytes, false); // passing-through
-            ranged(bytes, range_from)
-        }
+        // Serve it straight through — NOT stored. lymbo keeps only unsynced
+        // writes, never plain reads.
+        Ok(Ok(bytes)) => ranged(bytes, range_from),
         Ok(Err(parts)) => parts.into_response(),
         Err(_) => unreachable(),
     }

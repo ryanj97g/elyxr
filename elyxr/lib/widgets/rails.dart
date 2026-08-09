@@ -98,17 +98,18 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
   /// rest it returns the plain mark, so its normal colour and drop shadow are
   /// untouched between hints.
   Widget _wordmark(Palette p, bool lit) {
-    // Just the letters — no padding inside, so the gleam's ShaderMask rect lines
-    // up exactly with the glyphs. The left padding is applied around the whole
-    // thing below.
+    // The glyph geometry — identical for the mark and the gleam so they sit
+    // pixel-for-pixel on top of each other (same size, same position).
+    final baseStyle = TextStyle(
+      fontFamily: Fonts.chassis,
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+      letterSpacing: lit ? 15 * 0.24 : 15 * 0.4,
+      color: lit ? p.a : p.ml,
+    );
     final mark = AnimatedDefaultTextStyle(
       duration: const Duration(milliseconds: 200),
-      style: TextStyle(
-        fontFamily: Fonts.chassis,
-        fontSize: 15,
-        fontWeight: FontWeight.w700,
-        letterSpacing: lit ? 15 * 0.24 : 15 * 0.4,
-        color: lit ? p.a : p.ml,
+      style: baseStyle.copyWith(
         shadows: lit
             ? [Shadow(color: p.a, blurRadius: 11)]
             : const [Shadow(color: Color(0xFF0C0D0F), offset: Offset(0, 1))],
@@ -122,12 +123,17 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
       content = mark;
     } else {
       final hi = Color.lerp(p.ml, p.a, 0.45)!; // a clearer gleam, still gentle
+      // The sweep recolours ONLY the glyphs — a shadow-LESS copy at the exact
+      // same size and position. (With the shadow present, srcATop lit the drop
+      // shadow too, so the gleam ghosted a second copy of the letters ~1px below
+      // — reading as a slightly bigger, misaligned duplicate. This is that fix.)
+      final gleamGlyphs = Text('ELYXR', style: baseStyle);
       content = AnimatedBuilder(
         animation: _shine,
         child: mark,
         builder: (context, child) {
           final t = _shine.value;
-          if (t <= 0.0 || t >= 1.0) return child!; // at rest: plain mark
+          if (t <= 0.0 || t >= 1.0) return child!; // at rest: the embossed mark
           final c = -0.3 + t * 1.6; // the bright band travels left→right and off
           return ShaderMask(
             blendMode: BlendMode.srcATop,
@@ -141,7 +147,7 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
                 (c + 0.14).clamp(0.0, 1.0),
               ],
             ).createShader(rect),
-            child: child,
+            child: gleamGlyphs,
           );
         },
       );

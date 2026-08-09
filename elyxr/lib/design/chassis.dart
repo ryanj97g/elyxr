@@ -34,18 +34,13 @@ class Chassis extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = palette;
-    // On a phone the chassis fills the whole screen — its metal reaches up under
-    // the camera/status strip so that area is bezel, not a black bar. Push the
-    // CONTENT down by that strip's height (viewPadding.top) so the top rail isn't
-    // hidden behind the camera. Desktop has no such inset.
-    final topStrip = Caps.isMobile ? MediaQuery.viewPaddingOf(context).top : 0.0;
     return Container(
       // Fill whatever the parent sizes us to. Desktop wraps this in a fixed
-      // 440×944 box; mobile hands us a box shaped to the screen so the tube (and
-      // the file list inside it) can stretch to the real bottom edge.
+      // 440×944 box; mobile hands us the whole device screen — true fullscreen,
+      // edge to edge, no insets.
       width: double.infinity,
       height: double.infinity,
-      padding: EdgeInsets.fromLTRB(9, 9 + topStrip, 9, 9),
+      padding: const EdgeInsets.all(9),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           // 176deg ≈ nearly top-to-bottom, a touch off vertical.
