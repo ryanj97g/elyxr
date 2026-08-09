@@ -925,13 +925,13 @@ class _FileGrid extends StatelessWidget {
       final rows = browse.entries;
       return GridView.builder(
         padding: const EdgeInsets.all(10),
-        // Little icons, several per row (3–4 depending on width) instead of two
-        // big squares — max tile width drives the count so it stays tidy.
+        // Small file-explorer tiles: a compact icon over its name, many per row,
+        // not big squares. Max tile width drives the column count.
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 108,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 0.86,
+          maxCrossAxisExtent: 78,
+          mainAxisSpacing: 6,
+          crossAxisSpacing: 6,
+          childAspectRatio: 0.82,
         ),
         itemCount: rows.length,
         itemBuilder: (context, i) {
@@ -946,27 +946,29 @@ class _FileGrid extends StatelessWidget {
             onDoubleTap: () => _openEntry(context, browse, e),
             onLongPress: () => browse.toggle(i),
             child: Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
               decoration: BoxDecoration(
                 color: selected ? p.aAlpha(0.15) : null,
                 border: Border.all(color: selected ? p.a : p.dim),
                 borderRadius: BorderRadius.circular(3),
-                boxShadow: selected ? [BoxShadow(color: p.aAlpha(0.33), blurRadius: 12)] : null,
+                boxShadow: selected ? [BoxShadow(color: p.aAlpha(0.33), blurRadius: 10)] : null,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(e.isDir ? '█' : '▫',
-                      style: glass(e.isDir ? 30 : 26, e.isDir ? p.a : p.glow)),
-                  const SizedBox(height: 5),
+                      style: glass(e.isDir ? 20 : 17, e.isDir ? p.a : p.glow)),
+                  const SizedBox(height: 3),
                   Text(e.name,
                       maxLines: 2,
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
-                      style: glass(13, selected ? (p.dark ? Colors.white : Colors.black) : (e.isDir ? p.bright : p.mid))),
-                  const SizedBox(height: 2),
-                  Text(e.isDir ? '${e.childCount ?? 0} items' : fmtSize(e.sizeBytes),
-                      style: glass(11, p.mid)),
+                      style: glass(10.5, selected ? (p.dark ? Colors.white : Colors.black) : (e.isDir ? p.bright : p.mid))),
+                  const SizedBox(height: 1),
+                  Text(e.isDir ? '${e.childCount ?? 0}' : fmtSize(e.sizeBytes),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: glass(9, p.mid)),
                 ],
               ),
             ),
