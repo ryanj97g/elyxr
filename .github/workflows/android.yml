@@ -142,18 +142,10 @@ jobs:
 
           flutter pub get
 
-          # Launcher icon from the elyxr mark. Derive the two sources
-          # flutter_launcher_icons wants — a legacy square (mark on the dark void)
-          # and an adaptive foreground (mark alone, padded into the safe zone) —
-          # then generate every density + the adaptive icon. ImageMagick ships on
-          # the runner; the 512px master lives in branding/png/elyxr.
-          master=../branding/png/elyxr/elyxr-512.png
-          convert -size 1024x1024 xc:'#0B0E0C' \
-            \( "$master" -resize 825x825 \) -gravity center -composite \
-            assets/branding/elyxr_icon.png
-          convert -size 1024x1024 xc:none \
-            \( "$master" -resize 560x560 \) -gravity center -composite \
-            assets/branding/elyxr_icon_fg.png
+          # Launcher icon: generate every density + the adaptive icon from the
+          # committed elyxr sources (assets/branding/elyxr_icon*.png — a legacy
+          # square on the dark void and an adaptive foreground padded into the
+          # safe zone). Prebuilt so the job needs no ImageMagick.
           dart run flutter_launcher_icons
 
           flutter build apk --debug \
