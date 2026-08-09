@@ -75,9 +75,35 @@ class MusicController extends ChangeNotifier {
   double _spectroFps = 60.0;
   int _spectroToken = 0; // bumps per track so a stale async build is discarded
 
+  // A wall-clock play-head for the visualizer. audioplayers' position events can
+  // go sparse or stall on Android — if the bars sampled `_pos` directly they'd
+  // freeze mid-song (and the woofers and edge light with them). So anchor to the
+  // last real position event and extrapolate with a Stopwatch between events, so
+  // the reactive system keeps moving even when events dry up. Resynced on every
+  // real event, seek, and track change.
+  final Stopwatch _visClock = Stopwatch();
+  Duration _visAnchor = Duration.zero;
+
+  /// Re-anchor the visualizer play-head to a known position.
+  void _anchorVis(Duration at) {
+    _visAnchor = at;
+    _visClock.reset();
+    if (_playing) {
+      _visClock.start();
+    } else {
+      _visClock.stop();
+    }
+  }
+
+  /// The extrapolated play position for the visualizer (real anchor + elapsed).
+  Duration get _visPos => _playing
+      ? _visAnchor + Duration(microseconds: _visClock.elapsedMicroseconds)
+      : _visAnchor;
+
   MusicController() {
     _player.onPositionChanged.listen((d) {
       _pos = d;
+      _anchorVis(d);
       notifyListeners();
     });
     _player.onDurationChanged.listen((d) {
@@ -86,6 +112,11 @@ class MusicController extends ChangeNotifier {
     });
     _player.onPlayerStateChanged.listen((s) {
       _playing = s == PlayerState.playing;
+      if (_playing) {
+        if (!_visClock.isRunning) _visClock.start();
+      } else {
+        _visClock.stop();
+      }
       notifyListeners();
     });
     _player.onPlayerComplete.listen((_) => _onComplete());
@@ -153,7 +184,7 @@ class MusicController extends ChangeNotifier {
     final s = _spectro;
     final n = _spectroFrames;
     if (s == null || n == 0) return const <double>[];
-    var f = (_pos.inMicroseconds * _spectroFps / 1000000.0).floor();
+    var f = (_visPos.inMicroseconds * _spectroFps / 1000000.0).floor();
     if (f < 0) f = 0;
     if (f >= n) f = n - 1;
     final base = f * kVisBars;
@@ -336,6 +367,7 @@ class MusicController extends ChangeNotifier {
       await _player.play(src, volume: _volume);
       _hasSource = true;
       _playing = true;
+      _anchorVis(Duration.zero); // restart the visualizer play-head
       _startSpectro(analysisPath); // fire-and-forget; never blocks playback
     } catch (_) {
       _playing = false;
@@ -361,6 +393,7 @@ class MusicController extends ChangeNotifier {
       _hasSource = true;
       _pos = Duration.zero;
       _playing = true;
+      _anchorVis(Duration.zero); // restart the visualizer play-head
       _startSpectro(playable); // real spectrum for the streamed file too
     } catch (_) {
       _playing = false;
@@ -438,6 +471,7 @@ class MusicController extends ChangeNotifier {
     try {
       await _player.seek(to);
       _pos = to;
+      _anchorVis(to);
       notifyListeners();
     } catch (_) {}
   }

@@ -512,7 +512,7 @@ class _DensityPicker extends StatelessWidget {
                           d == Density.tight ? 6 : (d == Density.mid ? 4 : 3),
                           (_) => Padding(
                             padding: EdgeInsets.symmetric(
-                                vertical: d == Density.tight ? 1 : (d == Density.mid ? 2.5 : 4.5)),
+                                vertical: d == Density.tight ? 1 : (d == Density.mid ? 2.5 : 4.0)),
                             child: Container(
                                 height: 3,
                                 color: (d == settings.density ? p.a : p.mid)
@@ -768,7 +768,13 @@ class _DeviceRows extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 3),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [Text(label, style: glass(20, p.mid)), value],
+            children: [
+              Text(label, style: glass(20, p.mid)),
+              const SizedBox(width: 12),
+              // The value can be long (an Android downloads path); let it take
+              // the remaining width and clip to one line instead of overflowing.
+              Flexible(child: Align(alignment: Alignment.centerRight, child: value)),
+            ],
           ),
         );
 
@@ -791,7 +797,12 @@ class _DeviceRows extends StatelessWidget {
             child: Text('Server controls are on the main screen (exit settings).',
                 style: glass(14, p.foot)),
           ),
-        row('DOWNLOADS', Text(settings.downloadDir, style: glass(20, p.bright))),
+        row(
+            'DOWNLOADS',
+            Text(settings.downloadDir,
+                style: glass(20, p.bright),
+                softWrap: false,
+                overflow: TextOverflow.ellipsis)),
         // The mount path only matters where the gate can run (a Linux client);
         // in server mode there's no mount, so it isn't shown.
         if (settings.appMode == AppMode.client && Platform.isLinux)
