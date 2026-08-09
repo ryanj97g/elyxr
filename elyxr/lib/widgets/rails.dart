@@ -94,9 +94,9 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
   }
 
   /// The wordmark, with the periodic faint gleam layered on while idle. The
-  /// ShaderMask only wraps the letters during the brief sweep (0 < t < 1); at
-  /// rest it returns the plain mark, so its normal colour and drop shadow are
-  /// untouched between hints.
+  /// embossed mark is ALWAYS mounted; the gleam is a shadowless bright sweep
+  /// painted on top of it, never a replacement — so the mark (and its 1px emboss)
+  /// never blinks off and the letters never appear to shift during a hint.
   Widget _wordmark(Palette p, bool lit) {
     // The glyph geometry — identical for the mark and the gleam so they sit
     // pixel-for-pixel on top of each other (same size, same position).
@@ -123,33 +123,44 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
       content = mark;
     } else {
       final hi = Color.lerp(p.ml, p.a, 0.45)!; // a clearer gleam, still gentle
-      // The sweep recolours ONLY the glyphs — a shadow-LESS copy at the exact
-      // same size and position. (With the shadow present, srcATop lit the drop
-      // shadow too, so the gleam ghosted a second copy of the letters ~1px below
-      // — reading as a slightly bigger, misaligned duplicate. This is that fix.)
+      // A shadowless copy of the glyphs, recoloured by the travelling gradient.
+      // Shadowless so srcATop can't also light the emboss (which ghosted a second
+      // copy ~1px below); laid OVER the mark, so the emboss below still shows.
       final gleamGlyphs = Text('ELYXR', style: baseStyle);
-      content = AnimatedBuilder(
-        animation: _shine,
-        child: mark,
-        builder: (context, child) {
-          final t = _shine.value;
-          if (t <= 0.0 || t >= 1.0) return child!; // at rest: the embossed mark
-          final c = -0.3 + t * 1.6; // the bright band travels left→right and off
-          return ShaderMask(
-            blendMode: BlendMode.srcATop,
-            shaderCallback: (rect) => LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [p.ml, hi, p.ml],
-              stops: [
-                (c - 0.14).clamp(0.0, 1.0),
-                c.clamp(0.0, 1.0),
-                (c + 0.14).clamp(0.0, 1.0),
-              ],
-            ).createShader(rect),
-            child: gleamGlyphs,
-          );
-        },
+      // Base = the embossed mark, permanently mounted (never swapped out, so it
+      // never blinks). Overlay = the sweep, present only during 0 < t < 1, sized
+      // to the mark and sitting pixel-for-pixel on top. The Stack takes the
+      // mark's size (the overlay is Positioned.fill), so layout never changes.
+      content = Stack(
+        children: [
+          mark,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _shine,
+                builder: (context, _) {
+                  final t = _shine.value;
+                  if (t <= 0.0 || t >= 1.0) return const SizedBox.shrink();
+                  final c = -0.3 + t * 1.6; // bright band travels left→right, off
+                  return ShaderMask(
+                    blendMode: BlendMode.srcATop,
+                    shaderCallback: (rect) => LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [p.ml, hi, p.ml],
+                      stops: [
+                        (c - 0.14).clamp(0.0, 1.0),
+                        c.clamp(0.0, 1.0),
+                        (c + 0.14).clamp(0.0, 1.0),
+                      ],
+                    ).createShader(rect),
+                    child: gleamGlyphs,
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       );
     }
     return Padding(padding: const EdgeInsets.only(left: 6), child: content);
