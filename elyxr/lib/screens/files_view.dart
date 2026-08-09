@@ -66,7 +66,11 @@ class FilesView extends StatelessWidget {
                   ? _FileList(palette: p)
                   : _FileGrid(palette: p),
             ),
-            Flexible(child: QueueStrip(palette: p)),
+            // NOT Flexible: as a flex sibling it split the leftover space 50/50
+            // with the list, so an empty queue stole half the tube. It caps
+            // itself at 150px and collapses to nothing when idle, so let it size
+            // to its content and give every other pixel to the list.
+            QueueStrip(palette: p),
           ],
         ),
       ),
