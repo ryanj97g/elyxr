@@ -232,7 +232,7 @@ fn refresh_connection_and_settle() {
 #[cfg(target_os = "windows")]
 fn update_from_release() {
     const INSTALLER_URL: &str =
-        "https://github.com/ryanj97g/elyxr/releases/latest/download/elyxr-setup.exe";
+        "https://github.com/ryanj97g/elyxr/releases/download/windows-latest/elyxr-setup.exe";
     let dest = std::env::temp_dir().join("elyxr-setup.exe");
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(10))

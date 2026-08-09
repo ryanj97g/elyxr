@@ -91,14 +91,14 @@ jobs:
             elyxr-windows.zip
           if-no-files-found: error
 
-      # On main, publish elyxr-setup.exe as the "latest" release — the source a
-      # Windows client's self-update fetches. Not run on the windows-client
-      # branch (download the installer from the run's artifacts there instead).
+      # On main, publish elyxr-setup.exe to ONE stable release, updated in place —
+      # the source a Windows client's self-update fetches. A fixed tag (not a
+      # per-run tag) so builds don't pile up a new release every push.
       - name: Publish the release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: win-${{ github.run_number }}
-          name: Windows build ${{ github.run_number }}
+          tag_name: windows-latest
+          name: elyxr Windows (latest)
           files: elyxr-setup.exe
           make_latest: true
