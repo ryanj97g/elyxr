@@ -38,11 +38,15 @@ Future<void> main() async {
   // skipped there (calling it would throw at startup).
   if (Caps.hasWindowManager) {
     await windowManager.ensureInitialized();
+    // Linux's native runner owns a transparent window sized to include the glow
+    // ring. Windows windows are opaque, so the ring would paint as a black
+    // border — instead size the window to the chassis exactly (no ring) and let
+    // the chassis fill it, so there's no black margin.
     final opts = Platform.isLinux
         ? const WindowOptions(titleBarStyle: TitleBarStyle.hidden)
         : const WindowOptions(
             titleBarStyle: TitleBarStyle.hidden,
-            size: Size(kWindowWidth, kWindowHeight),
+            size: Size(kAppWidth, kAppHeight),
             center: true,
           );
     await windowManager.waitUntilReadyToShow(

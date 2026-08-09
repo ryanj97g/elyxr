@@ -113,7 +113,7 @@ var
   cfgDir, cfg, tmpl: String;
 begin
   if CurStep = ssPostInstall then begin
-    cfgDir := ExpandConstant('{userprofile}\.config\lymnal');
+    cfgDir := ExpandConstant('{%USERPROFILE}\.config\lymnal');
     cfg := cfgDir + '\config.toml';
     if not FileExists(cfg) then begin
       ForceDirectories(cfgDir);

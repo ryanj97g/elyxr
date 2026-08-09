@@ -2,6 +2,8 @@
 // the dark desk, and chooses between first run and the connected home from the
 // session's link status.
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -210,6 +212,18 @@ class _RootState extends State<_Root> {
         backgroundColor: Colors.black,
         resizeToAvoidBottomInset: false,
         body: SafeArea(bottom: false, child: child),
+      );
+    }
+
+    // Windows (and any non-Linux desktop): the window is opaque and sized to the
+    // chassis exactly, so there's no transparent ring to bleed a glow into — the
+    // ring would just be a black border. Fill the window with the chassis, no
+    // ring, like a phone. Only Linux (a genuinely transparent native window)
+    // gets the outward glow below.
+    if (!Platform.isLinux) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: child,
       );
     }
 
