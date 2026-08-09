@@ -19,6 +19,7 @@ import '../state/browse.dart';
 import '../state/music.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../util/drag_out.dart';
 import '../util/format.dart';
 import '../util/open_external.dart';
 import '../widgets/dialogs.dart';
@@ -567,7 +568,7 @@ class _Row extends StatelessWidget {
     final band = index.isOdd ? p.aAlpha(0.043) : null;
     final isDir = entry.isDir;
 
-    final rowWidget = GestureDetector(
+    return GestureDetector(
       behavior: HitTestBehavior.opaque,
       // Single click = select this one file (its details fill the box below).
       // Double click = open it (a folder navigates in; a file downloads to lymbo
@@ -581,6 +582,16 @@ class _Row extends StatelessWidget {
         }
       },
       onDoubleTap: () => _openEntry(context, browse, entry),
+      // Drag a file sideways to pull it out of the window; where you drop it is
+      // where it downloads. A vertical drag still scrolls the list.
+      onHorizontalDragStart: isDir
+          ? null
+          : (_) {
+              final path = browse.path.isEmpty
+                  ? entry.name
+                  : '${browse.path}/${entry.name}';
+              DragOut.begin(path, entry.name);
+            },
       onLongPress: () => browse.toggle(index),
       // Hover on desktop / press on touch lights the row the same way.
       child: Tactile(
@@ -636,93 +647,6 @@ class _Row extends StatelessWidget {
         ),
       ),
     );
-
-    // Pick a row up with a sideways drag and drop it on a folder to move it in.
-    // Horizontal affinity keeps a vertical drag scrolling the list untouched.
-    final draggable = Draggable<Entry>(
-      data: entry,
-      affinity: Axis.horizontal,
-      dragAnchorStrategy: pointerDragAnchorStrategy,
-      feedback: _dragChip(browse),
-      childWhenDragging: Opacity(opacity: 0.4, child: rowWidget),
-      child: rowWidget,
-    );
-
-    if (!isDir) return draggable;
-
-    // A folder is also a drop target: drop an item onto it to move it inside,
-    // lighting up while something hovers over it.
-    return DragTarget<Entry>(
-      onWillAcceptWithDetails: (d) => d.data.name != entry.name,
-      onAcceptWithDetails: (d) => _dropInto(context, browse, d.data),
-      builder: (context, cand, rej) {
-        final hot = cand.isNotEmpty;
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: hot ? p.aAlpha(0.22) : null,
-            border: hot ? Border.all(color: p.a) : null,
-          ),
-          child: draggable,
-        );
-      },
-    );
-  }
-
-  /// The little tag that follows the cursor while dragging — the name, or a
-  /// count when a whole multi-selection is being moved.
-  Widget _dragChip(BrowseController browse) {
-    final p = palette;
-    final sel = browse.selection;
-    final many = sel.length > 1 && sel.contains(entry.name);
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 240),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: p.tubeBg,
-          border: Border.all(color: p.a),
-          borderRadius: BorderRadius.circular(6),
-          boxShadow: [BoxShadow(color: p.aAlpha(0.4), blurRadius: 12)],
-        ),
-        child: Text(many ? '${sel.length} items' : entry.name,
-            maxLines: 1, overflow: TextOverflow.ellipsis, style: glass(14, p.bright)),
-      ),
-    );
-  }
-
-  /// Move the dropped item (or the whole selection, if the dropped item is part
-  /// of one) into this folder, offering Replace / Keep both on a name clash.
-  Future<void> _dropInto(
-      BuildContext context, BrowseController browse, Entry dragged) async {
-    final p = palette;
-    final sel = browse.selection;
-    final names =
-        (sel.length > 1 && sel.contains(dragged.name)) ? sel.toList() : [dragged.name];
-    if (names.contains(entry.name)) return; // never move a folder into itself
-    final base = browse.path;
-    final destFolder = base.isEmpty ? entry.name : '$base/${entry.name}';
-    final paths = names.map((n) => base.isEmpty ? n : '$base/$n').toList();
-    try {
-      await browse.moveInto(paths, destFolder);
-    } on LymnalError catch (e) {
-      if (e.code == 'TARGET_EXISTS' && context.mounted) {
-        final choice = await showConflict(context, p, dragged.name);
-        if (!context.mounted) return;
-        switch (choice) {
-          case ConflictChoice.replace:
-            await browse.moveInto(paths, destFolder, onConflict: 'replace');
-            break;
-          case ConflictChoice.keepBoth:
-            await browse.moveInto(paths, destFolder, onConflict: 'suffix');
-            break;
-          case ConflictChoice.cancel:
-            break;
-        }
-      } else if (context.mounted) {
-        await showLymnalError(context, p, e);
-      }
-    }
   }
 }
 
