@@ -211,20 +211,11 @@ class _RootState extends State<_Root> {
       return Scaffold(
         backgroundColor: Colors.black,
         resizeToAvoidBottomInset: false,
-        body: Builder(
-          builder: (context) {
-            // Immersive fullscreen HIDES the status bar, which zeroes SafeArea's
-            // top inset — so the chassis would draw up under the camera/status
-            // strip. viewPadding still knows where that hardware region is, so
-            // reserve it at the top. The bottom stays edge-to-edge (the nav bar
-            // is hidden, so nothing to avoid there).
-            final top = MediaQuery.viewPaddingOf(context).top;
-            return Padding(
-              padding: EdgeInsets.only(top: top),
-              child: child,
-            );
-          },
-        ),
+        // The chassis fills the whole device — its metal reaches all the way to
+        // the top edge, so the camera sits on the bezel, not a black bar. The
+        // chassis itself insets its CONTENT below the camera (see Chassis), so
+        // nothing important hides under it. Bottom stays edge-to-edge.
+        body: child,
       );
     }
 
