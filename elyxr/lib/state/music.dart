@@ -291,8 +291,8 @@ class MusicController extends ChangeNotifier {
     final out = '${dir.path}/elyxr_mod_${inPath.hashCode & 0x7fffffff}.wav';
     if (File(out).existsSync()) return out;
     final attempts = <List<String>>[
-      ['openmpt123', '--quiet', '--force', '--render', '-o', out, inPath],
-      ['ffmpeg', '-y', '-loglevel', 'error', '-i', inPath, out],
+      [_mediaBin('openmpt123'), '--quiet', '--force', '--render', '-o', out, inPath],
+      [_mediaBin('ffmpeg'), '-y', '-loglevel', 'error', '-i', inPath, out],
     ];
     for (final a in attempts) {
       try {
@@ -445,6 +445,17 @@ class _SpectroResult {
   const _SpectroResult(this.data, this.frames, this.fps);
 }
 
+/// The path to a media helper (ffmpeg / openmpt123). On Windows they ship beside
+/// the app executable; on Linux they come from the system (on PATH).
+String _mediaBin(String name) {
+  if (Platform.isWindows) {
+    final beside =
+        File('${File(Platform.resolvedExecutable).parent.path}\\$name.exe');
+    return beside.existsSync() ? beside.path : '$name.exe';
+  }
+  return name;
+}
+
 /// Decode the actual audio at [path] to PCM (via ffmpeg) and turn it into a
 /// spectrogram — a real FFT per video-frame-sized hop across the whole track.
 /// Runs on a background isolate (see compute), so the heavy work never touches
@@ -457,7 +468,7 @@ Future<_SpectroResult> _analyzeSpectrogram(String path) async {
 
   // ffmpeg decodes anything GStreamer can play to raw mono s16le on stdout.
   final res = await Process.run(
-    'ffmpeg',
+    _mediaBin('ffmpeg'),
     [
       '-v', 'error',
       '-i', path,

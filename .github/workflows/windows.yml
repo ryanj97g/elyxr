@@ -61,6 +61,14 @@ jobs:
           Copy-Item -Recurse -Force elyxr\build\windows\x64\runner\Release\* $stage\
           # lymnal alongside it (a standalone binary).
           Copy-Item -Force target\release\lymnal.exe $stage\
+          # Bundle ffmpeg.exe next to the app so the visualizer and tracker
+          # modules work on Windows (Linux uses the system ffmpeg). The BtbN GPL
+          # build bundles libopenmpt, so ffmpeg alone also renders modules.
+          $ff = "$env:RUNNER_TEMP\ffmpeg.zip"
+          Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile $ff
+          Expand-Archive -Path $ff -DestinationPath "$env:RUNNER_TEMP\ff" -Force
+          $ffexe = (Get-ChildItem -Path "$env:RUNNER_TEMP\ff" -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName
+          Copy-Item -Force $ffexe $stage\
           # A zip of exactly that, for running without installing.
           Compress-Archive -Path "$stage\*" -DestinationPath elyxr-windows.zip -Force
 
