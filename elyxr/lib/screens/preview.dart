@@ -3,9 +3,13 @@
 // sort is possible without leaving. PDFs and video are recognised but render as
 // a download offer in v1 (inline PDF/video rendering is a later iteration).
 
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../api/api_error.dart';
@@ -47,10 +51,24 @@ class _PreviewState extends State<_Preview> {
   bool _loading = false;
   String? _error;
 
+  // Inline video (media_kit): a player per previewed video, torn down when the
+  // preview moves on or closes.
+  Player? _player;
+  VideoController? _videoCtl;
+  bool _videoReady = false;
+  File? _videoTemp;
+
   @override
   void initState() {
     super.initState();
     _fetch();
+  }
+
+  @override
+  void dispose() {
+    _player?.dispose();
+    _videoTemp?.delete().ignore();
+    super.dispose();
   }
 
   Entry get _entry => widget.files[_index];
@@ -60,7 +78,12 @@ class _PreviewState extends State<_Preview> {
   bool get _isVideo => (_entry.mime ?? '').startsWith('video/');
 
   Future<void> _fetch() async {
-    if (!_isImage) return; // only images render inline in v1
+    await _disposeVideo();
+    if (_isVideo) {
+      await _fetchVideo();
+      return;
+    }
+    if (!_isImage) return; // PDF/other render as the open/download offer
     setState(() {
       _loading = true;
       _error = null;
@@ -78,6 +101,64 @@ class _PreviewState extends State<_Preview> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Download the video to a temp file and play it inline with media_kit.
+  Future<void> _fetchVideo() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _videoReady = false;
+    });
+    final browse = context.read<BrowseController>();
+    final client = browse.session.client;
+    final path = browse.path.isEmpty ? _entry.name : '${browse.path}/${_entry.name}';
+    try {
+      final dir = await getTemporaryDirectory();
+      final f = File('${dir.path}/elyxr_preview_${_entry.name}');
+      final sink = f.openWrite();
+      await client!.downloadTo(path, sink);
+      await sink.flush();
+      await sink.close();
+      if (!mounted) return;
+      final player = Player();
+      final ctl = VideoController(player);
+      await player.open(Media(f.path));
+      if (!mounted) {
+        await player.dispose();
+        return;
+      }
+      setState(() {
+        _player = player;
+        _videoCtl = ctl;
+        _videoTemp = f;
+        _videoReady = true;
+        _loading = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _error = 'Could not play this video.';
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  /// Tear down the current video player (moving to another file, or closing).
+  Future<void> _disposeVideo() async {
+    final pl = _player;
+    final tmp = _videoTemp;
+    _player = null;
+    _videoCtl = null;
+    _videoReady = false;
+    _videoTemp = null;
+    if (pl != null) {
+      try {
+        await pl.dispose();
+      } catch (_) {}
+    }
+    if (tmp != null) tmp.delete().ignore();
   }
 
   void _step(int delta) {
@@ -148,9 +229,20 @@ class _PreviewState extends State<_Preview> {
       if (_bytes != null) return InteractiveViewer(child: Image.memory(_bytes!, fit: BoxFit.contain));
       return const SizedBox.shrink();
     }
-    // PDF / video / other: open it in the default program (edits sync back), or
-    // download a copy to keep.
-    final kind = _isPdf ? 'PDF' : _isVideo ? 'video' : 'file';
+    if (_isVideo) {
+      if (_videoReady && _videoCtl != null) {
+        return Video(controller: _videoCtl!, fit: BoxFit.contain);
+      }
+      if (_error != null) {
+        return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text(_error!, style: glass(15, p.bright), textAlign: TextAlign.center));
+      }
+      return Text('LOADING…', style: glass(16, p.mid));
+    }
+    // PDF / other: open it in the default program (edits sync back), or download
+    // a copy to keep.
+    final kind = _isPdf ? 'PDF' : 'file';
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [

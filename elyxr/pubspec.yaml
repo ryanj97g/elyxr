@@ -18,6 +18,10 @@ dependencies:
   desktop_drop: ^0.5.0
   cross_file: ^0.3.4
   open_filex: ^4.0.0
+  # Inline video preview (Windows + Android). libs_video bundles the native mpv.
+  media_kit: ^1.1.0
+  media_kit_video: ^1.1.0
+  media_kit_libs_video: ^1.0.0
   window_manager: ^0.4.2
   # Audio via the system's GStreamer on Linux — uses the OS codecs (built for the
   # OS's own glibc), so no bundled-library incompatibilities. Replaced
