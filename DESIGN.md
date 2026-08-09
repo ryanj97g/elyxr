@@ -1,13 +1,13 @@
-# Elyxr — visual design
+# Elyxr: visual design
 
-The appearance and interaction specification. System behaviour — network, sync,
-updates — is in [SPECS.md](SPECS.md).
+The appearance and interaction specification. System behaviour; network, sync,
+updates; is in [SPECS.md](SPECS.md).
 
 Exact colours and sizes are defined in code, not duplicated here:
 
-- `elyxr/lib/design/oklch.dart` — the colour engine.
-- `elyxr/lib/design/tokens.dart` — accents, palette, densities, faces.
-- `elyxr/lib/design/text.dart` — the three type roles and their scales.
+- `elyxr/lib/design/oklch.dart`; the colour engine.
+- `elyxr/lib/design/tokens.dart`; accents, palette, densities, faces.
+- `elyxr/lib/design/text.dart`; the three type roles and their scales.
 
 This document defines the design rules, the invariants they must hold to, and
 the interaction model.
@@ -23,14 +23,14 @@ Everything behind the glass is terminal. Everything on the metal is a physical
 control. This division governs placement and typography throughout.
 
 On desktop the window is a fixed 440 × 944 logical px, portrait, not resizable.
-On a phone the app renders at the device's own full resolution — the whole
-screen, e.g. **1440 × 3088 px** — with no fixed box and no down-scaling: the
+On a phone the app renders at the device's own full resolution; the whole
+screen, e.g. **1440 × 3088 px**: with no fixed box and no down-scaling: the
 chassis fills the device directly. The phone owns its dimensions; never force a
 fixed phone size.
 
 On Android this is true fullscreen: the system bars are hidden (immersive) **and**
 the window draws edge-to-edge *under the camera cutout* (`setDecorFitsSystemWindows`
-false + `layoutInDisplayCutoutMode`). Both are required — without the cutout flag
+false + `layoutInDisplayCutoutMode`). Both are required; without the cutout flag
 Android letterboxes the notch strip solid black regardless of anything on the Dart
 side, so the chassis top would not reach the first pixel. No SafeArea, no padding,
 no glow ring on mobile.
@@ -55,23 +55,23 @@ no glow ring on mobile.
 ```
 
 The **music player** and the **action bar** are permanent fixtures of the files
-view, not pop-ups. The action bar holds the file actions at all times — greyed and
-inert with nothing selected, lit when there's a selection — so nothing ever slides
+view, not pop-ups. The action bar holds the file actions at all times; greyed and
+inert with nothing selected, lit when there's a selection; so nothing ever slides
 in over the list. There is no separate FIND field.
 
 The chassis is a near-vertical metal gradient with a machined bevel: a bright
 highlight hairline along the top edge and a recessed dark hairline along the
 bottom. The tube is recessed behind a bezel ring and a soft inner vignette.
 
-Both rails are drag handles for moving the window. The tube is not — it scrolls
+Both rails are drag handles for moving the window. The tube is not; it scrolls
 and receives clicks.
 
 ---
 
 ## Color
 
-Colour is a system, not a table. Every colour on screen — the glowing tube, the
-paper terminal in light mode, and the metal — is derived from a single hue by a
+Colour is a system, not a table. Every colour on screen; the glowing tube, the
+paper terminal in light mode, and the metal; is derived from a single hue by a
 perceptual (OKLCH) engine. A whole screen resolves to one phosphor colour and
 holds it. Adding an accent is one row of four numbers in `tokens.dart`.
 
@@ -79,7 +79,7 @@ holds it. Adding an accent is one row of four numbers in `tokens.dart`.
 
 - A screen renders in a single colour. Two competing colours indicate a defect.
 - The accent hue drives the phosphor and the metal alike. The metal carries only
-  a whisper of the hue — a tinted grey, never a coloured chassis.
+  a whisper of the hue; a tinted grey, never a coloured chassis.
 - Hue is preserved under saturation. Requesting more chroma than sRGB can show
   clamps the chroma; it never lets the hue drift.
 
@@ -105,23 +105,23 @@ oracle.
   `_linear`.
 - **Gamut test.** A colour fits sRGB when every linear channel is within `[0,1]`
   (0.001 slack).
-- **`maxChroma(l, h)`** — the maximum in-gamut chroma for a lightness and hue, by
+- **`maxChroma(l, h)`**: the maximum in-gamut chroma for a lightness and hue, by
   a 20-step binary search over `C ∈ [0, 0.4]`. The primitive the rest builds on.
 - **Encode.** Linear channel → 8-bit sRGB via gamma companding (`12.92·x` below
   `0.0031308`, else `1.055·x^(1/2.4) − 0.055`), clamped 0–255.
 - **`oklchArgb(l, c, h)`** renders chroma as given; used only where chroma is
   already gamut-safe (the achromatic mono/white).
-- **`trueArgb(l, h, reqC)`** = `oklchArgb(l, min(reqC, maxChroma(l, h)), h)` — the
+- **`trueArgb(l, h, reqC)`** = `oklchArgb(l, min(reqC, maxChroma(l, h)), h)`; the
   gamut clamp. The default for hue-bearing colour.
-- **`accentChroma(chromaMul, maxCeil, sat)`** — the accent swatch's chroma:
+- **`accentChroma(chromaMul, maxCeil, sat)`**: the accent swatch's chroma:
 
   ```
   c = 0.13 · chromaMul · sat
-  c = max(c, 0.045)     # floor — retains a trace of colour
-  c = min(c, maxCeil)   # ceiling — the hue's chroma budget
+  c = max(c, 0.045)     # floor; retains a trace of colour
+  c = min(c, maxCeil)   # ceiling; the hue's chroma budget
   ```
 
-- **`lForC(h, targetC, hiL, loL)`** — the lightest (or darkest) lightness that can
+- **`lForC(h, targetC, hiL, loL)`**: the lightest (or darkest) lightness that can
   hold a target chroma for a hue. Available for equalising chroma across hues; the
   current palette pins lightness per role and does not use it.
 
@@ -140,7 +140,7 @@ the default.
 | blue | 255 | 1.00 | 0.212 | 0.56 |
 | purple | 307 | 1.10 | 0.258 | 0.58 |
 | pink | 352 | 0.95 | 0.190 | 0.70 |
-| mono | — | 0 | — | 0.72 |
+| mono | n/a | 0 | n/a | 0.72 |
 
 `tokens.dart` is canonical for these values.
 
@@ -154,7 +154,7 @@ are 1 for a colour accent, 0 for mono.
   `oklchArgb(monoL, 0, 0)`).
 - **Ink** on the accent: dark (`L 0.24`) when the accent is light (`>0.70`), else
   white.
-- **Metal** — hue at a whisper of chroma (`0.008–0.016`), identical in both modes:
+- **Metal**: hue at a whisper of chroma (`0.008–0.016`), identical in both modes:
   `m1 L.240 · m2 .160 · m3 .130` (gradient), `mb .300` (border), `mh .400`
   (highlight), `mt .550` / `ml .860` (text), `mv1 .100` / `mv2 .210` (recess,
   vent).
@@ -168,7 +168,7 @@ are 1 for a colour accent, 0 for mono.
 
 The accent swatch responds to a vertical drag, live across the app.
 
-- A colour accent drags saturation and glow together — `sat` feeds both
+- A colour accent drags saturation and glow together; `sat` feeds both
   `accentChroma` and the bright-glow scale. Range `0.25 – 3.2`: near-grey at the
   bottom, the hue's in-gamut peak at the top.
 - `mono` drags lightness (`monoL`, `0.12 – 0.99`), graphite to white.
@@ -179,13 +179,13 @@ Selecting a different accent resets its intensity to neutral.
 
 Three separate elements render over the glass and remain distinct:
 
-- **Scanlines** — phosphor-tinted hairlines every 4px. Static texture; it does not
+- **Scanlines**: phosphor-tinted hairlines every 4px. Static texture; it does not
   move. Rasterised to a cached layer so scaling the fixed chassis resamples one
   texture rather than redrawing hairlines each frame.
-- **Sweep** — a single thin scanner line crossing top to bottom, one pass every
+- **Sweep**: a single thin scanner line crossing top to bottom, one pass every
   ~11 seconds, near-translucent with a faint glow. A moving line, not a lit band
   drawn across the texture.
-- **Vignette + bloom** — a soft accent bloom at the centre easing to a gentle dark
+- **Vignette + bloom**: a soft accent bloom at the centre easing to a gentle dark
   ring at the edges. A falloff, not a black frame; corners remain legible.
 
 ---
@@ -197,7 +197,7 @@ Three roles, one face each. The terminal face is user-selectable.
 | Role | Applies to | Face |
 |---|---|---|
 | `chassis()` | Chassis labels, section markers, rail buttons | **Chakra Petch**, fixed |
-| `glass()` | Everything on the glass — rows, readouts, settings | the terminal face |
+| `glass()` | Everything on the glass; rows, readouts, settings | the terminal face |
 | `mono()` | The ticker and glass readouts | the terminal face |
 
 - The terminal face is selectable in Settings › TYPEFACE, from VT323 (default)
@@ -215,7 +215,7 @@ Three roles, one face each. The terminal face is user-selectable.
 
 ## Interactions
 
-### Wordmark hold — Settings
+### Wordmark hold: Settings
 
 Holding the wordmark for ~250ms opens Settings; holding again returns to files.
 Releasing before the threshold does nothing. During the hold the wordmark tightens
@@ -223,7 +223,7 @@ its tracking, lights to the accent with a glow, and a bar beside it fills. The
 wordmark stays lit while Settings is open.
 
 There is no settings button, tooltip, or hint. This entry point is intentionally
-unmarked. The only cue is a periodic faint **gleam** — a shadowless bright gradient
+unmarked. The only cue is a periodic faint **gleam**: a shadowless bright gradient
 swept across the letters every ~4.5s while idle. It is layered *over* a
 permanently-mounted embossed wordmark (never swapped in), so the mark never blinks
 or shifts by a pixel as the sweep passes. It respects reduce-motion and pauses in
@@ -255,7 +255,7 @@ padding also tracks density.
 ### TEXT / GRID
 
 A rocker on the bottom rail. TEXT is the dense phosphor list (default); GRID is
-small file-explorer tiles (an icon over a two-line name over the size — many per
+small file-explorer tiles (an icon over a two-line name over the size; many per
 row, not big squares). Hidden while Settings **or the screensaver** is showing, as
 it controls only the file list. Persists.
 
@@ -275,7 +275,7 @@ it controls only the file list. Persists.
 The deck sits permanently above the action bar. Scroll the wheel **anywhere over
 it** to change volume (the whole panel is the hit target, not just the controls; a
 wheel signal never scrubs the seek bar). Tapping a track shows a loading spinner
-until playback starts. The spectrum is the real FFT of the audio at the play head —
+until playback starts. The spectrum is the real FFT of the audio at the play head; 
 the same live levels drive the corner speaker cones at all times and, in Nostalgia
 Mode, the tube's edge glow.
 
@@ -302,30 +302,30 @@ with a glow. The weight separation is load-bearing for scannability.
 Replaces the files view inside the same tube, with the same scanlines and sweep,
 in the same terminal vocabulary.
 
-- **Header** — a phosphor `▸ SETTINGS` with an accent caret and a dim underline;
+- **Header**: a phosphor `▸ SETTINGS` with an accent caret and a dim underline;
   the device name in mono at the right.
-- **Sections** — each a bracketed `[NN]` accent marker, a glass title, and a
+- **Sections**: each a bracketed `[NN]` accent marker, a glass title, and a
   trailing rule:
-  1. ACCENT — the eight swatches
-  2. DENSITY — three row-stack diagrams at their real spacings
-  3. TYPEFACE — the face rail, with a **SCAN** button that re-registers `.ttf`/`.otf`
+  1. ACCENT; the eight swatches
+  2. DENSITY; three row-stack diagrams at their real spacings
+  3. TYPEFACE; the face rail, with a **SCAN** button that re-registers `.ttf`/`.otf`
      files dropped into `assets/fonts/custom/` on disk (desktop only)
-  4. TUBE — dark / light
-  5. THIS DEVICE — mode, downloads, mount path, concurrent transfers, update, forget
-  6. USE SYSTEM FILE BROWSER — the optional gate mount (Linux client only)
-- **Footer** — versions on the left, `HOLD ELYXR TO EXIT` on the right.
+  4. TUBE; dark / light
+  5. THIS DEVICE; mode, downloads, mount path, concurrent transfers, update, forget
+  6. USE SYSTEM FILE BROWSER; the optional gate mount (Linux client only)
+- **Footer**: versions on the left, `HOLD ELYXR TO EXIT` on the right.
 
 Above the numbered sections sit the **NOSTALGIA MODE** master toggle and, revealed
 beneath it when Nostalgia is on, its **2000's DEMO MODE** sub-toggle (whether the
 built-in keygen soundtrack auto-plays; off by default). In **server mode**, the
 server controls (pairing, devices, space, recent problems) appear here too. The
-**music player is not in Settings** — it's a permanent fixture of the files view.
+**music player is not in Settings**: it's a permanent fixture of the files view.
 
 ---
 
 ## State
 
-Persisted with `shared_preferences`. The bearer token is not stored here — it
+Persisted with `shared_preferences`. The bearer token is not stored here; it
 lives in the keyring, never in the clear, never on screen.
 
 ```
@@ -342,10 +342,10 @@ termFont   the terminal face family                    persist
 density    TIGHT | MID | ROOMY                         persist
 dark       bool (tube: glow vs paper)                  persist
 appMode    client | server                             persist
-trove      bool — is the gate mount on                 persist
+trove      bool; is the gate mount on                 persist
 downloadDir / mountPath / atOnce / confirmDelete       persist
-demoMode2000s  bool — auto-play the demo soundtrack     persist
-nostalgia  bool — session toy, off on every launch      transient
+demoMode2000s  bool; auto-play the demo soundtrack     persist
+nostalgia  bool; session toy, off on every launch      transient
 holding    bool                                         transient
 ```
 
@@ -353,14 +353,14 @@ holding    bool                                         transient
 
 ## Error display
 
-lymnal's `message` renders verbatim, attached to the action that failed — never
+lymnal's `message` renders verbatim, attached to the action that failed; never
 reworded, summarised, or dropped. `code` and `request_id` sit behind a details
 toggle with a copy button.
 
 Three failures lymnal cannot report, because the request never arrives, have fixed
 messages:
 
-- **Timeout** — "Can't reach <server>. It may be asleep or off." Retries every few
+- **Timeout**: "Can't reach <server>. It may be asleep or off." Retries every few
   seconds and resumes waiting work once it answers.
-- **No tailnet** — "Tailscale isn't connected on this device."
-- **401** — "This device is no longer approved." Offers to request access again.
+- **No tailnet**: "Tailscale isn't connected on this device."
+- **401**: "This device is no longer approved." Offers to request access again.

@@ -10,11 +10,11 @@ Android, and the media player. Each entry is *symptom → why → fix*.
 ### "Tailscale isn't connected on this device."
 **Why:** elyxr reaches your devices over Tailscale, and this device isn't on the
 tailnet. (Internally: the OS reported the network as unreachable.)
-**Fix:** open Tailscale and sign in — **the same account on every device**. On
+**Fix:** open Tailscale and sign in; **the same account on every device**. On
 Android, Tailscale is a separate app you must install and sign into yourself.
 
 ### "Can't reach `<server>`. It may be asleep or off."
-**Why:** the server's lymnal didn't answer — it may be powered off/asleep, not
+**Why:** the server's lymnal didn't answer; it may be powered off/asleep, not
 running the service, or you have the wrong address.
 **Fix:** confirm the server is on and `lymnal status` shows it serving; confirm the
 address is the server's Tailscale IP with elyxr's port, `100.x.y.z:7749`. elyxr
@@ -49,12 +49,12 @@ Symptom: the log prints **"couldn't fast-forward to the latest (local changes?)"
 **Why:** the checkout's git history diverged from the published branch (this
 happens if upstream history was ever rewritten/force-pushed), so a fast-forward is
 impossible.
-**Fix:** current builds self-heal — the updater now fetches and hard-resets to the
+**Fix:** current builds self-heal; the updater now fetches and hard-resets to the
 published branch automatically. If you're on a build from *before* that fix, do it
 once by hand on that device:
 
 ```sh
-# find the checkout (it's recorded, usually ~/Elyxr — capital E, case-sensitive)
+# find the checkout (it's recorded, usually ~/Elyxr: capital E, case-sensitive)
 REPO="$(find ~ -maxdepth 4 -name elyxr.sh 2>/dev/null | head -1 | xargs -r dirname)"
 cd "$REPO"
 git fetch origin
@@ -92,7 +92,7 @@ instead.
 
 The installer builds from source and installs the system libraries it needs. If a
 build fails on a missing library, here's the map. Current `elyxr.sh` already lists
-all of these — if you hit one, you're likely on an older installer; re-run
+all of these; if you hit one, you're likely on an older installer; re-run
 `./elyxr.sh` (it self-updates first).
 
 ### `CMake Error: Could NOT find ALSA (missing: ALSA_LIBRARY ...)`
@@ -107,7 +107,7 @@ every plugin's native code, so the ALSA dev headers must be present.
 ### Some other `Could NOT find <X>` / `PkgConfig::<x>` error
 **Why:** a build machine missing a `-dev` package. The installer auto-heals missing
 C **headers** (it reads the missing `.h`, finds the owning package with `apt-file`,
-installs it, retries) — but a CMake `find_package`/`pkg_check_modules` failure is
+installs it, retries); but a CMake `find_package`/`pkg_check_modules` failure is
 *not* caught by that.
 **Fix:** install the matching `-dev` package by hand, or report the exact line so
 it can be added to the installer. For reference, the app build needs: `clang`,
@@ -145,7 +145,7 @@ happens coming from a very old build).
 with the same key, so future updates install in place with no uninstall.
 
 ### The persistent elyxr notification
-That's the on-device lymnal foreground service — it's what lets the phone keep its
+That's the on-device lymnal foreground service; it's what lets the phone keep its
 connection and receive updates. It's expected; it isn't a bug.
 
 ---
@@ -163,7 +163,7 @@ Linux, install ffmpeg: `sudo apt-get install ffmpeg`.
 ### The lightshow (visualizer) is dead for a streamed track
 **Why:** the visualizer reads raw PCM, so compressed audio must be decoded first.
 **Fix:** Android decodes natively (works out of the box). **Linux/Windows desktop**
-decode with `ffmpeg` — if the bars are dead for `.m4a`/`.mp3` but alive for the
+decode with `ffmpeg`; if the bars are dead for `.m4a`/`.mp3` but alive for the
 built-in tracker soundtrack, `ffmpeg` is missing from `PATH`
 (`sudo apt-get install ffmpeg`).
 

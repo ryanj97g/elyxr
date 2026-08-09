@@ -1,7 +1,7 @@
 # Quickstart
 
 Devices reach each other over Tailscale. Install Tailscale on each device and sign
-in with the **same account** — that puts them on one private network. Then set up
+in with the **same account**: that puts them on one private network. Then set up
 elyxr per the section for your OS.
 
 A device is either a **server** (holds the trove folder and shares it) or a
@@ -38,7 +38,7 @@ THIS DEVICE → Server, then open PAIRING. Terminal: `lymnal bind open`, then
 `lymnal bind seal` to approve. Change which folder is served with
 `lymnal trove set <path>`.
 
-**Reach a trove (client):** open elyxr — it starts as a client and lists servers it
+**Reach a trove (client):** open elyxr; it starts as a client and lists servers it
 finds on the tailnet. Pick yours and REQUEST ACCESS (or enter the address by hand,
 `100.x.y.z:7749`, if it isn't listed). Approve the device on the server. Terminal:
 `lymnal bind 100.x.y.z:7749`.
@@ -56,7 +56,7 @@ Latest) and run it. It's a per-user install with no administrator prompt. It
 installs to `%LOCALAPPDATA%\Programs\elyxr`, adds a Start-menu shortcut, seeds a
 starter config, installs Tailscale (via winget, or opens the download page), and
 starts lymnal hidden at each login. Windows may warn about an unrecognized app (the
-build is unsigned) — choose More info → Run anyway.
+build is unsigned); choose More info → Run anyway.
 
 Sign into Tailscale with the same account as your other devices.
 
@@ -64,7 +64,7 @@ Sign into Tailscale with the same account as your other devices.
 finds on the tailnet; pick yours and REQUEST ACCESS (or enter `100.x.y.z:7749`).
 Approve the device on the server.
 
-**Serve the trove:** a Windows desktop can also be a server — hold the wordmark →
+**Serve the trove:** a Windows desktop can also be a server; hold the wordmark →
 Settings → THIS DEVICE → Server, then open PAIRING. (The file-manager mount is
 Linux only; everything else is the same.)
 
@@ -72,7 +72,7 @@ Linux only; everything else is the same.)
 
 ## Android
 
-A phone is always a client. There's no build on the phone — you install a prebuilt
+A phone is always a client. There's no build on the phone; you install a prebuilt
 APK, and it runs its own on-device lymnal, so it behaves like a desktop client.
 
 1. **Install Tailscale** from the Play Store and sign in with the same account as
@@ -85,7 +85,7 @@ APK, and it runs its own on-device lymnal, so it behaves like a desktop client.
 3. **Connect:** open elyxr. It lists servers on the tailnet; pick yours and REQUEST
    ACCESS (or enter `100.x.y.z:7749`). Approve the device on the server.
 
-elyxr shows an ongoing notification while running — that's the on-device lymnal
+elyxr shows an ongoing notification while running; that's the on-device lymnal
 service holding the connection.
 
 **Updates:** the app downloads the new APK and opens the system installer; because

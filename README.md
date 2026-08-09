@@ -17,19 +17,19 @@ Ever.
 
 ## The pieces
 
-- **elyxr** — the app; the part that feels like magic, and the main way in on every
+- **elyxr**: the app; the part that feels like magic, and the main way in on every
   device.
-- **lymnal** — the always-on background service that connects your devices. One
+- **lymnal**: the always-on background service that connects your devices. One
   binary, two roles: on the **server** it shares the trove; on a **client** it
   keeps the device updated and runs a small local proxy the app talks to.
-- **trove** — the one real folder of files on the server. The source of truth.
-- **lymbo** — a client's small **write-back buffer**: it holds a file you've *saved*
-  only until it lands back on the trove. It is **not** a read cache — opening files
+- **trove**: the one real folder of files on the server. The source of truth.
+- **lymbo**: a client's small **write-back buffer**: it holds a file you've *saved*
+  only until it lands back on the trove. It is **not** a read cache; opening files
   never fills it.
-- **gate** — optional, Linux-only. Surfaces the trove as a real folder in your file
+- **gate**: optional, Linux-only. Surfaces the trove as a real folder in your file
   manager.
 
-Your devices reach each other over **Tailscale** — a private network of only your
+Your devices reach each other over **Tailscale**: a private network of only your
 own machines, nothing exposed to the internet. Use the **same account** on every
 device; that's what pairs them.
 
@@ -37,7 +37,7 @@ device; that's what pairs them.
 
 ## Install
 
-Pick your platform — each has a short, exact guide:
+Pick your platform; each has a short, exact guide:
 
 | Platform | How | Guide |
 |---|---|---|
@@ -70,23 +70,23 @@ Say you want your laptop to reach your desktop's files.
 **On the desktop (the one with the files):** open elyxr, **hold the wordmark** (the
 "ELYXR" text) to open Settings, set **THIS DEVICE → Server**, and open **PAIRING**.
 
-**On the laptop:** open elyxr — it starts as a **Client** and **looks for servers
+**On the laptop:** open elyxr; it starts as a **Client** and **looks for servers
 on your tailnet automatically**. Tap the desktop in the list and **REQUEST
-ACCESS ▸**. (If it doesn't appear, enter its address by hand — `100.x.y.z:7749`,
+ACCESS ▸**. (If it doesn't appear, enter its address by hand; `100.x.y.z:7749`,
 which the installer prints while setting the desktop up.)
 
-**Back on the desktop:** the laptop appears by name. Tap **APPROVE** — that also
+**Back on the desktop:** the laptop appears by name. Tap **APPROVE**: that also
 closes pairing, so nothing else can slip in.
 
-The laptop is connected, and the desktop's files are right there in elyxr — browse,
+The laptop is connected, and the desktop's files are right there in elyxr; browse,
 open, add, delete, each downloading only when you open it. Nothing is copied to the
 laptop.
 
 Prefer the terminal, or the server has no screen?
 
 ```sh
-lymnal bind 100.x.y.z:7749     # on the client — connect to the server
-lymnal bind seal               # on the server — approve the waiting device
+lymnal bind 100.x.y.z:7749     # on the client; connect to the server
+lymnal bind seal               # on the server; approve the waiting device
 ```
 
 ---
@@ -95,22 +95,22 @@ lymnal bind seal               # on the server — approve the waiting device
 
 elyxr is a live window into the trove, not a copy of it:
 
-- **Click a file** to select it — its details show below. Click an **audio file**
+- **Click a file** to select it; its details show below. Click an **audio file**
   and it plays in the built-in player, with the rest of that **folder queued up as
   a playlist**.
 - **Double-click a file** to open it: just that file downloads, right then, and
   opens in your default program. Edits you save come back to the trove on their
-  own — even if the server is briefly unreachable, the change waits on this device
+  own; even if the server is briefly unreachable, the change waits on this device
   and lands the moment it's back.
 - **Click and hold** to select several files at once; the actions (RENAME,
   DOWNLOAD, MOVE, DELETE) live permanently in the bar and light up when you have a
   selection.
-- **Add a file** — the upload button, or drag one in — and every device sees it.
+- **Add a file**: the upload button, or drag one in; and every device sees it.
 - **Drag a file out** of the window and it downloads to wherever you drop it.
 - **Delete a file** and it's gone everywhere (the app asks first, since the trove is
   shared).
 
-No syncing by hand — using the files *is* the sync.
+No syncing by hand; using the files *is* the sync.
 
 ### The music player
 
@@ -118,17 +118,17 @@ The player is a permanent fixture of the files view:
 
 - Playing an audio file makes its **whole folder a playlist** (any depth), and the
   next track **preloads** near the end so gaps stay short.
-- A real-time **lightshow** — the actual FFT of the audio at the play head — drives
+- A real-time **lightshow**: the actual FFT of the audio at the play head; drives
   the spectrum, the corner woofers, and (in Nostalgia Mode) the tube's edge glow.
 - **Scroll the wheel anywhere over the deck** to change volume.
-- An `.m4a` that's secretly an MP4 with video plays **audio-only** — no picture
+- An `.m4a` that's secretly an MP4 with video plays **audio-only**: no picture
   window.
 
 ---
 
 ## Updates
 
-Update from **any device** — the button in the app, or `lymnal update` — and every
+Update from **any device**: the button in the app, or `lymnal update`; and every
 other device updates itself in step. It happens in the background: a popup when it
 starts, a popup when it's done, and the app reopens on its own when ready. No
 password, no confirmation. The only thing that waits is a file mid-upload.
@@ -137,14 +137,14 @@ password, no confirmation. The only thing that waits is a file mid-upload.
 
 ## Make it yours
 
-Hold the wordmark to open Settings. None of this changes what elyxr *does* — just
+Hold the wordmark to open Settings. None of this changes what elyxr *does*; just
 how it looks and feels on this device:
 
-- **Accent** — eight phosphor colours; drag a swatch to push its glow (or the white
+- **Accent**: eight phosphor colours; drag a swatch to push its glow (or the white
   one's brightness).
-- **Tube** — dark glow, or light paper.
-- **Density** — how large the text sits.
-- **Typeface** — the terminal font, VT323 and a dozen more. Drop your own
+- **Tube**: dark glow, or light paper.
+- **Density**: how large the text sits.
+- **Typeface**: the terminal font, VT323 and a dozen more. Drop your own
   `.ttf`/`.otf` into `elyxr/assets/fonts/custom/` and tap **SCAN** (desktop) to use
   them right away.
 
@@ -154,7 +154,7 @@ a folder in your file manager.
 
 **Nostalgia Mode** (a toggle above the settings sections) turns on the fun: a
 matrix screensaver, a cursor trail, a transfer log, sound effects, a hidden Snake
-game (tap the wordmark ×7), and **2000's DEMO MODE** — which, when *you* switch it
+game (tap the wordmark ×7), and **2000's DEMO MODE**: which, when *you* switch it
 on, plays a built-in keygen soundtrack. It's off by default, so it never hijacks
 your own music.
 
@@ -184,7 +184,7 @@ lymnal trove set <path>       # change which folder is served
 
 ## Docs
 
-- **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — set up any device (Linux, Windows, Android).
-- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — when something's off.
-- **[SPECS.md](SPECS.md)** — how it works (architecture, protocol, the HTTP API).
-- **[DESIGN.md](DESIGN.md)** — the look and interaction model.
+- **[docs/QUICKSTART.md](docs/QUICKSTART.md)**: set up any device (Linux, Windows, Android).
+- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**: when something's off.
+- **[SPECS.md](SPECS.md)**: how it works (architecture, protocol, the HTTP API).
+- **[DESIGN.md](DESIGN.md)**: the look and interaction model.
