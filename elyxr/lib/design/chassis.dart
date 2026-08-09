@@ -17,6 +17,9 @@ class Chassis extends StatelessWidget {
   final Widget topRail;
   final Widget tube;
   final Widget bottomRail;
+  /// Nostalgia Mode drives the whimsy: the corner woofers only go rave-reactive
+  /// while it's on (they're a resting grille otherwise).
+  final bool nostalgia;
 
   const Chassis({
     super.key,
@@ -24,6 +27,7 @@ class Chassis extends StatelessWidget {
     required this.topRail,
     required this.tube,
     required this.bottomRail,
+    this.nostalgia = false,
   });
 
   @override
@@ -77,12 +81,12 @@ class Chassis extends StatelessWidget {
           Positioned(
             left: 0,
             bottom: 0,
-            child: CornerSpeaker(palette: p, left: true),
+            child: CornerSpeaker(palette: p, left: true, reactive: nostalgia),
           ),
           Positioned(
             right: 0,
             bottom: 0,
-            child: CornerSpeaker(palette: p, left: false),
+            child: CornerSpeaker(palette: p, left: false, reactive: nostalgia),
           ),
         ],
       ),
@@ -118,9 +122,15 @@ class Tube extends StatelessWidget {
   /// An optional top layer over the whole glass (the Matrix screensaver). When
   /// present it sits above everything, clipped to the tube.
   final Widget? overlay;
+  /// The music-reactive edge lighting is Nostalgia Mode only.
+  final bool nostalgia;
 
   const Tube(
-      {super.key, required this.palette, required this.child, this.overlay});
+      {super.key,
+      required this.palette,
+      required this.child,
+      this.overlay,
+      this.nostalgia = false});
 
   @override
   Widget build(BuildContext context) {
@@ -199,13 +209,15 @@ class Tube extends StatelessWidget {
               ),
             ),
           // Music-reactive edge lighting, framing everything else. Clipped to the
-          // glass so the bloom stays on-screen; invisible until music plays.
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: EdgeLight(palette: p),
+          // glass so the bloom stays on-screen; invisible until music plays —
+          // and only in Nostalgia Mode.
+          if (nostalgia)
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: EdgeLight(palette: p),
+              ),
             ),
-          ),
         ],
       ),
     );

@@ -19,8 +19,15 @@ class CornerSpeaker extends StatefulWidget {
   final Palette palette;
   final bool left; // bottom-left vs bottom-right — corner shaping mirrors.
   final double size;
+  /// When false the woofer is just a resting metal grille — the bass-reactive
+  /// "rave" (the flare, the cone slam) is Nostalgia Mode only.
+  final bool reactive;
   const CornerSpeaker(
-      {super.key, required this.palette, required this.left, this.size = 66});
+      {super.key,
+      required this.palette,
+      required this.left,
+      this.reactive = false,
+      this.size = 66});
 
   @override
   State<CornerSpeaker> createState() => _CornerSpeakerState();
@@ -39,6 +46,14 @@ class _CornerSpeakerState extends State<CornerSpeaker>
   }
 
   void _tick(Duration _) {
+    // Off Nostalgia, the woofer never reacts — settle to rest and stop.
+    if (!widget.reactive) {
+      if (_level != 0) {
+        _level = 0;
+        _bass.value = 0;
+      }
+      return;
+    }
     final m = context.read<MusicController>();
     final bars = m.playing ? m.visualizerBars() : const <double>[];
     var bass = 0.0;

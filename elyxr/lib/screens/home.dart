@@ -116,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
       onPointerSignal: (_) => _activity(),
       child: Chassis(
         palette: p,
+        nostalgia: settings.nostalgia,
         topRail: TopRail(
           palette: p,
           inSettings: settings.inSettings,
@@ -125,6 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         tube: Tube(
           palette: p,
+          nostalgia: settings.nostalgia,
           // The minigame wins over the screensaver; both live in the overlay.
           overlay: _game
               ? SnakeGame(

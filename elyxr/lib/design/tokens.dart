@@ -304,7 +304,9 @@ class Palette {
       dim = _c(trueArgb(0.80, h, maxC * 0.40 * wc));
       foot = _c(trueArgb(0.62, h, maxC * 0.60 * wc));
       glow = _c(trueArgb(0.55, h, maxC * wc));
-      tubeBg = _c(trueArgb(0.940, h, 0.018 * wc));
+      // A soft tinted paper, not stark white — a light wash of the accent so the
+      // background sits with the theme instead of glaring. (mono stays neutral.)
+      tubeBg = _c(trueArgb(0.930, h, 0.060 * wc));
       bloom = 0.04 * glowT;
       edgeGlow = glowT * glowT * 0.6;
     }
