@@ -20,6 +20,7 @@ import 'state/trove_mount.dart';
 import 'state/updater.dart';
 import 'util/drag_out.dart';
 import 'util/paths.dart';
+import 'util/platform_caps.dart';
 import 'screens/first_run.dart';
 import 'screens/home.dart';
 
@@ -193,6 +194,29 @@ class _RootState extends State<_Root> {
     // shrunk; on a genuinely short screen the whole thing scales together.
     final p = settings.palette;
     final g = p.edgeGlow; // 0 at normal saturation, 1 at the very top.
+
+    // On a phone there's no window and no room around the app for a glow to
+    // bleed into — the chassis IS the screen. Fill it edge to edge (below the
+    // status bar / above the nav bar via SafeArea), scaling the fixed portrait
+    // design up to the device. No outer glow ring, no transparent margin.
+    if (Caps.isMobile) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: SizedBox(
+                width: kAppWidth,
+                height: kAppHeight,
+                child: child,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Center(
