@@ -93,77 +93,87 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  /// The wordmark, with the periodic faint gleam layered on while idle. The
-  /// embossed mark is ALWAYS mounted; the gleam is a shadowless bright sweep
-  /// painted on top of it, never a replacement — so the mark (and its 1px emboss)
-  /// never blinks off and the letters never appear to shift during a hint.
+  /// The wordmark. It is ONE static Text: the glyph geometry (size, spacing,
+  /// position) is identical on every frame, so the letters can never grow,
+  /// shrink, shift, or blink. While idle, a gleam sweeps across it done purely by
+  /// animating the text's FILL: a soft brighter band slides left to right through
+  /// the letters via the text's foreground gradient. Nothing about the layout,
+  /// and no second copy or offscreen layer, is involved, so there is nothing to
+  /// pulse. While lit (Settings/holding) it glows the accent instead, no gleam.
   Widget _wordmark(Palette p, bool lit) {
-    // The glyph geometry — identical for the mark and the gleam so they sit
-    // pixel-for-pixel on top of each other (same size, same position).
-    final baseStyle = TextStyle(
+    const emboss = [Shadow(color: Color(0xFF0C0D0F), offset: Offset(0, 1))];
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    // Lit or reduce-motion: no gleam. The mark sits in its colour (accent when
+    // lit, with a glow); AnimatedDefaultTextStyle eases the light-up on a hold.
+    if (lit || reduceMotion) {
+      return Padding(
+        padding: const EdgeInsets.only(left: 6),
+        child: AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 200),
+          style: TextStyle(
+            fontFamily: Fonts.chassis,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            letterSpacing: lit ? 15 * 0.24 : 15 * 0.4,
+            color: lit ? p.a : p.ml,
+            shadows: lit ? [Shadow(color: p.a, blurRadius: 11)] : emboss,
+          ),
+          child: const Text('ELYXR'),
+        ),
+      );
+    }
+
+    // Idle: one Text, its geometry fixed forever. Measure it once so the sweep
+    // spans exactly the glyphs; only the foreground gradient changes per frame.
+    final idle = TextStyle(
       fontFamily: Fonts.chassis,
       fontSize: 15,
       fontWeight: FontWeight.w700,
-      letterSpacing: lit ? 15 * 0.24 : 15 * 0.4,
-      color: lit ? p.a : p.ml,
+      letterSpacing: 15 * 0.4,
     );
-    final mark = AnimatedDefaultTextStyle(
-      duration: const Duration(milliseconds: 200),
-      style: baseStyle.copyWith(
-        shadows: lit
-            ? [Shadow(color: p.a, blurRadius: 11)]
-            : const [Shadow(color: Color(0xFF0C0D0F), offset: Offset(0, 1))],
-      ),
-      child: const Text('ELYXR'),
-    );
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final probe = TextPainter(
+      text: TextSpan(text: 'ELYXR', style: idle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final w = probe.width, h = probe.height;
+    final hi = Color.lerp(p.ml, p.a, 0.45)!; // the gleam colour: a gentle brighten
 
-    Widget content;
-    if (lit || reduceMotion) {
-      content = mark;
-    } else {
-      final hi = Color.lerp(p.ml, p.a, 0.45)!; // a clearer gleam, still gentle
-      // A shadowless copy of the glyphs, recoloured by the travelling gradient.
-      // Shadowless so srcATop can't also light the emboss (which ghosted a second
-      // copy ~1px below); laid OVER the mark, so the emboss below still shows.
-      final gleamGlyphs = Text('ELYXR', style: baseStyle);
-      // Base = the embossed mark, permanently mounted (never swapped out, so it
-      // never blinks). Overlay = the sweep, present only during 0 < t < 1, sized
-      // to the mark and sitting pixel-for-pixel on top. The Stack takes the
-      // mark's size (the overlay is Positioned.fill), so layout never changes.
-      content = Stack(
-        children: [
-          mark,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _shine,
-                builder: (context, _) {
-                  final t = _shine.value;
-                  if (t <= 0.0 || t >= 1.0) return const SizedBox.shrink();
-                  final c = -0.3 + t * 1.6; // bright band travels left→right, off
-                  return ShaderMask(
-                    blendMode: BlendMode.srcATop,
-                    shaderCallback: (rect) => LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [p.ml, hi, p.ml],
-                      stops: [
-                        (c - 0.14).clamp(0.0, 1.0),
-                        c.clamp(0.0, 1.0),
-                        (c + 0.14).clamp(0.0, 1.0),
-                      ],
-                    ).createShader(rect),
-                    child: gleamGlyphs,
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-    return Padding(padding: const EdgeInsets.only(left: 6), child: content);
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: AnimatedBuilder(
+        animation: _shine,
+        builder: (context, _) {
+          final t = _shine.value;
+          Paint? fg;
+          if (t > 0.0 && t < 1.0) {
+            // The bright band's centre travels from off the left to off the right.
+            final c = -0.2 + t * 1.4;
+            fg = Paint()
+              ..shader = LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [p.ml, p.ml, hi, p.ml, p.ml],
+                stops: [
+                  0.0,
+                  (c - 0.16).clamp(0.0, 1.0),
+                  c.clamp(0.0, 1.0),
+                  (c + 0.16).clamp(0.0, 1.0),
+                  1.0,
+                ],
+              ).createShader(Rect.fromLTWH(0, 0, w, h));
+          }
+          // color and foreground are mutually exclusive: solid ml at rest, the
+          // gradient fill mid-sweep. The emboss shadow is constant either way.
+          return Text(
+            'ELYXR',
+            style: fg == null
+                ? idle.copyWith(color: p.ml, shadows: emboss)
+                : idle.copyWith(foreground: fg, shadows: emboss),
+          );
+        },
+      ),
+    );
   }
 
   @override
