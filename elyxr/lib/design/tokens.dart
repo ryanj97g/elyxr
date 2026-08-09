@@ -96,22 +96,45 @@ Future<void> loadCustomFonts() async {
   }
 }
 
+/// Locate the repo's live `assets/fonts/custom/` on disk (desktop dev only).
+/// There's no recorded repo path, so look where the app actually runs from: the
+/// working directory and the executable's own location, plus their ancestors,
+/// checking both `<dir>/assets/fonts/custom` (running from the elyxr package,
+/// e.g. `flutter run`) and `<dir>/elyxr/assets/fonts/custom` (running from the
+/// repo root or a build tree beside the source). Returns the first that exists,
+/// or null on a packaged app with no source tree next to it.
+Directory? _repoCustomFontDir() {
+  final seeds = <String>{
+    Directory.current.path,
+    File(Platform.resolvedExecutable).parent.path,
+  };
+  for (final seed in seeds) {
+    var d = Directory(seed);
+    for (var i = 0; i < 12; i++) {
+      for (final rel in const ['assets/fonts/custom', 'elyxr/assets/fonts/custom']) {
+        final cand = Directory('${d.path}/$rel');
+        if (cand.existsSync()) return cand;
+      }
+      final parent = d.parent;
+      if (parent.path == d.path) break; // reached the filesystem root
+      d = parent;
+    }
+  }
+  return null;
+}
+
 /// A manual, on-disk refresh — for previewing a font you've dropped into the
 /// folder but haven't committed/rebuilt yet. Startup's loadCustomFonts reads the
 /// *bundled* copy; this reads the *actual* assets/fonts/custom/ directory in the
-/// repo (found via the path lymnal recorded at install), so uncommitted fonts
-/// show up too. Loads any new .ttf/.otf and returns how many faces it added.
+/// repo (located from where the app runs — see _repoCustomFontDir), so
+/// uncommitted fonts show up too. Loads any new .ttf/.otf and returns how many
+/// faces it added. Desktop only: a phone has no repo folder to scan.
 Future<int> reloadCustomFontsFromDisk() async {
+  if (Platform.isAndroid || Platform.isIOS) return 0;
   var added = 0;
   try {
-    final home = Platform.environment['HOME'];
-    if (home == null) return 0;
-    final repoFile = File('$home/.config/lymnal/repo.path');
-    if (!repoFile.existsSync()) return 0;
-    final repo = (await repoFile.readAsString()).trim();
-    if (repo.isEmpty) return 0;
-    final dir = Directory('$repo/elyxr/assets/fonts/custom');
-    if (!dir.existsSync()) return 0;
+    final dir = _repoCustomFontDir();
+    if (dir == null) return 0;
     final files = dir.listSync().whereType<File>().toList()
       ..sort((a, b) => a.path.compareTo(b.path));
     for (final f in files) {
