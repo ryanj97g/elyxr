@@ -261,9 +261,9 @@ class _NostalgiaRow extends StatelessWidget {
               // once it's done — but ONLY if 2000's DEMO MODE is on and nothing
               // was already playing. Without demo mode, Nostalgia's visuals come
               // up with no music hijack; a live trove stream is always left be.
-              if (s.demoMode && !music.active) {
+              if (s.demoMode2000s && !music.active) {
                 laughDone.then((_) {
-                  if (s.nostalgia && s.demoMode && !music.active) {
+                  if (s.nostalgia && s.demoMode2000s && !music.active) {
                     music.startBuiltIn();
                   }
                 });
@@ -289,7 +289,7 @@ class _NostalgiaRow extends StatelessWidget {
                 Tooltip(
                   message: 'Matrix screensaver\nCursor trail\nTransfer log\n'
                       'Snake (wordmark ×7)\nNonsense button\nSound effects\n'
-                      "2000's demo music (toggle below)",
+                      "2000's DEMO MODE (toggle below)",
                   triggerMode: TooltipTriggerMode.longPress,
                   waitDuration: const Duration(days: 3650),
                   showDuration: const Duration(seconds: 6),
@@ -318,8 +318,8 @@ class _NostalgiaRow extends StatelessWidget {
         if (on)
           GestureDetector(
             onTap: () {
-              final now = !s.demoMode;
-              s.demoMode = now;
+              final now = !s.demoMode2000s;
+              s.demoMode2000s = now;
               final music = context.read<MusicController>();
               if (now) {
                 // On: start the demo soundtrack now, unless something's already
@@ -338,7 +338,7 @@ class _NostalgiaRow extends StatelessWidget {
                   Expanded(
                     child: Text("2000's DEMO MODE", style: glass(15, p.mid)),
                   ),
-                  _toggle(p, s.demoMode),
+                  _toggle(p, s.demoMode2000s),
                 ],
               ),
             ),

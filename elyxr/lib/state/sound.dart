@@ -14,11 +14,11 @@ class SoundController {
   final SettingsController settings;
   SoundController(this.settings);
 
-  bool get _on => settings.nostalgia && settings.sound;
+  bool get _on => settings.nostalgia;
 
-  /// The laugh that fires every time Nostalgia Mode is switched on. It is *not*
-  /// gated by the Sound switch, and each call is its own player, so rapid toggles
-  /// stack rather than cut each other off. The returned future completes when the
+  /// The laugh that fires every time Nostalgia Mode is switched on. Each call is
+  /// its own player, so rapid toggles stack rather than cut each other off. The
+  /// returned future completes when the
   /// laugh has finished playing, so the caller can hold the soundtrack until then
   /// (letting the opening laugh land clean before the music comes in).
   Future<void> laugh() => _shoot('sounds/laugh.mp3');
