@@ -16,6 +16,7 @@ import '../api/api_error.dart';
 import '../api/local_trove_client.dart';
 import '../api/lymnal_client.dart';
 import '../api/models.dart';
+import '../util/lymnal_host.dart';
 import '../util/platform_caps.dart';
 
 /// Where the bearer token is kept. Abstracted so tests can swap the keyring for
@@ -92,11 +93,12 @@ class SessionController extends ChangeNotifier {
   /// address, since that's how a device is found and approved.
   static const _localProxy = 'http://127.0.0.1:7749';
 
-  /// Where the paired client points. Desktop has a local lymnal on loopback (it
-  /// owns lymbo and fronts the trove). A phone has no local proxy, so it talks
-  /// straight to the remote lymnal over the tailnet, carrying the bearer token
-  /// itself — the same address pairing/discovery already use. (No local lymbo on
-  /// mobile yet; that's the on-device lymnal, still to come.)
+  /// Where the paired client points: its own local lymnal on loopback, which
+  /// owns lymbo and fronts the trove. True everywhere the app runs its own
+  /// lymnal — desktop (an OS service) and Android (a foreground service).
+  /// Discovery and pairing still use the remote address, since that's how a
+  /// device is found and approved. (The false branch is a defensive fallback
+  /// for any platform without a local lymnal.)
   String get _clientBase =>
       Caps.hasLocalLymnal ? _localProxy : _baseUrl(_serverAddress!);
 
@@ -113,9 +115,27 @@ class SessionController extends ChangeNotifier {
       return;
     }
     _client = _factory(_clientBase, token: _token);
-    await refresh();
-    await _syncLink();
+    if (Caps.isAndroid) {
+      // Bring the on-device lymnal up first, then wait for its loopback proxy to
+      // start answering — right after launch it needs a moment to bind.
+      await _syncLink();
+      await _connectWithRetry();
+    } else {
+      await refresh();
+      await _syncLink();
+    }
     _startPolling();
+  }
+
+  /// Retry the first health check while a just-started local lymnal binds its
+  /// loopback port. Falls through to whatever status the last attempt set, so
+  /// polling still recovers if it isn't up within the window.
+  Future<void> _connectWithRetry() async {
+    for (var i = 0; i < 12; i++) {
+      await refresh();
+      if (_status == LinkStatus.ok) return;
+      await Future.delayed(const Duration(milliseconds: 700));
+    }
   }
 
   /// Bumped when the server announces (over the live stream) that an update is
@@ -156,6 +176,10 @@ class SessionController extends ChangeNotifier {
   /// which server to stay connected to — that's what keeps the device updated
   /// with the app closed. When the contents change, nudge lymnal to re-read.
   Future<void> _syncLink() async {
+    if (Caps.isAndroid) {
+      await _syncLinkAndroid();
+      return;
+    }
     final home = _homeDir();
     if (home == null) return;
     final f = File('$home/.config/lymnal/link.json');
@@ -177,6 +201,33 @@ class SessionController extends ChangeNotifier {
       await f.parent.create(recursive: true);
       await f.writeAsString(content);
       await _restartLymnal(running: true);
+    } catch (_) {}
+  }
+
+  /// Android has no $HOME and can't shell out, so link.json goes into the app's
+  /// private data dir (where the foreground service points HOME/LYMNAL_CONFIG),
+  /// and the service — not systemd — runs lymnal. The service reads link.json
+  /// only at start, so it's stopped and restarted to pick up changes. Unlike
+  /// desktop we always (re)start when paired: the OS may have killed the service.
+  Future<void> _syncLinkAndroid() async {
+    final dataDir = await LymnalHost.dataDir();
+    if (dataDir == null) return;
+    final f = File('$dataDir/lymnal/link.json');
+    try {
+      if (_token == null || _serverAddress == null) {
+        if (await f.exists()) await f.delete();
+        await LymnalHost.stop(); // unpaired — stop the proxy
+        return;
+      }
+      final content = jsonEncode({
+        'server': _serverAddress,
+        'token': _token,
+        'name': _serverName ?? _serverAddress,
+      });
+      await f.parent.create(recursive: true);
+      await f.writeAsString(content);
+      await LymnalHost.stop();
+      await LymnalHost.start();
     } catch (_) {}
   }
 
@@ -311,10 +362,15 @@ class SessionController extends ChangeNotifier {
     await _prefs.setString('serverAddress', address);
     await _prefs.setString('serverName', _serverName!);
     _client = _factory(_clientBase, token: _token);
-    // Write link.json first so lymnal restarts as this device's local proxy,
-    // then refresh — which retries until the proxy is answering.
+    // Write link.json first so lymnal (re)starts as this device's local proxy,
+    // then refresh. On Android the just-started service needs a moment to bind,
+    // so retry until the loopback proxy answers.
     await _syncLink();
-    await refresh();
+    if (Caps.isAndroid) {
+      await _connectWithRetry();
+    } else {
+      await refresh();
+    }
   }
 
   /// Forget this server: delete the token, drop the pairing, and return to

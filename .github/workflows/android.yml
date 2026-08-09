@@ -49,7 +49,9 @@ jobs:
           build=$(git rev-list --count HEAD)
           commit=$(git rev-parse --short HEAD)
           # The repo only carries the Linux runner; scaffold the Android one.
-          flutter create --platforms=android .
+          # --org fixes the package to com.elyxr.elyxr so the committed
+          # MainActivity/LymnalService (package com.elyxr.elyxr) drop straight in.
+          flutter create --platforms=android --org com.elyxr .
 
           # The app's own SDK levels: minSdk 23 covers flutter_secure_storage's
           # Keystore backend; target 34.
@@ -79,6 +81,23 @@ jobs:
             cat "$root_groovy" >> "$tmp"; mv "$tmp" "$root_groovy"
             echo "--- root groovy head ---"; head -14 "$root_groovy"
           fi
+
+          # Drop in the real MainActivity (MethodChannel bridge to the lymnal
+          # service) and the foreground service that execs lymnal. flutter create
+          # already wrote a stub MainActivity in this package; overwrite it.
+          kdir=android/app/src/main/kotlin/com/elyxr/elyxr
+          mkdir -p "$kdir"
+          cp packaging/android/MainActivity.kt "$kdir/MainActivity.kt"
+          cp packaging/android/LymnalService.kt "$kdir/LymnalService.kt"
+
+          # Manifest: the permissions lymnal needs (network + a long-running
+          # foreground service + its notification) and the <service> declaration.
+          # Single-line sed only (GNU sed turns \n in the replacement into real
+          # newlines); heredocs would break this YAML block scalar.
+          manifest=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application#' "$manifest"
+          sed -i 's#</application>#    <service android:name=".LymnalService" android:foregroundServiceType="dataSync" android:exported="false"/>\n    </application>#' "$manifest"
+          echo "--- AndroidManifest.xml ---"; cat "$manifest"
 
           # Bundle lymnal INSIDE the app so the phone runs its own local daemon
           # with lymbo — the same client -> local-lymnal -> trove model as desktop.
