@@ -150,7 +150,7 @@ class LymnalClient {
     return _ok(r);
   }
 
-  /// Ask the local proxy to push anything stranded in limbo now (the reconcile /
+  /// Ask the local proxy to push anything stranded in lymbo now (the reconcile /
   /// refresh action). Returns how many edits are still held afterwards.
   Future<int> reconcile() async {
     final r = await _send(() => _http.post(
@@ -173,7 +173,7 @@ class LymnalClient {
   // ---- uploads (§04, §05) ----
 
   /// Uploads talk to the *local* proxy, but a chunk carries real bytes and a
-  /// commit waits on limbo — both can take longer than an ordinary call, so they
+  /// commit waits on lymbo — both can take longer than an ordinary call, so they
   /// get a roomy fuse. (Too tight a fuse here is what once made a big file's
   /// commit "time out" while it was in fact still landing.)
   static const _uploadTimeout = Duration(seconds: 120);

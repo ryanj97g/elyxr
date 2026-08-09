@@ -1,11 +1,11 @@
 //! The client proxy.
 //!
 //! On a client, lymnal runs a small local HTTP server that the app (and the
-//! gate) talk to, and forwards every call to the remote trove — with limbo in
+//! gate) talk to, and forwards every call to the remote trove — with lymbo in
 //! front of it.
 //!
-//!   reads  (`/v1/download`)  are cached in limbo and served from there next time.
-//!   writes (`/v1/upload/*`)  assemble into limbo, push to the trove, and unpin
+//!   reads  (`/v1/download`)  are cached in lymbo and served from there next time.
+//!   writes (`/v1/upload/*`)  assemble into lymbo, push to the trove, and unpin
 //!                            on success. If the trove is unreachable the file
 //!                            stays *held*, and a background pusher keeps trying
 //!                            until it lands — so "save and you're done" holds
@@ -30,7 +30,7 @@ use axum::{
 use serde_json::{json, Value};
 use tokio::sync::Notify;
 
-use crate::limbo::{Limbo, StoreErr};
+use crate::lymbo::{Lymbo, StoreErr};
 
 /// An upload being assembled locally before it's pushed to the trove.
 struct Pending {
@@ -45,14 +45,14 @@ pub struct Proxy {
     remote: String,
     /// The bearer token this device was approved with.
     token: String,
-    limbo: Limbo,
+    lymbo: Lymbo,
     /// Uploads mid-assembly, keyed by the id we handed the app.
     pending: Mutex<HashMap<String, Pending>>,
     /// Paths currently held (unsynced), with the mtime to push them under. This
     /// is the outbound push queue; it's persisted so a restart mid-batch never
-    /// strands a held file (the bytes live in limbo on disk).
+    /// strands a held file (the bytes live in lymbo on disk).
     held: Mutex<HashMap<String, i64>>,
-    /// Where the held queue is persisted, inside the limbo dir.
+    /// Where the held queue is persisted, inside the lymbo dir.
     held_state: PathBuf,
     /// Wakes the background pusher the instant a commit lands, so a file doesn't
     /// wait for the next timer tick to start heading for the trove.
@@ -71,7 +71,7 @@ pub struct Proxy {
 }
 
 impl Proxy {
-    pub fn new(remote: String, token: String, limbo: Limbo) -> Proxy {
+    pub fn new(remote: String, token: String, lymbo: Lymbo) -> Proxy {
         let quick = ureq::AgentBuilder::new()
             .timeout_connect(Duration::from_secs(5))
             .timeout(Duration::from_secs(30))
@@ -80,13 +80,13 @@ impl Proxy {
             .timeout_connect(Duration::from_secs(5))
             .build();
         // The held queue survives a restart: reload whatever hadn't finished
-        // pushing last time. The bytes are still in limbo on disk.
-        let held_state = limbo.aux_path("held.json");
+        // pushing last time. The bytes are still in lymbo on disk.
+        let held_state = lymbo.aux_path("held.json");
         let held = load_held(&held_state);
         Proxy {
             remote,
             token,
-            limbo,
+            lymbo,
             pending: Mutex::new(HashMap::new()),
             held: Mutex::new(held),
             held_state,
@@ -130,7 +130,7 @@ impl Proxy {
     }
 
     /// How many files are still waiting to reach the trove. The updater reads this
-    /// so a restart never fires while limbo still holds unsynced work.
+    /// so a restart never fires while lymbo still holds unsynced work.
     pub fn held_count(&self) -> usize {
         self.held.lock().unwrap().len()
     }
@@ -149,8 +149,8 @@ impl Proxy {
             Err(_) => return self.held.lock().unwrap().len(),
         };
         // Oldest first, so the file that has waited longest goes first.
-        let keys: Vec<String> = self.limbo.held_keys();
-        // Fall back to the queue's own order if limbo has forgotten its in-memory
+        let keys: Vec<String> = self.lymbo.held_keys();
+        // Fall back to the queue's own order if lymbo has forgotten its in-memory
         // index (e.g. right after a restart) — the persisted queue is the truth.
         let keys = if keys.is_empty() {
             self.held.lock().unwrap().keys().cloned().collect()
@@ -163,7 +163,7 @@ impl Proxy {
             let Some(mtime) = self.held.lock().unwrap().get(&path).copied() else {
                 continue;
             };
-            let Some(bytes) = self.limbo.read(&path) else {
+            let Some(bytes) = self.lymbo.read(&path) else {
                 // The bytes are genuinely gone; drop the stale queue entry.
                 self.held.lock().unwrap().remove(&path);
                 changed = true;
@@ -178,7 +178,7 @@ impl Proxy {
                 if h.get(&path).copied() == Some(mtime) {
                     h.remove(&path);
                     drop(h);
-                    self.limbo.set_held(&path, false); // now passing-through
+                    self.lymbo.set_held(&path, false); // now passing-through
                     changed = true;
                 }
             }
@@ -221,7 +221,7 @@ fn now() -> i64 {
         .unwrap_or(0)
 }
 
-// --- uploads → limbo → trove -------------------------------------------------
+// --- uploads → lymbo → trove -------------------------------------------------
 
 async fn upload_init(State(px): State<Arc<Proxy>>, Json(body): Json<Value>) -> Response {
     let path = body.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -312,20 +312,20 @@ async fn upload_chunk(
 async fn upload_commit(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>) -> Response {
     let Some(p) = px.pending.lock().unwrap().remove(&id) else {
         // Unknown id: the upload was already committed here (a retried commit whose
-        // first response the app didn't get), so the file is already safe in limbo.
+        // first response the app didn't get), so the file is already safe in lymbo.
         // Don't fail it — a false error here is exactly what stranded uploads
         // before, reporting failures for files that had actually landed.
         return Json(json!({ "held": true })).into_response();
     };
-    // Land the whole file in limbo, held — it's the only copy until it reaches the
+    // Land the whole file in lymbo, held — it's the only copy until it reaches the
     // trove. This is a local disk write, so commit returns fast and can't time the
     // app out while a large file crosses the network.
-    match px.limbo.store(&p.path, &p.buf, true) {
+    match px.lymbo.store(&p.path, &p.buf, true) {
         Ok(()) => {}
         Err(StoreErr::NoRoomHeldBlocks) => {
             return coded(
                 507,
-                "LIMBO_FULL",
+                "LYMBO_FULL",
                 "Unsynced changes can't be dropped, and free space is low. Save them somewhere local, restore the lymnal bond, then retry the sync.",
             );
         }
@@ -334,7 +334,7 @@ async fn upload_commit(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>)
     px.held.lock().unwrap().insert(p.path.clone(), p.mtime);
     px.persist_held();
 
-    // Hand it to the background pusher and return now. The file is safe in limbo,
+    // Hand it to the background pusher and return now. The file is safe in lymbo,
     // so from the app's side the save is done; the pusher lands it on the trove and
     // unpins it, retrying through any lapse. Pushing here inline (as it once did)
     // is what made a big file's commit outrun the app's timeout, so it retried,
@@ -344,7 +344,7 @@ async fn upload_commit(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>)
     Json(json!({ "path": p.path, "held": true })).into_response()
 }
 
-/// `/v1/reconcile` — the refresh control. Push anything stranded in limbo now.
+/// `/v1/reconcile` — the refresh control. Push anything stranded in lymbo now.
 /// The drain is blocking, so it runs on a blocking thread rather than stalling an
 /// async worker; the single-flight lock means it won't collide with the timer's
 /// drain — whichever holds the lock does the work, the other reports the backlog.
@@ -499,13 +499,13 @@ async fn download(State(px): State<Arc<Proxy>>, req: Request) -> Response {
         return coded(400, "BAD_PATH", "The download needs a path.");
     };
 
-    if let Some(bytes) = px.limbo.read(&key) {
+    if let Some(bytes) = px.lymbo.read(&key) {
         return ranged(bytes, range_from);
     }
 
     // Fetch the whole file from the trove, forwarding the original query verbatim
     // (so a path with spaces or other characters survives). Range is a header, so
-    // it isn't here — limbo always caches the complete copy.
+    // it isn't here — lymbo always caches the complete copy.
     let url = px.url(uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/v1/download"));
     let auth = px.auth();
     let agent = px.stream.clone();
@@ -523,7 +523,7 @@ async fn download(State(px): State<Arc<Proxy>>, req: Request) -> Response {
 
     match fetched {
         Ok(Ok(bytes)) => {
-            let _ = px.limbo.store(&key, &bytes, false); // passing-through
+            let _ = px.lymbo.store(&key, &bytes, false); // passing-through
             ranged(bytes, range_from)
         }
         Ok(Err(parts)) => parts.into_response(),

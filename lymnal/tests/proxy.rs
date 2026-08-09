@@ -1,6 +1,6 @@
 //! Does the client proxy actually forward a list to the trove and hand the
 //! response back? (Regression cover for the "READING…" hang.) And does an upload
-//! commit return the moment the file is safe in limbo, with the push to the trove
+//! commit return the moment the file is safe in lymbo, with the push to the trove
 //! happening in the background? (Regression cover for big files "timing out" on
 //! commit and reporting a failure for a file that in fact landed.)
 
@@ -12,7 +12,7 @@ use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use lymnal::limbo::Limbo;
+use lymnal::lymbo::Lymbo;
 use lymnal::proxy::{router, Proxy};
 
 #[tokio::test]
@@ -35,8 +35,8 @@ async fn proxy_forwards_a_list() {
 
     // The proxy pointing at that stand-in.
     let dir = tempfile::tempdir().unwrap();
-    let limbo = Limbo::open(dir.path()).unwrap();
-    let proxy = Arc::new(Proxy::new(addr.to_string(), "tok".into(), limbo));
+    let lymbo = Lymbo::open(dir.path()).unwrap();
+    let proxy = Arc::new(Proxy::new(addr.to_string(), "tok".into(), lymbo));
     let app = router(proxy);
 
     // A list request through the proxy comes back with the backend's entries.
@@ -88,8 +88,8 @@ async fn commit_returns_held_then_pusher_lands_it() {
     tokio::spawn(async move { axum::serve(listener, backend).await.unwrap() });
 
     let dir = tempfile::tempdir().unwrap();
-    let limbo = Limbo::open(dir.path()).unwrap();
-    let proxy = Arc::new(Proxy::new(addr.to_string(), "tok".into(), limbo));
+    let lymbo = Lymbo::open(dir.path()).unwrap();
+    let proxy = Arc::new(Proxy::new(addr.to_string(), "tok".into(), lymbo));
     let app = router(proxy.clone());
 
     // init → chunk → commit, all through the proxy.

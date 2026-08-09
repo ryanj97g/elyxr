@@ -10,7 +10,7 @@ pub mod devices;
 pub mod error;
 pub mod events;
 pub mod handlers;
-pub mod limbo;
+pub mod lymbo;
 pub mod limits;
 pub mod model;
 pub mod pairing;

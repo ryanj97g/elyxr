@@ -411,9 +411,9 @@ class TransferController extends ChangeNotifier {
       await raf.close();
     }
     if (t.cancelRequested || t.pauseRequested) return;
-    // Commit returns as soon as the file is safely held in limbo; lymnal lands it
+    // Commit returns as soon as the file is safely held in lymbo; lymnal lands it
     // on the trove from there, retrying through any lapse. "Saved" means "in
-    // limbo", so the app is done the moment this returns.
+    // lymbo", so the app is done the moment this returns.
     final res = await client.uploadCommit(t.uploadId!);
     t.replacement = res['replaced'] as bool? ?? t.replacement;
     t.doneBytes = t.totalBytes;

@@ -1,6 +1,6 @@
 // Runs the optional folder mount: launches the `gate` program with the server
 // address, the bearer token, and where to mount, then stops it on request. gate
-// itself is the filesystem window (it rides the local lymnal proxy's limbo);
+// itself is the filesystem window (it rides the local lymnal proxy's lymbo);
 // this just starts and stops it, reflects whether it's running, and clears the
 // mount point away afterwards so no phantom folder is left behind.
 
@@ -56,7 +56,7 @@ class TroveMountController extends ChangeNotifier {
         const [],
         environment: {
           // The gate talks to the *local* lymnal proxy, not the remote — so it
-          // rides limbo (cached reads, queued writes) like the app does. The
+          // rides lymbo (cached reads, queued writes) like the app does. The
           // proxy injects the real token; the gate's own is unused.
           'ELYXR_SERVER': '127.0.0.1:7749',
           'ELYXR_TOKEN': token,

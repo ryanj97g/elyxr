@@ -571,7 +571,7 @@ class _Row extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       // Single click = select this one file (its details fill the box below).
-      // Double click = open it (a folder navigates in; a file downloads to limbo
+      // Double click = open it (a folder navigates in; a file downloads to lymbo
       // and opens in your default app, edits syncing back — no dialog, no second
       // click). Click-and-hold = multi-select. Shift-click extends a range.
       onTap: () {
@@ -664,7 +664,7 @@ void _selectEntry(
 }
 
 /// Open an entry the way a double-click should: a folder navigates into itself;
-/// a file is downloaded to limbo and handed to the OS default app, with edits
+/// a file is downloaded to lymbo and handed to the OS default app, with edits
 /// synced back to the trove (see OpenExternal) — no preview overlay, no dialog.
 void _openEntry(BuildContext context, BrowseController browse, Entry entry) {
   if (entry.isDir) {
@@ -711,7 +711,7 @@ class _FileGrid extends StatelessWidget {
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
             // Single click = select this one; double-click = open it (folder
-            // navigates, file opens in the default app via limbo); click-and-hold
+            // navigates, file opens in the default app via lymbo); click-and-hold
             // = multi-select.
             onTap: () => _selectEntry(context, browse, i, e),
             onDoubleTap: () => _openEntry(context, browse, e),

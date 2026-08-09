@@ -1,4 +1,4 @@
-//! limbo — the client's lobby.
+//! lymbo — the client's lobby.
 //!
 //! A capped working-set and outbound queue, owned by lymnal on a client. It is a
 //! *place* work passes through, never storage. Every entry is in one of two
@@ -34,7 +34,7 @@ struct Inner {
     order: VecDeque<String>,
 }
 
-pub struct Limbo {
+pub struct Lymbo {
     dir: PathBuf,
     inner: Mutex<Inner>,
 }
@@ -49,11 +49,11 @@ pub enum StoreErr {
     NoRoomHeldBlocks,
 }
 
-impl Limbo {
-    pub fn open(dir: impl AsRef<Path>) -> std::io::Result<Limbo> {
+impl Lymbo {
+    pub fn open(dir: impl AsRef<Path>) -> std::io::Result<Lymbo> {
         let dir = dir.as_ref().to_path_buf();
         std::fs::create_dir_all(&dir)?;
-        Ok(Limbo {
+        Ok(Lymbo {
             dir,
             inner: Mutex::new(Inner {
                 entries: HashMap::new(),
@@ -146,7 +146,7 @@ impl Limbo {
 
     // --- room-making --------------------------------------------------------
 
-    /// Free bytes left on the disk holding limbo, plus the space the incoming
+    /// Free bytes left on the disk holding lymbo, plus the space the incoming
     /// key would reclaim if it's replacing an existing entry.
     fn free_after_replacing(&self, inner: &Inner, key: &str) -> u64 {
         let reclaimed = inner.entries.get(key).map(|e| e.size).unwrap_or(0);
@@ -164,7 +164,7 @@ impl Limbo {
     /// passing-through work is left to evict:
     ///   - a `held` write is accepted anyway — it's the only copy, so it's
     ///     allowed to cross the reserve;
-    ///   - a passing-through write is refused (§ failsafe), unless limbo is
+    ///   - a passing-through write is refused (§ failsafe), unless lymbo is
     ///     otherwise empty, in which case a single oversized item is allowed
     ///     through (the caller syncs and unpins it right away).
     fn make_room(&self, inner: &mut Inner, incoming_key: &str, size: u64, held: bool) -> bool {
@@ -229,7 +229,7 @@ mod tests {
     #[test]
     fn held_survives_and_lists_oldest_first() {
         let d = tempfile::tempdir().unwrap();
-        let l = Limbo::open(d.path()).unwrap();
+        let l = Lymbo::open(d.path()).unwrap();
         l.store("a", &[0u8; 10], true).unwrap();
         l.store("b", &[0u8; 10], true).unwrap();
         assert_eq!(l.held_keys(), vec!["a".to_string(), "b".to_string()]);
@@ -241,7 +241,7 @@ mod tests {
     #[test]
     fn read_round_trips() {
         let d = tempfile::tempdir().unwrap();
-        let l = Limbo::open(d.path()).unwrap();
+        let l = Lymbo::open(d.path()).unwrap();
         l.store("k", b"hello", false).unwrap();
         assert_eq!(l.read("k").as_deref(), Some(&b"hello"[..]));
         l.drop("k");

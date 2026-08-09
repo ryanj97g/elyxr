@@ -87,7 +87,7 @@ class SessionController extends ChangeNotifier {
   String _baseUrl(String address) => 'http://$address';
 
   /// A paired client talks to its *own* lymnal, which proxies to the trove with
-  /// limbo in front — never across the tailnet directly, and never holding a
+  /// lymbo in front — never across the tailnet directly, and never holding a
   /// token itself (local lymnal injects it). Discovery and pairing still use the
   /// remote address, since that's how a device is found and approved.
   static const _localProxy = 'http://127.0.0.1:7749';

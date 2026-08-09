@@ -4,7 +4,7 @@
 // is handed to the OS ("open with your default app"); the temp is then watched.
 // A real change — writes settled for 2 seconds, and the content actually
 // different — is uploaded back through the local lymnal proxy, which queues it
-// into limbo and pushes it to the trove. A pure view changes nothing, so it
+// into lymbo and pushes it to the trove. A pure view changes nothing, so it
 // syncs nothing. Watching ends when the file goes quiet for 10 minutes.
 
 import 'dart:async';
@@ -55,7 +55,7 @@ class OpenExternal {
     _watching.add(remotePath);
 
     // The temp dir that holds this working copy (createTemp made one per open).
-    // Deleting it when we're done is what reclaims the space — this is "limbo".
+    // Deleting it when we're done is what reclaims the space — this is "lymbo".
     final tempDir = local.parent;
     // Content already safely in the trove (initial download == the trove copy).
     var syncedHash = 0;
@@ -173,7 +173,7 @@ class OpenExternal {
   }
 
   /// Upload the edited bytes back. This goes to the local proxy, which holds it
-  /// in limbo and pushes it to the trove (queuing if the trove is unreachable).
+  /// in lymbo and pushes it to the trove (queuing if the trove is unreachable).
   static Future<void> _syncBack(
       LymnalClient client, String remotePath, List<int> bytes, int mtime) async {
     final session = await client.uploadInit(remotePath, bytes.length, mtime: mtime);

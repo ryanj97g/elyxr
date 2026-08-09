@@ -84,18 +84,30 @@ fn run_service(config_path: PathBuf) -> anyhow::Result<()> {
 }
 
 /// The client's local caching proxy: a small HTTP server on loopback that the
-/// app and the gate talk to, forwarding to the remote trove with limbo in front.
+/// app and the gate talk to, forwarding to the remote trove with lymbo in front.
 /// The app points here instead of at the remote, so it never holds a token and
 /// never reaches across the tailnet itself.
 async fn run_proxy(link: agent::Link) -> anyhow::Result<()> {
-    let cache_dir = limbo_dir();
-    let limbo = lymnal::limbo::Limbo::open(&cache_dir)?;
+    let cache_dir = lymbo_dir();
+    // One-time migration: earlier builds kept this cache at `~/.cache/lymnal/limbo`.
+    // If that old dir is still there and the new one isn't, move it across whole —
+    // so unsynced (held) files and the persisted push queue survive the rename
+    // instead of being stranded under the old name.
+    if !cache_dir.exists() {
+        if let Some(parent) = cache_dir.parent() {
+            let old = parent.join("limbo");
+            if old.is_dir() {
+                let _ = std::fs::rename(&old, &cache_dir);
+            }
+        }
+    }
+    let lymbo = lymnal::lymbo::Lymbo::open(&cache_dir)?;
     let proxy = std::sync::Arc::new(lymnal::proxy::Proxy::new(
         link.server.clone(),
         link.token.clone(),
-        limbo,
+        lymbo,
     ));
-    // The outbound push queue. A commit lands the file in limbo (held) and wakes
+    // The outbound push queue. A commit lands the file in lymbo (held) and wakes
     // this loop, which pushes it to the trove and unpins it. It also runs every
     // 10s as a backstop, and — because the interval fires immediately on its
     // first tick — flushes anything the last run left held the moment we start.
@@ -132,15 +144,15 @@ async fn run_proxy(link: agent::Link) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Where limbo keeps its files: `~/.cache/lymnal/limbo` (honoring XDG on Linux,
+/// Where lymbo keeps its files: `~/.cache/lymnal/lymbo` (honoring XDG on Linux,
 /// falling back to the user profile on Windows).
-fn limbo_dir() -> PathBuf {
+fn lymbo_dir() -> PathBuf {
     let base = std::env::var("XDG_CACHE_HOME")
         .ok()
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| lymnal::config::home_dir().join(".cache"));
-    base.join("lymnal").join("limbo")
+    base.join("lymnal").join("lymbo")
 }
 
 /// Where the tray's menu points: the elyxr repo (for "Update now") and the
