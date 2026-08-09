@@ -174,7 +174,13 @@ class MusicPlayerPanel extends StatelessWidget {
 
   /// Scroll the wheel anywhere over the deck to nudge the volume — up is louder.
   /// A wheel signal isn't a drag, so it never disturbs the seek bar.
+  ///
+  /// opaque, NOT the default deferToChild: the deck is mostly gaps between the
+  /// controls, and deferToChild only catches the wheel directly over a painted
+  /// widget — so scrolling in the empty space did nothing. opaque claims the
+  /// whole panel rectangle, so a scroll ANYWHERE over it counts.
   Widget _wheel(MusicController m, Widget child) => Listener(
+        behavior: HitTestBehavior.opaque,
         onPointerSignal: (sig) {
           if (sig is PointerScrollEvent) {
             m.nudgeVolume(sig.scrollDelta.dy < 0 ? 0.05 : -0.05);
