@@ -16,6 +16,7 @@ import '../api/api_error.dart';
 import '../api/local_trove_client.dart';
 import '../api/lymnal_client.dart';
 import '../api/models.dart';
+import '../util/platform_caps.dart';
 
 /// Where the bearer token is kept. Abstracted so tests can swap the keyring for
 /// memory (the keyring needs a desktop secret service that headless CI lacks).
@@ -86,11 +87,18 @@ class SessionController extends ChangeNotifier {
 
   String _baseUrl(String address) => 'http://$address';
 
-  /// A paired client talks to its *own* lymnal, which proxies to the trove with
-  /// lymbo in front — never across the tailnet directly, and never holding a
-  /// token itself (local lymnal injects it). Discovery and pairing still use the
-  /// remote address, since that's how a device is found and approved.
+  /// A paired client on desktop talks to its *own* lymnal, which proxies to the
+  /// trove with lymbo in front. Discovery and pairing still use the remote
+  /// address, since that's how a device is found and approved.
   static const _localProxy = 'http://127.0.0.1:7749';
+
+  /// Where the paired client points. Desktop has a local lymnal on loopback (it
+  /// owns lymbo and fronts the trove). A phone has no local proxy, so it talks
+  /// straight to the remote lymnal over the tailnet, carrying the bearer token
+  /// itself — the same address pairing/discovery already use. (No local lymbo on
+  /// mobile yet; that's the on-device lymnal, still to come.)
+  String get _clientBase =>
+      Caps.hasLocalLymnal ? _localProxy : _baseUrl(_serverAddress!);
 
   /// Load the saved pairing and confirm the server answers. Call once at start.
   Future<void> boot() async {
@@ -104,7 +112,7 @@ class SessionController extends ChangeNotifier {
       _setStatus(LinkStatus.firstRun);
       return;
     }
-    _client = _factory(_localProxy, token: _token);
+    _client = _factory(_clientBase, token: _token);
     await refresh();
     await _syncLink();
     _startPolling();
@@ -302,7 +310,7 @@ class SessionController extends ChangeNotifier {
     await _tokens.write(result.token);
     await _prefs.setString('serverAddress', address);
     await _prefs.setString('serverName', _serverName!);
-    _client = _factory(_localProxy, token: _token);
+    _client = _factory(_clientBase, token: _token);
     // Write link.json first so lymnal restarts as this device's local proxy,
     // then refresh — which retries until the proxy is answering.
     await _syncLink();
@@ -344,7 +352,7 @@ class SessionController extends ChangeNotifier {
   /// mode), rebuilding the client from the saved pairing.
   void useRemote() {
     if (_serverAddress != null) {
-      _client = _factory(_localProxy, token: _token);
+      _client = _factory(_clientBase, token: _token);
       refresh();
     }
   }
