@@ -14,6 +14,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../util/platform_caps.dart';
 import '../util/device.dart';
 import '../widgets/rails.dart';
 
@@ -132,7 +133,8 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
             ),
             // This device can be the server instead of a client — the way out
             // of the first-run screen when it's the machine holding the files.
-            if (_phase != _Phase.waiting)
+            // Desktop only: a phone is always a client (no local trove).
+            if (_phase != _Phase.waiting && Caps.isDesktop)
               GestureDetector(
                 onTap: () =>
                     context.read<SettingsController>().appMode = AppMode.server,

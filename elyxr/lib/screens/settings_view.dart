@@ -15,6 +15,7 @@ import '../state/session.dart';
 import '../state/settings.dart';
 import '../state/music.dart';
 import '../state/sound.dart';
+import '../util/platform_caps.dart';
 import '../state/updater.dart';
 import '../util/device.dart';
 import 'server_view.dart';
@@ -773,16 +774,18 @@ class _DeviceRows extends StatelessWidget {
 
     return Column(
       children: [
-        row(
-          'MODE',
-          GestureDetector(
-            onTap: () => settings.appMode =
-                settings.appMode == AppMode.server ? AppMode.client : AppMode.server,
-            behavior: HitTestBehavior.opaque,
-            child: Text('${settings.appMode.name.toUpperCase()}  ⇄', style: glass(20, p.a)),
+        // Server mode is desktop only — a phone has no local trove to host.
+        if (Caps.isDesktop)
+          row(
+            'MODE',
+            GestureDetector(
+              onTap: () => settings.appMode =
+                  settings.appMode == AppMode.server ? AppMode.client : AppMode.server,
+              behavior: HitTestBehavior.opaque,
+              child: Text('${settings.appMode.name.toUpperCase()}  ⇄', style: glass(20, p.a)),
+            ),
           ),
-        ),
-        if (settings.appMode == AppMode.server)
+        if (Caps.isDesktop && settings.appMode == AppMode.server)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 3),
             child: Text('Server controls are on the main screen (exit settings).',
