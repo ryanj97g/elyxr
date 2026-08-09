@@ -97,6 +97,9 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
   /// rest it returns the plain mark, so its normal colour and drop shadow are
   /// untouched between hints.
   Widget _wordmark(Palette p, bool lit) {
+    // Just the letters — no padding inside, so the gleam's ShaderMask rect lines
+    // up exactly with the glyphs. The left padding is applied around the whole
+    // thing below.
     final mark = AnimatedDefaultTextStyle(
       duration: const Duration(milliseconds: 200),
       style: TextStyle(
@@ -109,38 +112,40 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
             ? [Shadow(color: p.a, blurRadius: 11)]
             : const [Shadow(color: Color(0xFF0C0D0F), offset: Offset(0, 1))],
       ),
-      child: const Padding(
-        padding: EdgeInsets.only(left: 6),
-        child: Text('ELYXR'),
-      ),
+      child: const Text('ELYXR'),
     );
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (lit || reduceMotion) return mark;
 
-    final hi = Color.lerp(p.ml, p.a, 0.35)!; // barely brighter than idle
-    return AnimatedBuilder(
-      animation: _shine,
-      child: mark,
-      builder: (context, child) {
-        final t = _shine.value;
-        if (t <= 0.0 || t >= 1.0) return child!; // at rest: plain mark
-        final c = -0.3 + t * 1.6; // the bright band travels left→right and off
-        return ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (rect) => LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [p.ml, hi, p.ml],
-            stops: [
-              (c - 0.14).clamp(0.0, 1.0),
-              c.clamp(0.0, 1.0),
-              (c + 0.14).clamp(0.0, 1.0),
-            ],
-          ).createShader(rect),
-          child: child,
-        );
-      },
-    );
+    Widget content;
+    if (lit || reduceMotion) {
+      content = mark;
+    } else {
+      final hi = Color.lerp(p.ml, p.a, 0.45)!; // a clearer gleam, still gentle
+      content = AnimatedBuilder(
+        animation: _shine,
+        child: mark,
+        builder: (context, child) {
+          final t = _shine.value;
+          if (t <= 0.0 || t >= 1.0) return child!; // at rest: plain mark
+          final c = -0.3 + t * 1.6; // the bright band travels left→right and off
+          return ShaderMask(
+            blendMode: BlendMode.srcATop,
+            shaderCallback: (rect) => LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [p.ml, hi, p.ml],
+              stops: [
+                (c - 0.14).clamp(0.0, 1.0),
+                c.clamp(0.0, 1.0),
+                (c + 0.14).clamp(0.0, 1.0),
+              ],
+            ).createShader(rect),
+            child: child,
+          );
+        },
+      );
+    }
+    return Padding(padding: const EdgeInsets.only(left: 6), child: content);
   }
 
   @override
