@@ -28,23 +28,36 @@ screen, e.g. **1440 × 3088 px** — with no fixed box and no down-scaling: the
 chassis fills the device directly. The phone owns its dimensions; never force a
 fixed phone size.
 
+On Android this is true fullscreen: the system bars are hidden (immersive) **and**
+the window draws edge-to-edge *under the camera cutout* (`setDecorFitsSystemWindows`
+false + `layoutInDisplayCutoutMode`). Both are required — without the cutout flag
+Android letterboxes the notch strip solid black regardless of anything on the Dart
+side, so the chassis top would not reach the first pixel. No SafeArea, no padding,
+no glow ring on mobile.
+
 ---
 
 ## Layout
 
 ```
 ┌─ chassis ──────────────────────┐
-│  top rail                      │   screw · ELYXR · hold-bar · vent · v2.0.5 · screw
+│  top rail                      │   screw · ELYXR · hold-bar · vent · v0.9 · screw
 │  ┌─ tube ────────────────────┐ │
 │  │  console block            │ │   ticker, then host/link/free + capacity
-│  │  find row                 │ │   FIND, text field, sort (NAME/SIZE/DATE)
+│  │  music player             │ │   permanent: title, spectrum, seek, transport
+│  │  action bar               │ │   RENAME · DOWNLOAD · MOVE · DELETE · sort ▾
 │  │  breadcrumbs              │ │   /ELYXR / MUSIC / ALBUMS      ▲ UP
 │  │  file list  or  grid      │ │   fills remaining space
-│  │  selection + transfers    │ │   selection bar and queue appear when active
+│  │  transfer footer          │ │   the queue strip appears while transfers run
 │  └───────────────────────────┘ │
-│  bottom rail                   │   TEXT/GRID rocker · status LED
+│  bottom rail                   │   TEXT/GRID rocker · corner speakers · status LED
 └────────────────────────────────┘
 ```
+
+The **music player** and the **action bar** are permanent fixtures of the files
+view, not pop-ups. The action bar holds the file actions at all times — greyed and
+inert with nothing selected, lit when there's a selection — so nothing ever slides
+in over the list. There is no separate FIND field.
 
 The chassis is a near-vertical metal gradient with a machined bevel: a bright
 highlight hairline along the top edge and a recessed dark hairline along the
@@ -191,7 +204,7 @@ Three roles, one face each. The terminal face is user-selectable.
   through the bundled faces. It governs `glass()` and `mono()` together: the whole
   screen renders in one face. A face is added by placing a TTF in `assets/fonts/`,
   declaring it in `pubspec.yaml`, and adding a row to `kTermFaces`.
-- The metal face (`chassis()`) is fixed. The `v2.0.5` badge on the rail is metal
+- The metal face (`chassis()`) is fixed. The `v0.9` badge on the rail is metal
   and uses the chassis face, so it is unaffected by the terminal-face selection.
 - The ticker uses the terminal face, as part of the screen. A monospace terminal
   face yields a monospace ticker.
@@ -210,7 +223,11 @@ its tracking, lights to the accent with a glow, and a bar beside it fills. The
 wordmark stays lit while Settings is open.
 
 There is no settings button, tooltip, or hint. This entry point is intentionally
-unmarked.
+unmarked. The only cue is a periodic faint **gleam** — a shadowless bright gradient
+swept across the letters every ~4.5s while idle. It is layered *over* a
+permanently-mounted embossed wordmark (never swapped in), so the mark never blinks
+or shifts by a pixel as the sweep passes. It respects reduce-motion and pauses in
+Settings.
 
 ### Tactile feedback
 
@@ -238,16 +255,29 @@ padding also tracks density.
 ### TEXT / GRID
 
 A rocker on the bottom rail. TEXT is the dense phosphor list (default); GRID is
-3-across tiles. Hidden while Settings is open, as it controls only the file list.
-Persists.
+small file-explorer tiles (an icon over a two-line name over the size — many per
+row, not big squares). Hidden while Settings **or the screensaver** is showing, as
+it controls only the file list. Persists.
 
 ### File rows
 
-- Single click selects (files and folders alike).
-- Double-click opens a folder or previews a file.
+- **Single click** selects (files and folders alike). Clicking an audio file also
+  starts it in the player and makes its folder the playlist.
+- **Double-click** opens a folder or opens a file in the default program.
+- **Click-and-hold** multi-selects (toggles a row into the selection);
+  **shift-click** selects a range from the anchor.
+- **Rename** is an action-bar button, active only for a single selection.
 - Dragging a file sideways out of the window downloads it to the drop location; a
   vertical drag scrolls.
-- Long-press renames.
+
+### The music player & the lightshow
+
+The deck sits permanently above the action bar. Scroll the wheel **anywhere over
+it** to change volume (the whole panel is the hit target, not just the controls; a
+wheel signal never scrubs the seek bar). Tapping a track shows a loading spinner
+until playback starts. The spectrum is the real FFT of the audio at the play head —
+the same live levels drive the corner speaker cones at all times and, in Nostalgia
+Mode, the tube's edge glow.
 
 ### Ticker
 
@@ -278,13 +308,18 @@ in the same terminal vocabulary.
   trailing rule:
   1. ACCENT — the eight swatches
   2. DENSITY — three row-stack diagrams at their real spacings
-  3. TYPEFACE — the face grid
+  3. TYPEFACE — the face rail, with a **SCAN** button that re-registers `.ttf`/`.otf`
+     files dropped into `assets/fonts/custom/` on disk (desktop only)
   4. TUBE — dark / light
-  5. THIS DEVICE — mode, downloads, mount path, concurrent transfers, forget
+  5. THIS DEVICE — mode, downloads, mount path, concurrent transfers, update, forget
   6. USE SYSTEM FILE BROWSER — the optional gate mount (Linux client only)
 - **Footer** — versions on the left, `HOLD ELYXR TO EXIT` on the right.
 
-A NOSTALGIA MODE toggle sits above the numbered sections.
+Above the numbered sections sit the **NOSTALGIA MODE** master toggle and, revealed
+beneath it when Nostalgia is on, its **2000's DEMO MODE** sub-toggle (whether the
+built-in keygen soundtrack auto-plays; off by default). In **server mode**, the
+server controls (pairing, devices, space, recent problems) appear here too. The
+**music player is not in Settings** — it's a permanent fixture of the files view.
 
 ---
 
@@ -309,9 +344,9 @@ dark       bool (tube: glow vs paper)                  persist
 appMode    client | server                             persist
 trove      bool — is the gate mount on                 persist
 downloadDir / mountPath / atOnce / confirmDelete       persist
-nostalgia  bool                                         persist
-sound      bool                                         persist
-holding    bool, transient
+demoMode2000s  bool — auto-play the demo soundtrack     persist
+nostalgia  bool — session toy, off on every launch      transient
+holding    bool                                         transient
 ```
 
 ---
