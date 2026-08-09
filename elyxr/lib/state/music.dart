@@ -632,16 +632,15 @@ class MusicController extends ChangeNotifier {
     }
   }
 
-  /// Near the end of the current track, fetch + prepare the next one into the
-  /// other slot so the gap between songs stays short. Best-effort, idempotent.
+  /// Fetch + prepare the next track into the other slot as soon as the current
+  /// one starts playing, so a straight play-through or a skip begins fast. Only
+  /// ever ONE track ahead (the other half of the double buffer), so the preload
+  /// can't pile up no matter how long the queue is. Best-effort and idempotent:
+  /// it's called on every position tick but does real work only once per track.
   void _maybePreload() {
     if (_troveQueue.isEmpty || _troveIndex < 0 || _preloading) return;
     final next = _troveIndex + 1;
     if (next >= _troveQueue.length || _preloadedIndex == next) return;
-    final dur = _dur.inMilliseconds;
-    final pos = _pos.inMilliseconds;
-    if (dur <= 0) return;
-    if (dur - pos > 15000 && pos < dur * 0.85) return; // not close enough yet
     final client = _troveClient;
     if (client == null) return;
     _preloading = true;
