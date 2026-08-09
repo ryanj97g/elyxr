@@ -182,6 +182,17 @@ pub fn launch_local_installer(config_path: &Path) {
 /// this device. A duplicate install from the fleet broadcast echoing back is
 /// refused by the installer's fixed scope name.
 pub fn update_fleet_and_self(config_path: &Path) {
+    // Reconnect BEFORE announcing — the same thing the tray's "Refresh
+    // connection" does. The fleet update rides the server's live event stream,
+    // which only reaches currently-connected agents; a stale stream is why the
+    // fleet used to update piecemeal (each device waiting on its 60s build poll)
+    // instead of all at once. Restarting the service re-establishes the link (and,
+    // on the server, drops every client so they reconnect fresh), so the announce
+    // that follows actually lands everywhere. Best-effort, then a moment to settle
+    // before we announce. Only the manual trigger runs this — an agent applying an
+    // update it was told about goes straight to run_installer, so there's no loop.
+    #[cfg(not(target_os = "windows"))]
+    refresh_connection_and_settle();
     if let Some(dir) = config_path.parent() {
         if let Some(link) = load_link(dir) {
             let _ = crate::cli::request_fleet_update(&link);
@@ -190,6 +201,28 @@ pub fn update_fleet_and_self(config_path: &Path) {
         }
     }
     run_installer(config_path);
+}
+
+/// Restart the local service to refresh its connection, exactly as the tray's
+/// "Refresh connection" button does — detached in its own scope so restarting the
+/// service can't kill this updater process — then wait for it to reconnect.
+#[cfg(not(target_os = "windows"))]
+fn refresh_connection_and_settle() {
+    tracing::info!("update: refreshing the connection before announcing the fleet update");
+    let started = std::process::Command::new("systemd-run")
+        .args([
+            "--user", "--scope", "--quiet",
+            "systemctl", "--user", "restart", "lymnal.service",
+        ])
+        .spawn();
+    if started.is_err() {
+        let _ = std::process::Command::new("systemctl")
+            .args(["--user", "restart", "lymnal.service"])
+            .spawn();
+    }
+    // Give the service time to come back up and its event stream to reconnect
+    // (clients retry on a ~5s cadence) before the announce goes out.
+    std::thread::sleep(Duration::from_secs(8));
 }
 
 /// Windows: there is no compiler on the device, so an update is a *fetch*, not a
