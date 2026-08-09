@@ -1,0 +1,38 @@
+name: lymnal-android
+
+# Cross-compiles lymnal for Android (arm64) with the NDK. This is step one of
+# running lymnal on the phone: prove the daemon builds for the target. Anything
+# desktop-only in lymnal (the tray, etc.) shows up here as a build failure to be
+# gated off for Android.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust (with the Android target)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Cross-compile lymnal for Android (arm64)
+        run: |
+          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$(ls -d $ANDROID_HOME/ndk/* | tail -1)}"
+          echo "Using NDK at $ANDROID_NDK_HOME"
+          cargo ndk -t arm64-v8a build --release -p lymnal
+
+      - name: Upload the Android lymnal binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: lymnal-android-arm64
+          path: target/aarch64-linux-android/release/lymnal
+          if-no-files-found: warn
