@@ -57,6 +57,10 @@ pub struct Proxy {
     /// Wakes the background pusher the instant a commit lands, so a file doesn't
     /// wait for the next timer tick to start heading for the trove.
     pusher: Notify,
+    /// Held only while a push drain is running. The background loop and a manual
+    /// reconcile both drain the queue; this makes sure only one does at a time, so
+    /// they can't double-push a file or run two sweeps at once.
+    drain_lock: Mutex<()>,
     /// For ordinary calls (a list, a stat): fail the connect fast and cap the
     /// whole call, so a slow or vanished trove can't hang the request forever
     /// and exhaust the blocking pool — the cause of the app sitting on "READING…".
@@ -87,6 +91,7 @@ impl Proxy {
             held: Mutex::new(held),
             held_state,
             pusher: Notify::new(),
+            drain_lock: Mutex::new(()),
             quick,
             stream,
         }
@@ -111,13 +116,15 @@ impl Proxy {
     }
 
     /// Write the held queue to disk (best effort). Called whenever it changes so
-    /// a restart resumes exactly where it left off.
+    /// a restart resumes exactly where it left off. The write happens while the
+    /// queue lock is held, so two commits finishing together can't write the file
+    /// out of order and leave a stale entry behind.
     fn persist_held(&self) {
-        let snapshot: HashMap<String, i64> = self.held.lock().unwrap().clone();
+        let map = self.held.lock().unwrap();
         if let Some(parent) = self.held_state.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        if let Ok(bytes) = serde_json::to_vec(&snapshot) {
+        if let Ok(bytes) = serde_json::to_vec(&*map) {
             let _ = std::fs::write(&self.held_state, bytes);
         }
     }
@@ -134,6 +141,13 @@ impl Proxy {
     /// on a commit, and whenever the app asks to reconcile. Returns how many are
     /// still held afterwards.
     pub fn retry_held(self: &Arc<Self>) -> usize {
+        // Single-flight: if a drain is already running (the background loop and a
+        // manual reconcile can both call this), don't start a second one — just
+        // report the current backlog. The running drain covers the same work.
+        let _drain = match self.drain_lock.try_lock() {
+            Ok(g) => g,
+            Err(_) => return self.held.lock().unwrap().len(),
+        };
         // Oldest first, so the file that has waited longest goes first.
         let keys: Vec<String> = self.limbo.held_keys();
         // Fall back to the queue's own order if limbo has forgotten its in-memory
@@ -331,8 +345,13 @@ async fn upload_commit(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>)
 }
 
 /// `/v1/reconcile` — the refresh control. Push anything stranded in limbo now.
+/// The drain is blocking, so it runs on a blocking thread rather than stalling an
+/// async worker; the single-flight lock means it won't collide with the timer's
+/// drain — whichever holds the lock does the work, the other reports the backlog.
 async fn reconcile(State(px): State<Arc<Proxy>>) -> Response {
-    let still_held = px.retry_held();
+    let still_held = tokio::task::spawn_blocking(move || px.retry_held())
+        .await
+        .unwrap_or(0);
     Json(json!({ "held": still_held })).into_response()
 }
 
