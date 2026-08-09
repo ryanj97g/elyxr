@@ -175,7 +175,13 @@ jobs:
           mkdir -p ~/.android
           cp packaging/android/debug.keystore ~/.android/debug.keystore
 
+          # --build-number sets the Android versionCode (git commit count), so
+          # every build is genuinely newer than the last — the in-app updater and
+          # the system installer both see a real upgrade instead of a same-version
+          # (versionCode 1) reinstall. Signing is unchanged, so it still installs
+          # over the top without an uninstall.
           flutter build apk --debug \
+            --build-number=$build \
             --dart-define=ELYXR_BUILD=$build \
             --dart-define=ELYXR_COMMIT=$commit
 
