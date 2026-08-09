@@ -191,12 +191,29 @@ class MusicController extends ChangeNotifier {
     return List<double>.generate(kVisBars, (b) => s[base + b].toDouble());
   }
 
+  // Spectrograms already analysed this session, keyed by the analysed file path.
+  // The soundtrack shuffles and replays tracks, so a hit here means the bars are
+  // live the instant a track starts again — no re-analysis, no gap. Bounded so it
+  // can't grow without limit.
+  final Map<String, _SpectroResult> _spectroCache = {};
+  final List<String> _spectroCacheOrder = [];
+  static const int _spectroCacheMax = 8;
+
   /// Analyse the actual audio file into a spectrogram on a background isolate,
   /// then hold it for the visualizer to sample by play position. Never blocks or
   /// affects playback: if analysis fails (no ffmpeg, odd file), the bars simply
   /// stay flat. Each call invalidates any earlier build via the token.
   Future<void> _startSpectro(String path) async {
     final token = ++_spectroToken;
+    // Already analysed → apply instantly, so a new (or repeated) track's bars
+    // don't drop out while it re-analyses.
+    final cached = _spectroCache[path];
+    if (cached != null) {
+      _spectro = cached.data;
+      _spectroFrames = cached.frames;
+      _spectroFps = cached.fps;
+      return;
+    }
     _spectro = null;
     _spectroFrames = 0;
     try {
@@ -205,6 +222,11 @@ class MusicController extends ChangeNotifier {
       _spectro = res.data;
       _spectroFrames = res.frames;
       _spectroFps = res.fps;
+      _spectroCache[path] = res;
+      _spectroCacheOrder.add(path);
+      if (_spectroCacheOrder.length > _spectroCacheMax) {
+        _spectroCache.remove(_spectroCacheOrder.removeAt(0));
+      }
     } catch (_) {
       if (token == _spectroToken) {
         _spectro = null;
@@ -566,7 +588,7 @@ String _mediaBin(String name) {
 /// Runs on a background isolate (see compute), so the heavy work never touches
 /// the UI thread. On any failure it throws and the caller leaves the bars flat.
 Future<_SpectroResult> _analyzeSpectrogram(String path) async {
-  const double fps = 60.0; // one spectrum per screen frame
+  const double fps = 30.0; // spectra per second (30 is plenty; halves the work)
   const int win = 1024; // FFT window (power of two)
 
   late final int rate;
