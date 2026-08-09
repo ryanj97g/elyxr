@@ -202,19 +202,14 @@ class _RootState extends State<_Root> {
     // status bar / above the nav bar via SafeArea), scaling the fixed portrait
     // design up to the device. No outer glow ring, no transparent margin.
     if (Caps.isMobile) {
-      // Render at the device's OWN resolution — the full screen (e.g. 1440 ×
-      // 3088), no fixed design box, no down-scaling. The chassis fills the
-      // device directly, so every pixel of the panel is a real device pixel.
-      // SafeArea guards only the TOP (a notch/punch-hole); the bottom reaches the
-      // true edge (the gesture-nav inset was the "invisible box" before). The
-      // Expanded tube absorbs the height, so the file list reaches the bottom.
+      // True fullscreen at the device's own resolution. The system bars are
+      // hidden (immersive, see main.dart), and the chassis fills the ENTIRE
+      // screen — no SafeArea, no padding, no top strip. Its top edge is the
+      // screen's top pixel; nothing is reserved for the status bar or camera.
+      // (Do NOT reintroduce SafeArea/viewPadding here — that is the black bar.)
       return Scaffold(
         backgroundColor: Colors.black,
         resizeToAvoidBottomInset: false,
-        // The chassis fills the whole device — its metal reaches all the way to
-        // the top edge, so the camera sits on the bezel, not a black bar. The
-        // chassis itself insets its CONTENT below the camera (see Chassis), so
-        // nothing important hides under it. Bottom stays edge-to-edge.
         body: child,
       );
     }
