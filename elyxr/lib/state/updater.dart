@@ -17,6 +17,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../util/platform_caps.dart';
+
 enum UpdateStage { idle, updating, waitingForUpload, failed }
 
 class UpdateController extends ChangeNotifier {
@@ -59,6 +61,14 @@ class UpdateController extends ChangeNotifier {
   }
 
   Future<void> _run() async {
+    // A phone can't shell out to `lymnal update`; it updates from the app store
+    // or a new APK. Report that rather than throwing.
+    if (!Caps.canExec) {
+      stage = UpdateStage.failed;
+      error = 'Update elyxr from the app store (or install the latest APK).';
+      notifyListeners();
+      return;
+    }
     stage = UpdateStage.updating;
     error = null;
     notifyListeners();

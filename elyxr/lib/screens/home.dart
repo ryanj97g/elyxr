@@ -155,25 +155,32 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    return Stack(
-      children: [
-        app,
-        // Transfer HUD — Nostalgia Mode only.
-        if (settings.nostalgia && !settings.inSettings)
-          Positioned(
-            top: 60,
-            left: 14,
-            right: 14,
-            child: TransferHud(palette: p),
-          ),
-        // Cursor trail — Nostalgia Mode only.
-        if (settings.nostalgia)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CursorTrail(cursor: _cursor, palette: p),
+    return PopScope(
+      // Android back: leave Settings first rather than closing the app.
+      canPop: !settings.inSettings,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && settings.inSettings) settings.inSettings = false;
+      },
+      child: Stack(
+        children: [
+          app,
+          // Transfer HUD — Nostalgia Mode only.
+          if (settings.nostalgia && !settings.inSettings)
+            Positioned(
+              top: 60,
+              left: 14,
+              right: 14,
+              child: TransferHud(palette: p),
             ),
-          ),
-      ],
+          // Cursor trail — Nostalgia Mode only.
+          if (settings.nostalgia)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CursorTrail(cursor: _cursor, palette: p),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
