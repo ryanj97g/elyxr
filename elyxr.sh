@@ -75,14 +75,27 @@ if [ "$UPDATE" = 1 ] && [ -z "${ELYXR_REEXEC:-}" ] \
   # Discard all tracked drift (the committed versions are the source of truth);
   # untracked files, like dropped music/sounds, are left untouched.
   git checkout -- . 2>/dev/null || true
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+  [ "$branch" = "HEAD" ] && branch=main
   if git pull --ff-only >/dev/null 2>&1; then
     after="$(git rev-parse HEAD 2>/dev/null || true)"
     if [ "$before" != "$after" ]; then
       echo "updated to the latest version — restarting installer..."
       ELYXR_REEXEC=1 exec bash "$SELF" "$@"
     fi
+  elif git fetch origin "$branch" >/dev/null 2>&1 \
+       && git reset --hard "origin/$branch" >/dev/null 2>&1; then
+    # A fast-forward is impossible when upstream history was rewritten (a
+    # force-push) — the local checkout has diverged and would otherwise build
+    # stale code forever. Reset hard to the published branch to recover. This
+    # only touches tracked files; untracked drops (music/sounds) are left alone.
+    after="$(git rev-parse HEAD 2>/dev/null || true)"
+    if [ "$before" != "$after" ]; then
+      echo "history had diverged from upstream — reset to the latest published build, restarting installer..."
+      ELYXR_REEXEC=1 exec bash "$SELF" "$@"
+    fi
   else
-    echo "note: couldn't fast-forward to the latest (local changes?) — building what's checked out."
+    echo "note: couldn't reach the latest (offline?) — building what's checked out."
   fi
 fi
 
