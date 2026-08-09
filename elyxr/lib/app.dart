@@ -202,11 +202,16 @@ class _RootState extends State<_Root> {
     // status bar / above the nav bar via SafeArea), scaling the fixed portrait
     // design up to the device. No outer glow ring, no transparent margin.
     if (Caps.isMobile) {
-      // True fullscreen at the device's own resolution. The system bars are
-      // hidden (immersive, see main.dart), and the chassis fills the ENTIRE
-      // screen — no SafeArea, no padding, no top strip. Its top edge is the
-      // screen's top pixel; nothing is reserved for the status bar or camera.
-      // (Do NOT reintroduce SafeArea/viewPadding here — that is the black bar.)
+      // True fullscreen at the device's own resolution. The chassis fills the
+      // ENTIRE screen — no SafeArea, no padding, no top strip. Two separate
+      // things make that real, and BOTH are required:
+      //   1) the system bars are hidden (immersiveSticky, see main.dart), and
+      //   2) the window draws into the camera-cutout band
+      //      (layoutInDisplayCutoutMode = SHORT_EDGES, see MainActivity.kt).
+      // Without (2), Android letterboxes the cutout strip solid black — the
+      // "black bar at the top" — no matter what happens on the Dart side. So
+      // don't reintroduce SafeArea/viewPadding here, but know the bar itself was
+      // the native cutout mode, not this widget.
       return Scaffold(
         backgroundColor: Colors.black,
         resizeToAvoidBottomInset: false,

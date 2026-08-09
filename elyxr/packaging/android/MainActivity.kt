@@ -6,6 +6,8 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.os.Build
+import android.os.Bundle
+import android.view.WindowManager
 import androidx.annotation.NonNull
 import androidx.core.app.ActivityCompat
 import io.flutter.embedding.android.FlutterActivity
@@ -20,6 +22,22 @@ import java.nio.ByteBuffer
 // client -> local-lymnal -> trove model as desktop.
 class MainActivity : FlutterActivity() {
     private val channel = "elyxr/lymnal"
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // Let the app render INTO the display cutout band — the camera notch /
+        // punch-hole strip at the very top of the screen. By default Android
+        // reserves that strip and paints it solid black even in immersive
+        // fullscreen: that is the "black bar at the top". SHORT_EDGES tells the
+        // window to extend into it, so the chassis reaches the literal top pixel,
+        // camera and all. Window-level only — no Dart/SafeArea change can do this.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+    }
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
