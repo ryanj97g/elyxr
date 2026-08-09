@@ -49,8 +49,10 @@ class _CornerSpeakerState extends State<CornerSpeaker>
       }
       bass /= n;
     }
-    // Instant push, quick settle — a cone thump, not a wobble.
-    _level = bass > _level ? bass : _level * 0.80 + bass * 0.20;
+    // Exaggerate so a hit reads as a real thump, not a shimmer.
+    bass = (bass * 1.7).clamp(0.0, 1.0);
+    // Instant attack, snappy decay — BOOM, then fall fast.
+    _level = bass > _level ? bass : _level * 0.72 + bass * 0.28;
     _bass.value = _level;
   }
 
@@ -125,18 +127,7 @@ class _CornerSpeakerPainter extends CustomPainter {
     final c = size.center(Offset.zero);
     final r = math.min(size.width, size.height) / 2 - 6;
 
-    // Bass glow behind the cone — bigger/brighter as it thumps.
-    if (level > 0.02) {
-      canvas.drawCircle(
-        c,
-        r * (1 + level * 0.3),
-        Paint()
-          ..color = p.a.withValues(alpha: (level * 0.5).clamp(0.0, 1.0))
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 3 + 5 * level),
-      );
-    }
-
-    // The basket: a recessed ring.
+    // The basket: a recessed ring (the fixed housing).
     canvas.drawCircle(c, r, Paint()..color = p.mv1);
     canvas.drawCircle(
         c,
@@ -146,9 +137,36 @@ class _CornerSpeakerPainter extends CustomPainter {
           ..strokeWidth = 1.4
           ..color = p.mh);
 
-    // The cone — pushes out on the beat.
-    final coneR = ((r - 3) * (1 + level * 0.13)).clamp(0.0, r - 1);
-    canvas.drawCircle(c, coneR, Paint()..color = p.m3);
+    // The BOOM: a wide, bright accent flare plus an expanding shockwave ring,
+    // punching out on every beat. This is the rave — it spills past the basket
+    // onto the metal on the hardest hits.
+    if (level > 0.01) {
+      final lv = level;
+      canvas.drawCircle(
+        c,
+        r * (1 + lv * 0.95),
+        Paint()
+          ..color = p.a.withValues(alpha: (lv * 0.85).clamp(0.0, 1.0))
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 6 + 22 * lv),
+      );
+      canvas.drawCircle(
+        c,
+        r * (0.8 + lv * 0.7),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5 + 3 * lv
+          ..color = p.a.withValues(alpha: (lv * 0.7).clamp(0.0, 1.0))
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 1 + 3 * lv),
+      );
+    }
+
+    // The cone — real travel now, and it lights toward the accent as it slams.
+    final coneR = (r * (0.58 + level * 0.36)).clamp(0.0, r - 1.5);
+    canvas.drawCircle(
+      c,
+      coneR,
+      Paint()..color = Color.lerp(p.m3, p.a, (level * 0.55).clamp(0.0, 1.0))!,
+    );
     final ring = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
@@ -156,11 +174,11 @@ class _CornerSpeakerPainter extends CustomPainter {
     canvas.drawCircle(c, coneR * 0.72, ring);
     canvas.drawCircle(c, coneR * 0.46, ring);
 
-    // The dust cap lights up in the accent as the bass hits.
+    // The dust cap flares hard and swells on the hit.
     canvas.drawCircle(
       c,
-      coneR * 0.26,
-      Paint()..color = Color.lerp(p.mt, p.a, level)!,
+      coneR * (0.24 + level * 0.16),
+      Paint()..color = Color.lerp(p.mt, p.a, (level * 1.3).clamp(0.0, 1.0))!,
     );
   }
 
