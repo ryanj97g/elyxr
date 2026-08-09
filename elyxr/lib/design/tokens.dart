@@ -317,14 +317,12 @@ class Palette {
 }
 
 /// The visible chassis: portrait, not resizable. It carries the Galaxy S22
-/// The DESKTOP chassis coordinate system, in logical pixels. Its proportion is
-/// the target phone's Ultra screen (1440 × 3088 px, ~19.3:9) — at 440 wide the
-/// height works out to 944 (440 × 3088 / 1440 ≈ 943.6). On desktop the window is
-/// exactly this size (see app.dart / the native runner). On a PHONE these are
-/// only the horizontal design unit: the app fills the real device screen and the
-/// chassis stretches to the device's exact height (app.dart derives it live from
-/// the screen). Do NOT "restore" a fixed phone size from this — the phone owns
-/// its dimensions, not this constant.
+/// The DESKTOP window size, in logical pixels (used by the native runner /
+/// window_manager). It is NOT the phone size. On a PHONE the app renders at the
+/// device's own full resolution — the whole screen, e.g. 1440 × 3088 px — with
+/// no fixed box and no down-scaling (see app.dart: the chassis fills the device
+/// directly). Do NOT force a fixed phone size from these constants; the phone
+/// owns its dimensions.
 const double kAppWidth = 440;
 const double kAppHeight = 944;
 
