@@ -253,8 +253,16 @@ class _NostalgiaRow extends StatelessWidget {
               // trove stream), Nostalgia leaves it alone rather than yanking it
               // back to track 0. Cancel any pending auto-stop from a recent off.
               music.cancelBuiltInStop();
-              sound.laugh();
-              if (!music.active) music.startBuiltIn();
+              final laughDone = sound.laugh();
+              // Opening laugh: let it land clean, then bring the soundtrack in
+              // once it's done — but only when nothing was already playing. Rapid
+              // re-toggles find the music live, skip this, and just stack another
+              // laugh, so the stacking-laugh bit stays intact.
+              if (!music.active) {
+                laughDone.then((_) {
+                  if (s.nostalgia && !music.active) music.startBuiltIn();
+                });
+              }
             } else {
               // Switching off: after a 3s grace period, stop the easter-egg
               // soundtrack (but leave a user's trove stream playing).
@@ -268,12 +276,18 @@ class _NostalgiaRow extends StatelessWidget {
               children: [
                 Text('◈', style: glass(20, on ? p.a : p.foot)),
                 const SizedBox(width: 9),
-                // What it does lives in a hover popup on the label itself — no
-                // spelled-out list on the page, no narration of the off state.
+                // What it does lives in a long-press popup on the label itself —
+                // no spelled-out list on the page, no narration of the off state.
+                // Long-press to reveal; hover never triggers it (the huge
+                // waitDuration effectively disables the hover trigger, so only
+                // triggerMode.longPress shows it).
                 Tooltip(
                   message: 'Matrix screensaver\nCursor trail\nTransfer log\n'
                       'Snake (wordmark ×7)\nNonsense button\nSound effects\n'
                       'Auto-plays the soundtrack',
+                  triggerMode: TooltipTriggerMode.longPress,
+                  waitDuration: const Duration(days: 3650),
+                  showDuration: const Duration(seconds: 6),
                   decoration: BoxDecoration(
                     color: p.tubeBg,
                     border: Border.all(color: p.a.withValues(alpha: 0.5)),
