@@ -19,14 +19,18 @@ class CornerSpeaker extends StatefulWidget {
   final Palette palette;
   final bool left; // bottom-left vs bottom-right — corner shaping mirrors.
   final double size;
-  /// When false the woofer is just a resting metal grille — the bass-reactive
-  /// "rave" (the flare, the cone slam) is Nostalgia Mode only.
+  /// When false the woofer is just a resting metal grille. It thumps to whatever
+  /// is playing whenever this is true.
   final bool reactive;
+  /// Nostalgia Mode: crank the bass response so the cone really slams. Off, the
+  /// woofer still bumps to the music, just gentler.
+  final bool intense;
   const CornerSpeaker(
       {super.key,
       required this.palette,
       required this.left,
       this.reactive = false,
+      this.intense = false,
       this.size = 66});
 
   @override
@@ -64,8 +68,9 @@ class _CornerSpeakerState extends State<CornerSpeaker>
       }
       bass /= n;
     }
-    // Exaggerate so a hit reads as a real thump, not a shimmer.
-    bass = (bass * 1.7).clamp(0.0, 1.0);
+    // Exaggerate so a hit reads as a real thump, not a shimmer — harder in
+    // Nostalgia Mode (the rave), softer otherwise (a normal woofer).
+    bass = (bass * (widget.intense ? 1.7 : 1.05)).clamp(0.0, 1.0);
     // Instant attack, snappy decay — BOOM, then fall fast.
     _level = bass > _level ? bass : _level * 0.72 + bass * 0.28;
     _bass.value = _level;

@@ -200,18 +200,31 @@ class _RootState extends State<_Root> {
     // status bar / above the nav bar via SafeArea), scaling the fixed portrait
     // design up to the device. No outer glow ring, no transparent margin.
     if (Caps.isMobile) {
+      // Fill the whole device. SafeArea only guards the TOP (a notch/punch-hole)
+      // — never the bottom, because the lingering gesture-nav inset was the
+      // "invisible box" holding the chassis off the real bottom edge. The design
+      // box is grown to the screen's aspect so it fills top-to-bottom with a
+      // uniform scale (no letterbox, no stretch); the extra height flows into the
+      // Expanded tube, so the file list reaches the true bottom.
       return Scaffold(
         backgroundColor: Colors.black,
+        resizeToAvoidBottomInset: false,
         body: SafeArea(
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.contain,
-              child: SizedBox(
-                width: kAppWidth,
-                height: kAppHeight,
-                child: child,
-              ),
-            ),
+          bottom: false,
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final designH = c.maxWidth > 0 && c.maxHeight.isFinite
+                  ? c.maxHeight * kAppWidth / c.maxWidth
+                  : kAppHeight;
+              return FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: kAppWidth,
+                  height: designH < kAppHeight ? kAppHeight : designH,
+                  child: child,
+                ),
+              );
+            },
           ),
         ),
       );

@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 import '../../design/text.dart';
 import '../../design/tokens.dart';
 import '../../state/music.dart';
+import '../../state/settings.dart';
 import 'marquee.dart';
 
 class MusicPlayerPanel extends StatelessWidget {
@@ -29,29 +30,35 @@ class MusicPlayerPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = palette;
     final m = context.watch<MusicController>();
+    // The built-in tracker soundtrack is the Nostalgia Mode easter egg. With
+    // Nostalgia off, the player only plays what's in the trove (started from a
+    // file row) — the built-in playlist is neither startable nor listable.
+    final egg = context.watch<SettingsController>().nostalgia;
+    final canBuiltIn = egg && m.hasTracks;
 
     if (!m.active) {
       // Idle — a slim one-line bar, not the full deck, so it doesn't eat the
-      // tube when nothing's playing. Still present and startable: a play button
-      // and the tracklist. The full deck only unfolds while something plays.
+      // tube when nothing's playing. With Nostalgia on it can start/list the
+      // built-in soundtrack; with it off it just rests (trove playback starts
+      // from a file row). The full deck only unfolds while something plays.
       return _wheel(
         m,
         Row(
           children: [
             GestureDetector(
-              onTap: m.hasTracks ? () => m.toggle() : null,
+              onTap: canBuiltIn ? () => m.toggle() : null,
               behavior: HitTestBehavior.opaque,
               child: Icon(Icons.play_arrow,
-                  size: 20, color: m.hasTracks ? p.a : p.foot),
+                  size: 20, color: canBuiltIn ? p.a : p.foot),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(m.hasTracks ? m.title : '—',
+              child: Text(canBuiltIn ? m.title : '—',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: glass(15, p.foot)),
             ),
-            if (m.hasTracks) ...[
+            if (canBuiltIn) ...[
               const SizedBox(width: 8),
               _volumeControl(p, m),
               const SizedBox(width: 8),
@@ -65,6 +72,10 @@ class MusicPlayerPanel extends StatelessWidget {
         ),
       );
     }
+
+    // A trove stream is a single file — no playlist to shuffle/skip through.
+    // The built-in playlist controls only appear for the easter-egg soundtrack.
+    final playlist = egg && !m.isStream;
 
     final total = m.duration.inMilliseconds;
     final frac =
@@ -85,12 +96,14 @@ class MusicPlayerPanel extends StatelessWidget {
                 child: Marquee(text: m.title, style: glass(17, p.bright)),
               ),
             ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => _showTracklist(context, m, p),
-              behavior: HitTestBehavior.opaque,
-              child: Icon(Icons.queue_music, color: p.mid, size: 18),
-            ),
+            if (egg) ...[
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _showTracklist(context, m, p),
+                behavior: HitTestBehavior.opaque,
+                child: Icon(Icons.queue_music, color: p.mid, size: 18),
+              ),
+            ],
             const SizedBox(width: 8),
             Text(m.isStream ? 'TROVE' : '${m.index + 1}/${m.count}',
                 style: mono(11, p.mid)),
@@ -134,20 +147,24 @@ class MusicPlayerPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        // Transport — shuffle · prev · play/pause · next · repeat.
+        // Transport. A single trove stream gets just play/pause; the built-in
+        // soundtrack (Nostalgia) gets the full shuffle · prev · next · repeat.
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: playlist
+              ? MainAxisAlignment.spaceEvenly
+              : MainAxisAlignment.center,
           children: [
-            _iconToggle(p, Icons.shuffle, m.shuffle, m.toggleShuffle),
-            _btn(p, Icons.skip_previous, m.prev),
+            if (playlist) _iconToggle(p, Icons.shuffle, m.shuffle, m.toggleShuffle),
+            if (playlist) _btn(p, Icons.skip_previous, m.prev),
             _btn(p, m.playing ? Icons.pause : Icons.play_arrow, m.toggle,
                 big: true),
-            _btn(p, Icons.skip_next, m.next),
-            _iconToggle(
-                p,
-                m.repeat == MusicRepeat.one ? Icons.repeat_one : Icons.repeat,
-                m.repeat != MusicRepeat.off,
-                m.cycleRepeat),
+            if (playlist) _btn(p, Icons.skip_next, m.next),
+            if (playlist)
+              _iconToggle(
+                  p,
+                  m.repeat == MusicRepeat.one ? Icons.repeat_one : Icons.repeat,
+                  m.repeat != MusicRepeat.off,
+                  m.cycleRepeat),
           ],
         ),
       ],

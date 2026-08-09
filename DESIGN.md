@@ -22,7 +22,11 @@ tube recessed into it.
 Everything behind the glass is terminal. Everything on the metal is a physical
 control. This division governs placement and typography throughout.
 
-The window is a fixed 440 × 884, portrait, not resizable.
+On desktop the window is a fixed 440 × 944 logical px, portrait, not resizable.
+On a phone the chassis fills the whole device screen — the 440-wide coordinate
+system scales to the device width and the chassis stretches to the device's real
+height (e.g. a 1440 × 3088 px display). The phone owns its dimensions; do not
+force a fixed phone size.
 
 ---
 

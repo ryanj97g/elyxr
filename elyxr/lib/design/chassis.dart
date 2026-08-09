@@ -35,8 +35,11 @@ class Chassis extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = palette;
     return Container(
-      width: kAppWidth,
-      height: kAppHeight,
+      // Fill whatever the parent sizes us to. Desktop wraps this in a fixed
+      // 440×944 box; mobile hands us a box shaped to the screen so the tube (and
+      // the file list inside it) can stretch to the real bottom edge.
+      width: double.infinity,
+      height: double.infinity,
       padding: const EdgeInsets.all(9),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -79,15 +82,20 @@ class Chassis extends StatelessWidget {
           // bottom corner beneath it (a reverse notch) and the end of the
           // bottom rail — which is why the rail's controls are inset to live in
           // the space between them.
+          // The woofers thump to whatever's playing at all times; Nostalgia Mode
+          // only cranks the intensity (the full light show — the edge glow — is
+          // still Nostalgia-only, layered in the tube above).
           Positioned(
             left: 0,
             bottom: 0,
-            child: CornerSpeaker(palette: p, left: true, reactive: nostalgia),
+            child: CornerSpeaker(
+                palette: p, left: true, reactive: true, intense: nostalgia),
           ),
           Positioned(
             right: 0,
             bottom: 0,
-            child: CornerSpeaker(palette: p, left: false, reactive: nostalgia),
+            child: CornerSpeaker(
+                palette: p, left: false, reactive: true, intense: nostalgia),
           ),
         ],
       ),
