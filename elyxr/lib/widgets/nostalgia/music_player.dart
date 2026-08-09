@@ -41,24 +41,29 @@ class MusicPlayerPanel extends StatelessWidget {
       // tube when nothing's playing. With Nostalgia on it can start/list the
       // built-in soundtrack; with it off it just rests (trove playback starts
       // from a file row). The full deck only unfolds while something plays.
+      // While a tapped trove track is being fetched, this bar shows a spinner so
+      // the tap has visible feedback before the deck appears.
+      final loading = m.loadingTrove;
       return _wheel(
         m,
         Row(
           children: [
-            GestureDetector(
-              onTap: canBuiltIn ? () => m.toggle() : null,
-              behavior: HitTestBehavior.opaque,
-              child: Icon(Icons.play_arrow,
-                  size: 20, color: canBuiltIn ? p.a : p.foot),
-            ),
+            loading
+                ? _spinner(p)
+                : GestureDetector(
+                    onTap: canBuiltIn ? () => m.toggle() : null,
+                    behavior: HitTestBehavior.opaque,
+                    child: Icon(Icons.play_arrow,
+                        size: 20, color: canBuiltIn ? p.a : p.foot),
+                  ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(canBuiltIn ? m.title : '—',
+              child: Text(loading ? 'LOADING…' : (canBuiltIn ? m.title : '—'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: glass(15, p.foot)),
+                  style: glass(15, loading ? p.mid : p.foot)),
             ),
-            if (canBuiltIn) ...[
+            if (canBuiltIn && !loading) ...[
               const SizedBox(width: 8),
               _volumeControl(p, m),
               const SizedBox(width: 8),
@@ -90,6 +95,9 @@ class MusicPlayerPanel extends StatelessWidget {
         Row(
           children: [
             Text('♪ ', style: glass(16, p.a)),
+            // A spinner while the next track is being fetched (e.g. an advance
+            // that wasn't preloaded in time), so the wait is visible.
+            if (m.loadingTrove) ...[_spinner(p), const SizedBox(width: 6)],
             Expanded(
               child: SizedBox(
                 height: 22,
@@ -187,6 +195,16 @@ class MusicPlayerPanel extends StatelessWidget {
           }
         },
         child: child,
+      );
+
+  /// A small spinner — plain loading feedback while a trove track is fetched.
+  Widget _spinner(Palette p) => SizedBox(
+        width: 13,
+        height: 13,
+        child: CircularProgressIndicator(
+          strokeWidth: 1.6,
+          valueColor: AlwaysStoppedAnimation<Color>(p.a),
+        ),
       );
 
   /// Speaker + a short level bar: live feedback for the wheel, and a tap-target

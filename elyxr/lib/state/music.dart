@@ -53,9 +53,25 @@ class MusicController extends ChangeNotifier {
   Duration _pos = Duration.zero;
   Duration _dur = Duration.zero;
   bool _hasSource = false;
-  // Set when playing a one-off trove stream (not the asset playlist); overrides
-  // the shown title and hides the playlist index.
+  // Set when playing a trove stream (not the asset playlist); overrides the
+  // shown title and hides the playlist index.
   String? _override;
+
+  // --- trove folder playlist + double-buffered preload ---
+  // Streaming from a trove folder plays that whole folder as a playlist: when a
+  // track ends the next file in the SAME folder plays (never the easter-egg
+  // soundtrack), and near the end of each track the next one is fetched ahead
+  // into the other temp "slot" so the gap between songs is short. Two slots are
+  // reused round-robin, so only ~2 tracks' worth of temp files ever exist.
+  LymnalClient? _troveClient;
+  List<(String, String)> _troveQueue = const []; // (full trove path, name)
+  int _troveIndex = -1;
+  int _curSlot = 0; // temp slot holding the current track (0 or 1)
+  int _preloadedIndex = -1; // queue index sitting ready in the other slot
+  String? _preloadedPath; // its prepared, ready-to-play file
+  bool _preloading = false;
+  final List<List<String>> _slotTemp = [<String>[], <String>[]];
+  bool _loadingTrove = false; // a user-tapped track is being fetched/prepared
 
   // Playback volume (0..1), applied to every source and remembered across
   // launches. _preMute holds the level to come back to when unmuting.
@@ -111,6 +127,7 @@ class MusicController extends ChangeNotifier {
     _player.onPositionChanged.listen((d) {
       _pos = d;
       _anchorVis(d);
+      _maybePreload(); // fetch the next trove track ahead as this one nears its end
       notifyListeners();
     });
     _player.onDurationChanged.listen((d) {
@@ -144,6 +161,7 @@ class MusicController extends ChangeNotifier {
       _override ?? (hasTracks ? _pretty(_tracks[_index]) : 'no tracks');
   String titleAt(int i) => _pretty(_tracks[i]);
   bool get isStream => _override != null;
+  bool get loadingTrove => _loadingTrove;
   bool get active => _hasSource && (_playing || _pos > Duration.zero);
   double get volume => _volume;
   bool get muted => _volume <= 0;
@@ -330,6 +348,14 @@ class MusicController extends ChangeNotifier {
   Future<void> startBuiltIn() async {
     if (_tracks.isEmpty) return;
     cancelBuiltInStop();
+    // Leaving trove-playlist mode for the asset soundtrack — drop the queue (and
+    // its preload) so a completing track egg-shuffles instead of advancing it.
+    _troveQueue = const [];
+    _troveIndex = -1;
+    _preloadedIndex = -1;
+    _preloadedPath = null;
+    _freeSlot(0);
+    _freeSlot(1);
     _eggShuffle = true;
     await playIndex(_tracks.length == 1 ? 0 : _rnd.nextInt(_tracks.length));
   }
@@ -353,12 +379,26 @@ class MusicController extends ChangeNotifier {
     _nostalgiaStop = null;
   }
 
+  /// Turn the demo soundtrack off now (2000's DEMO MODE switched off) — but only
+  /// if that easter-egg soundtrack is what's playing; a trove stream is left be.
+  Future<void> stopBuiltIn() async {
+    if (_playing && !isStream) await stopPlayback();
+  }
+
   /// Stop playback entirely and return the player to its resting state — from
   /// here it only plays again when the user picks a trove file (or Nostalgia
   /// restarts the soundtrack). Clears the easter-egg shuffle too.
   Future<void> stopPlayback() async {
     _nostalgiaStop?.cancel();
     _eggShuffle = false;
+    // Clear the trove playlist + preload and free both temp slots.
+    _troveQueue = const [];
+    _troveIndex = -1;
+    _preloadedIndex = -1;
+    _preloadedPath = null;
+    _loadingTrove = false;
+    _freeSlot(0);
+    _freeSlot(1);
     try {
       await _player.stop();
     } catch (_) {}
@@ -397,19 +437,20 @@ class MusicController extends ChangeNotifier {
   /// (MediaExtractor/MediaCodec), which carries no video and also feeds the
   /// visualizer. If no decoder is available or it fails, the original path is
   /// returned (audio still plays — a video window may appear).
-  Future<String> _audioOnly(String path, String ext) async {
+  Future<String> _audioOnly(String path, String ext, String tag) async {
     if (!_videoCapableExts.contains(ext.toLowerCase())) return path;
     final dir = await getTemporaryDirectory();
-    // One stream plays at a time; a single reused slot, regenerated each call.
+    // [tag] keeps each track's temp file distinct, so a preloaded next track
+    // never overwrites the one currently playing.
     if (Platform.isAndroid) {
       // No ffmpeg on a phone: decode natively to a PCM WAV. It has no video
       // track (nothing to render) and doubles as the visualizer's input, so the
       // lightshow works too. Falls back to the original if the decode fails.
-      final wavOut = '${dir.path}/elyxr_aud.wav';
+      final wavOut = '${dir.path}/elyxr_aud_$tag.wav';
       final ok = await LymnalHost.decodeToWav(path, wavOut);
       return ok ? wavOut : path;
     }
-    final m4aOut = '${dir.path}/elyxr_aud.m4a';
+    final m4aOut = '${dir.path}/elyxr_aud_$tag.m4a';
     try {
       final r = await Process.run(_mediaBin('ffmpeg'),
           ['-y', '-v', 'error', '-i', path, '-vn', '-c:a', 'copy', m4aOut]);
@@ -420,7 +461,7 @@ class MusicController extends ChangeNotifier {
     }
     // Copy failed (an audio codec MP4 can't hold): decode to a plain WAV, which
     // also can't carry video. WAV feeds the visualizer directly too.
-    final wavOut = '${dir.path}/elyxr_aud.wav';
+    final wavOut = '${dir.path}/elyxr_aud_$tag.wav';
     try {
       final r = await Process.run(_mediaBin('ffmpeg'),
           ['-y', '-v', 'error', '-i', path, '-vn', '-ac', '2', '-ar', '44100', wavOut]);
@@ -509,25 +550,50 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Stream and play one audio file from the trove (long-press on a client file
-  /// row). Downloads it through the local proxy to a temp file, then plays it.
-  Future<void> playTroveFile(
-      LymnalClient client, String path, String name) async {
+  /// Stream a trove folder as a playlist. [queue] is the folder's audio files
+  /// (full trove path + display name) in list order; [index] is the tapped one
+  /// to start on. From here the folder auto-advances and preloads (see
+  /// _onComplete / _maybePreload). Works for any folder, nested or not — the
+  /// caller passes whatever folder is being browsed.
+  Future<void> playTroveQueue(
+      LymnalClient client, List<(String, String)> queue, int index) async {
+    _troveClient = client;
+    _troveQueue = queue;
+    _eggShuffle = false; // a real pick ends the easter-egg auto-shuffle
+    _preloadedIndex = -1;
+    _preloadedPath = null;
+    _loadingTrove = true; // show the spinner the instant the row is tapped
+    notifyListeners();
+    await _freeSlot(0);
+    await _freeSlot(1);
+    await _playTroveIndex(index, 0);
+  }
+
+  /// Fetch + prepare queue entry [i] into [slot] and play it. This is the path
+  /// that shows the loading indicator; a preloaded advance skips it.
+  Future<void> _playTroveIndex(int i, int slot) async {
+    final client = _troveClient;
+    if (client == null || i < 0 || i >= _troveQueue.length) return;
+    _troveIndex = i;
+    _curSlot = slot;
+    _loadingTrove = true;
+    notifyListeners();
+    final (path, name) = _troveQueue[i];
+    final playable = await _prepareSlot(client, path, slot);
+    _loadingTrove = false;
+    if (playable == null) {
+      _playing = false;
+      notifyListeners();
+      return;
+    }
+    await _startFile(playable, name);
+    _maybePreload();
+  }
+
+  /// Play an already-prepared file as the current trove track — shared by the
+  /// initial play and a preloaded advance.
+  Future<void> _startFile(String playable, String name) async {
     try {
-      final bytes = await client.downloadBytes(path);
-      final dir = await getTemporaryDirectory();
-      final dot = path.lastIndexOf('.');
-      final ext = dot >= 0 ? path.substring(dot + 1).toLowerCase() : '';
-      final f = File('${dir.path}/elyxr_stream.$ext');
-      await f.writeAsBytes(bytes, flush: true);
-      final String playable;
-      if (_isModule(ext)) {
-        playable = await _renderModule(f.path, ext);
-      } else {
-        // Strip any video track (an .m4a that's really an MP4) so only sound
-        // plays — no picture window on any platform.
-        playable = await _audioOnly(f.path, ext);
-      }
       await _player.stop();
       await _player.play(DeviceFileSource(playable), volume: _volume);
       _override = _pretty(name);
@@ -540,6 +606,104 @@ class MusicController extends ChangeNotifier {
       _playing = false;
     }
     notifyListeners();
+  }
+
+  /// The current trove track ended: play the next file in the folder. Uses the
+  /// preloaded track instantly if it's ready, else fetches it; stops at the end
+  /// of the folder (never falls through to the easter-egg soundtrack).
+  Future<void> _advanceTrove() async {
+    final next = _troveIndex + 1;
+    if (next >= _troveQueue.length) {
+      await stopPlayback(); // end of folder — rest, don't start the egg music
+      return;
+    }
+    if (_preloadedIndex == next && _preloadedPath != null) {
+      final slot = 1 - _curSlot;
+      _troveIndex = next;
+      _curSlot = slot;
+      final ready = _preloadedPath!;
+      final (_, name) = _troveQueue[next];
+      _preloadedIndex = -1;
+      _preloadedPath = null;
+      await _startFile(ready, name);
+      _maybePreload();
+    } else {
+      await _playTroveIndex(next, 1 - _curSlot);
+    }
+  }
+
+  /// Near the end of the current track, fetch + prepare the next one into the
+  /// other slot so the gap between songs stays short. Best-effort, idempotent.
+  void _maybePreload() {
+    if (_troveQueue.isEmpty || _troveIndex < 0 || _preloading) return;
+    final next = _troveIndex + 1;
+    if (next >= _troveQueue.length || _preloadedIndex == next) return;
+    final dur = _dur.inMilliseconds;
+    final pos = _pos.inMilliseconds;
+    if (dur <= 0) return;
+    if (dur - pos > 15000 && pos < dur * 0.85) return; // not close enough yet
+    final client = _troveClient;
+    if (client == null) return;
+    _preloading = true;
+    final slot = 1 - _curSlot;
+    final target = next;
+    final (path, _) = _troveQueue[next];
+    _prepareSlot(client, path, slot).then((playable) {
+      _preloading = false;
+      // Keep it only if we're still on the same current track.
+      if (playable != null && _troveIndex + 1 == target) {
+        _preloadedIndex = target;
+        _preloadedPath = playable;
+      }
+    });
+  }
+
+  /// Download [path] and prepare a playable file in [slot] (double-buffered: one
+  /// slot for the current track, the other for the preloaded next, swapping as
+  /// we advance). Frees the slot's previous temp files first, so only ~2 tracks'
+  /// worth of temp ever exists. Returns the playable path, or null on failure.
+  Future<String?> _prepareSlot(LymnalClient client, String path, int slot) async {
+    await _freeSlot(slot);
+    try {
+      final bytes = await client.downloadBytes(path);
+      final dir = await getTemporaryDirectory();
+      final dot = path.lastIndexOf('.');
+      final ext = dot >= 0 ? path.substring(dot + 1).toLowerCase() : '';
+      final raw = File('${dir.path}/elyxr_slot$slot.$ext');
+      await raw.writeAsBytes(bytes, flush: true);
+      _slotTemp[slot].add(raw.path);
+      final String playable;
+      if (_isModule(ext)) {
+        playable = await _renderModule(raw.path, ext);
+      } else {
+        // Strip any video track (an .m4a that's really an MP4) so only sound
+        // plays — no picture window on any platform.
+        playable = await _audioOnly(raw.path, ext, 'slot$slot');
+      }
+      if (playable != raw.path) _slotTemp[slot].add(playable);
+      return playable;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Delete a slot's temp files — the tracked ones, plus any stray slot-named
+  /// leftovers (e.g. an intermediate from _audioOnly's fallback).
+  Future<void> _freeSlot(int slot) async {
+    for (final t in _slotTemp[slot]) {
+      File(t).delete().ignore();
+    }
+    _slotTemp[slot] = [];
+    try {
+      final dir = await getTemporaryDirectory();
+      for (final f in dir.listSync().whereType<File>()) {
+        final n = f.path.split(Platform.pathSeparator).last;
+        if (n.startsWith('elyxr_slot$slot.') ||
+            n.startsWith('elyxr_aud_slot$slot')) {
+          f.delete().ignore();
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> toggle() async {
@@ -593,6 +757,12 @@ class MusicController extends ChangeNotifier {
   // (a user can still lock one track); otherwise Nostalgia's egg shuffle keeps
   // the soundtrack endlessly non-linear, never repeating back-to-back.
   void _onComplete() {
+    // Streaming a trove folder: the folder IS the playlist — play the next file
+    // in it (stopping at the end), never the easter-egg soundtrack.
+    if (_troveQueue.isNotEmpty && _troveIndex >= 0) {
+      _advanceTrove();
+      return;
+    }
     if (_repeat == MusicRepeat.one) {
       playIndex(_index);
     } else if (_eggShuffle && _tracks.length > 1) {
@@ -620,6 +790,8 @@ class MusicController extends ChangeNotifier {
   @override
   void dispose() {
     _closeAnalysis(); // close the visualizer handle, drop any temp
+    _freeSlot(0);
+    _freeSlot(1);
     _nostalgiaStop?.cancel();
     _player.dispose();
     super.dispose();

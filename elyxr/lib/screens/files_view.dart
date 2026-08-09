@@ -862,9 +862,18 @@ void _selectEntry(
   if (!entry.isDir && isAudioName(entry.name)) {
     final client = context.read<SessionController>().client;
     if (client != null) {
-      final path =
-          browse.path.isEmpty ? entry.name : '${browse.path}/${entry.name}';
-      context.read<MusicController>().playTroveFile(client, path, entry.name);
+      // The folder currently being browsed IS the playlist: gather its audio
+      // files in display order (works at any depth — TROVE/MUSIC TEST/… too),
+      // and start on the tapped one. From there the folder auto-advances.
+      final queue = <(String, String)>[];
+      var start = 0;
+      for (final e in browse.entries) {
+        if (e.isDir || !isAudioName(e.name)) continue;
+        final p = browse.path.isEmpty ? e.name : '${browse.path}/${e.name}';
+        if (e.name == entry.name) start = queue.length;
+        queue.add((p, e.name));
+      }
+      context.read<MusicController>().playTroveQueue(client, queue, start);
     }
   }
 }
