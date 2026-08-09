@@ -99,7 +99,7 @@ class _Console extends StatelessWidget {
     final up = session.status == LinkStatus.ok;
     final items = <String>[
       up ? 'Link to lymnal up' : 'Link to lymnal down',
-      if (h != null) 'Trove ${h.trove} · ${fmtGb(used)} of ${fmtGb(max)} GB',
+      if (h != null) 'Trove ${fmtGb(used)} of ${fmtGb(max)} GB used',
       if (h != null) '${fmtGb(h.driveFreeBytes)} GB free on the drive',
       if (xfers > 0) '$xfers ${xfers == 1 ? 'transfer' : 'transfers'} running',
       if (playing != null) 'Now playing $playing',
@@ -438,34 +438,39 @@ class _FindRowState extends State<_FindRow> {
 
     return Row(
       children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 150),
+        Flexible(
           child: Text(figures,
               style: glass(16, p.bright), maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
         const SizedBox(width: 12),
-        // A Wrap, not a scroll: a mouse can't drag a scroll, so an off-screen
-        // action would be unreachable. This stays one thin line normally and
-        // only spills to a second line in the tightest case — never hiding an
-        // action. CLEAR is the ✕ at the end.
+        // Always one line: the actions ride a FittedBox that scales them down to
+        // fit rather than ever wrapping to a second row (and never a scroll — a
+        // mouse can't drag one, which would hide an action). CLEAR is the ✕.
         Expanded(
-          child: Wrap(
-            alignment: WrapAlignment.end,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 14,
-            runSpacing: 4,
-            children: [
-              if (single != null)
-                _action(p, 'RENAME', () => _rename(context, browse, p, single!.name)),
-              _action(p, 'DOWNLOAD', () => _download(context, browse, actions)),
-              _action(p, 'MOVE', () => _move(context, browse, p)),
-              _action(p, 'DELETE', () => _delete(context, browse, p)),
-              GestureDetector(
-                onTap: browse.clearSelection,
-                behavior: HitTestBehavior.opaque,
-                child: Text('✕', style: glass(16, p.mid)),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                children: [
+                  if (single != null) ...[
+                    _action(p, 'RENAME', () => _rename(context, browse, p, single!.name)),
+                    const SizedBox(width: 14),
+                  ],
+                  _action(p, 'DOWNLOAD', () => _download(context, browse, actions)),
+                  const SizedBox(width: 14),
+                  _action(p, 'MOVE', () => _move(context, browse, p)),
+                  const SizedBox(width: 14),
+                  _action(p, 'DELETE', () => _delete(context, browse, p)),
+                  const SizedBox(width: 16),
+                  GestureDetector(
+                    onTap: browse.clearSelection,
+                    behavior: HitTestBehavior.opaque,
+                    child: Text('✕', style: glass(16, p.mid)),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ],
