@@ -859,23 +859,28 @@ class _Row extends StatelessWidget {
 void _selectEntry(
     BuildContext context, BrowseController browse, int index, Entry entry) {
   browse.selectOnly(index);
-  if (!entry.isDir && isAudioName(entry.name)) {
-    final client = context.read<SessionController>().client;
-    if (client != null) {
-      // The folder currently being browsed IS the playlist: gather its audio
-      // files in display order (works at any depth — TROVE/MUSIC TEST/… too),
-      // and start on the tapped one. From there the folder auto-advances.
-      final queue = <(String, String)>[];
-      var start = 0;
-      for (final e in browse.entries) {
-        if (e.isDir || !isAudioName(e.name)) continue;
-        final p = browse.path.isEmpty ? e.name : '${browse.path}/${e.name}';
-        if (e.name == entry.name) start = queue.length;
-        queue.add((p, e.name));
-      }
-      context.read<MusicController>().playTroveQueue(client, queue, start);
+  if (entry.isDir || !isAudioName(entry.name)) return;
+  final client = context.read<SessionController>().client;
+  if (client == null) return;
+  // Capture the controllers before any await so we don't touch context across
+  // an async gap.
+  final music = context.read<MusicController>();
+  final targetName = entry.name;
+  () async {
+    // Load the WHOLE folder first so the playlist covers every track, not just
+    // the pages scrolled into view. Then gather its audio files in display order
+    // (works at any depth — TROVE/MUSIC TEST/… too) and start on the tapped one.
+    await browse.loadAll();
+    final queue = <(String, String)>[];
+    var start = 0;
+    for (final e in browse.entries) {
+      if (e.isDir || !isAudioName(e.name)) continue;
+      final p = browse.path.isEmpty ? e.name : '${browse.path}/${e.name}';
+      if (e.name == targetName) start = queue.length;
+      queue.add((p, e.name));
     }
-  }
+    music.playTroveQueue(client, queue, start);
+  }();
 }
 
 /// Open an entry the way a double-click should: a folder navigates into itself;

@@ -250,6 +250,18 @@ class BrowseController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load every remaining page of the current folder. Used before building a
+  /// playlist from a folder so the queue covers ALL its tracks, not only the
+  /// pages scrolled into view. Stops if a page makes no progress (e.g. an error),
+  /// so it can never loop forever.
+  Future<void> loadAll() async {
+    while (hasMore) {
+      final before = _cursor;
+      await loadMore();
+      if (_cursor == before) break;
+    }
+  }
+
   /// Re-fetch the current folder, bypassing the cache (after an event, or a
   /// manual retry once the server answers again).
   Future<void> refreshFolder() async {
