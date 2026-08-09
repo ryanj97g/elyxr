@@ -258,12 +258,14 @@ class _NostalgiaRow extends StatelessWidget {
               music.cancelBuiltInStop();
               final laughDone = sound.laugh();
               // Opening laugh: let it land clean, then bring the soundtrack in
-              // once it's done — but only when nothing was already playing. Rapid
-              // re-toggles find the music live, skip this, and just stack another
-              // laugh, so the stacking-laugh bit stays intact.
-              if (!music.active) {
+              // once it's done — but ONLY if 2000's DEMO MODE is on and nothing
+              // was already playing. Without demo mode, Nostalgia's visuals come
+              // up with no music hijack; a live trove stream is always left be.
+              if (s.demoMode && !music.active) {
                 laughDone.then((_) {
-                  if (s.nostalgia && !music.active) music.startBuiltIn();
+                  if (s.nostalgia && s.demoMode && !music.active) {
+                    music.startBuiltIn();
+                  }
                 });
               }
             } else {
@@ -287,7 +289,7 @@ class _NostalgiaRow extends StatelessWidget {
                 Tooltip(
                   message: 'Matrix screensaver\nCursor trail\nTransfer log\n'
                       'Snake (wordmark ×7)\nNonsense button\nSound effects\n'
-                      'Auto-plays the soundtrack',
+                      "2000's demo music (toggle below)",
                   triggerMode: TooltipTriggerMode.longPress,
                   waitDuration: const Duration(days: 3650),
                   showDuration: const Duration(seconds: 6),
@@ -309,21 +311,34 @@ class _NostalgiaRow extends StatelessWidget {
             ),
           ),
         ),
-        // The only sub-control: silence the sound effects without leaving the
-        // mode. No feature list — that's in the label's hover popup.
+        // The sub-control: 2000's DEMO MODE — whether the built-in keygen
+        // soundtrack is the auto-playing music source. Off by default so it's
+        // opt-in and never hijacks a trove stream. No feature list here — that's
+        // in the label's long-press popup.
         if (on)
           GestureDetector(
-            onTap: () => s.sound = !s.sound,
+            onTap: () {
+              final now = !s.demoMode;
+              s.demoMode = now;
+              final music = context.read<MusicController>();
+              if (now) {
+                // On: start the demo soundtrack now, unless something's already
+                // playing (never yank a trove stream).
+                if (!music.active) music.startBuiltIn();
+              } else {
+                // Off: stop the demo soundtrack, but leave a trove stream be.
+                music.stopBuiltIn();
+              }
+            },
             behavior: HitTestBehavior.opaque,
             child: Padding(
               padding: const EdgeInsets.only(left: 29, top: 3, bottom: 2),
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(s.sound ? 'Sound on' : 'Sound off',
-                        style: glass(15, p.mid)),
+                    child: Text("2000's DEMO MODE", style: glass(15, p.mid)),
                   ),
-                  _toggle(p, s.sound),
+                  _toggle(p, s.demoMode),
                 ],
               ),
             ),

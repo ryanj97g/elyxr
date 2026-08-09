@@ -44,6 +44,11 @@ class SettingsController extends ChangeNotifier {
   // Sounds, gated under nostalgia. Its own switch so the retro SFX can be
   // silenced without leaving nostalgia mode.
   bool _sound = true;
+  // "2000's DEMO MODE": when on (with Nostalgia on), the built-in easter-egg
+  // keygen soundtrack is the auto-playing music source. Off by default, so it's
+  // opt-in rather than hijacking the player the moment Nostalgia turns on — and
+  // so a trove folder you're streaming stays your music source.
+  bool _demoMode = false;
   // A dev-only escape hatch: let the normally-locked window be resized. Purely
   // in-memory — never persisted, never on by default, off on every launch, and
   // undocumented. The window is meant to be a fixed size; this is the buried way
@@ -70,6 +75,7 @@ class SettingsController extends ChangeNotifier {
   String get termFont => _termFont;
   bool get nostalgia => _nostalgia;
   bool get sound => _sound;
+  bool get demoMode => _demoMode;
   bool get allowResize => _allowResize;
   bool get inSettings => _inSettings;
 
@@ -96,6 +102,7 @@ class SettingsController extends ChangeNotifier {
     // preference. (Deliberately not read back from prefs.)
     _nostalgia = false;
     _sound = _prefs.getBool('sound') ?? true;
+    _demoMode = _prefs.getBool('demoMode') ?? false;
     // Apply the chosen terminal face before the first frame builds. It governs
     // everything on the glass — the body text and the ticker/readouts alike —
     // since the ticker is part of the screen, not a separate face. Only the
@@ -163,6 +170,8 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
   set sound(bool v) => _set('sound', () => _sound = v, () => _prefs.setBool('sound', v));
+  set demoMode(bool v) =>
+      _set('demoMode', () => _demoMode = v, () => _prefs.setBool('demoMode', v));
   set density(Density v) => _set('density', () => _density = v, () => _prefs.setString('density', v.name));
   set dark(bool v) => _set('dark', () => _dark = v, () => _prefs.setBool('dark', v));
   set mode(ViewMode v) => _set('mode', () => _mode = v, () => _prefs.setString('mode', v.name));
