@@ -13,6 +13,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/lymnal_client.dart';
 
@@ -55,6 +56,12 @@ class MusicController extends ChangeNotifier {
   // the shown title and hides the playlist index.
   String? _override;
 
+  // Playback volume (0..1), applied to every source and remembered across
+  // launches. _preMute holds the level to come back to when unmuting.
+  static const _volKey = 'music.volume';
+  double _volume = 1.0;
+  double _preMute = 1.0;
+
   // ---- real-time visualizer data ----
   // The spectrum bars are NOT captured from the speakers (that path always lags
   // by a capture buffer). Instead the *actual audio of the current track* is
@@ -82,6 +89,7 @@ class MusicController extends ChangeNotifier {
     });
     _player.onPlayerComplete.listen((_) => _onComplete());
     _load();
+    _restoreVolume();
   }
 
   List<String> get tracks => _tracks;
@@ -98,6 +106,41 @@ class MusicController extends ChangeNotifier {
   String titleAt(int i) => _pretty(_tracks[i]);
   bool get isStream => _override != null;
   bool get active => _hasSource && (_playing || _pos > Duration.zero);
+  double get volume => _volume;
+  bool get muted => _volume <= 0;
+
+  Future<void> _restoreVolume() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _volume = (prefs.getDouble(_volKey) ?? 1.0).clamp(0.0, 1.0);
+    } catch (_) {}
+    if (_volume > 0) _preMute = _volume;
+    try {
+      await _player.setVolume(_volume);
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  /// Set the playback volume (0..1) and remember it. Applies live.
+  Future<void> setVolume(double v) async {
+    _volume = v.clamp(0.0, 1.0);
+    if (_volume > 0) _preMute = _volume;
+    try {
+      await _player.setVolume(_volume);
+    } catch (_) {}
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_volKey, _volume);
+    } catch (_) {}
+  }
+
+  /// Nudge the volume by [delta] — what the mouse wheel over the deck drives.
+  Future<void> nudgeVolume(double delta) => setVolume(_volume + delta);
+
+  /// Mute, or return to the level from before muting (clicking the speaker).
+  Future<void> toggleMute() =>
+      setVolume(_volume > 0 ? 0.0 : (_preMute > 0 ? _preMute : 0.5));
 
   /// Number of spectrum bars the analysis produces (and the visualizer draws).
   static const int kVisBars = _kVisBars;
@@ -271,7 +314,7 @@ class MusicController extends ChangeNotifier {
     try {
       final (src, analysisPath) = await _assetSource(_tracks[_index]);
       await _player.stop();
-      await _player.play(src);
+      await _player.play(src, volume: _volume);
       _hasSource = true;
       _playing = true;
       _startSpectro(analysisPath); // fire-and-forget; never blocks playback
@@ -294,7 +337,7 @@ class MusicController extends ChangeNotifier {
       await f.writeAsBytes(bytes, flush: true);
       final playable = _isModule(ext) ? await _renderModule(f.path, ext) : f.path;
       await _player.stop();
-      await _player.play(DeviceFileSource(playable));
+      await _player.play(DeviceFileSource(playable), volume: _volume);
       _override = _pretty(name);
       _hasSource = true;
       _pos = Duration.zero;

@@ -19,6 +19,7 @@ import '../state/browse.dart';
 import '../state/music.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
+import '../state/transfers.dart';
 import '../util/drag_out.dart';
 import '../util/format.dart';
 import '../util/open_external.dart';
@@ -89,6 +90,22 @@ class _Console extends StatelessWidget {
     final max = browse.maxBytes;
     final pct = max > 0 ? (used / max * 100) : 0.0;
 
+    // Live status for the ticker. select (not watch) so a running transfer's
+    // per-tick progress or the play head don't rebuild the console — only the
+    // things the ticker actually shows (their count, the track) do.
+    final playing =
+        context.select<MusicController, String?>((m) => m.playing ? m.title : null);
+    final xfers = context.select<TransferController, int>((t) => t.active.length);
+    final up = session.status == LinkStatus.ok;
+    final items = <String>[
+      up ? 'Link to lymnal up' : 'Link to lymnal down',
+      if (h != null) 'Trove ${h.trove} · ${fmtGb(used)} of ${fmtGb(max)} GB',
+      if (h != null) '${fmtGb(h.driveFreeBytes)} GB free on the drive',
+      if (xfers > 0) '$xfers ${xfers == 1 ? 'transfer' : 'transfers'} running',
+      if (playing != null) 'Now playing $playing',
+      if (up && xfers == 0 && playing == null) 'Ready',
+    ];
+
     return Container(
       padding: const EdgeInsets.fromLTRB(13, 11, 13, 10),
       decoration: BoxDecoration(
@@ -97,7 +114,7 @@ class _Console extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _Ticker(palette: p, used: used, max: max, name: h?.trove ?? 'elyxr'),
+          _Ticker(palette: p, items: items),
           const SizedBox(height: 9),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,14 +222,12 @@ class _CapacityBars extends StatelessWidget {
 }
 
 /// The ticker: IBM Plex Mono, scrolling right-to-left, pausing on hover, with a
-/// fixed LOG label anchoring the left edge.
+/// fixed LOG label anchoring the left edge. Its lines are live status, passed in
+/// from the console (link, trove, drive, transfers, now playing).
 class _Ticker extends StatefulWidget {
   final Palette palette;
-  final int used;
-  final int max;
-  final String name;
-  const _Ticker(
-      {required this.palette, required this.used, required this.max, required this.name});
+  final List<String> items;
+  const _Ticker({required this.palette, required this.items});
 
   @override
   State<_Ticker> createState() => _TickerState();
@@ -220,9 +235,11 @@ class _Ticker extends StatefulWidget {
 
 class _TickerState extends State<_Ticker> with SingleTickerProviderStateMixin {
   late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(seconds: 38))
-        ..repeat();
+      AnimationController(vsync: this, duration: const Duration(seconds: 19))..repeat();
   bool _hover = false;
+  // Pixels per second — about twice the old pace. Hover-to-pause makes a brisk
+  // crawl easy to stop and actually read.
+  static const double _speed = 46.0;
 
   @override
   void didUpdateWidget(covariant _Ticker old) {
@@ -237,16 +254,22 @@ class _TickerState extends State<_Ticker> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  List<String> get _items => [
-        'Trove at ${fmtGb(widget.used)} GB of ${fmtGb(widget.max)} GB',
-        'Link to ${widget.name} up',
-        'Ready',
-      ];
+  // Keep the crawl at a constant speed however long the live status gets: the
+  // duration scales with the distance to travel. Only re-times when it changes.
+  void _retimeTo(Duration d) {
+    if (_c.duration == d) return;
+    _c.duration = d;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_hover) _c.repeat();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = widget.palette;
-    final text = _items.join('        ·        ');
+    final text = widget.items.join('        ·        ');
+    final style = mono(11.5, p.bright, spacing: 0)
+        .copyWith(shadows: [Shadow(color: p.aAlpha(0.4), blurRadius: 7)]);
     return Container(
       height: 22,
       decoration: BoxDecoration(
@@ -277,12 +300,23 @@ class _TickerState extends State<_Ticker> with SingleTickerProviderStateMixin {
                 _c.repeat();
               },
               child: ClipRect(
-                child: AnimatedBuilder(
-                  animation: _c,
-                  builder: (context, _) {
-                    return LayoutBuilder(builder: (context, cons) {
-                      final w = cons.maxWidth;
-                      final dx = w - (_c.value * (w + 400));
+                child: LayoutBuilder(builder: (context, cons) {
+                  final w = cons.maxWidth;
+                  // Measure the line so it fully scrolls off before looping, and
+                  // set the duration from that distance to hold the speed steady.
+                  final tp = TextPainter(
+                    text: TextSpan(text: text, style: style),
+                    maxLines: 1,
+                    textDirection: TextDirection.ltr,
+                  )..layout();
+                  final travel = tp.width + w;
+                  _retimeTo(Duration(
+                      milliseconds:
+                          (travel / _speed * 1000).round().clamp(3000, 120000)));
+                  return AnimatedBuilder(
+                    animation: _c,
+                    builder: (context, _) {
+                      final dx = w - _c.value * travel;
                       return Transform.translate(
                         offset: Offset(dx, 0),
                         child: Align(
@@ -292,14 +326,13 @@ class _TickerState extends State<_Ticker> with SingleTickerProviderStateMixin {
                             maxLines: 1,
                             softWrap: false,
                             overflow: TextOverflow.visible,
-                            style: mono(11.5, p.bright, spacing: 0)
-                                .copyWith(shadows: [Shadow(color: p.aAlpha(0.4), blurRadius: 7)]),
+                            style: style,
                           ),
                         ),
                       );
-                    });
-                  },
-                ),
+                    },
+                  );
+                }),
               ),
             ),
           ),

@@ -6,6 +6,7 @@
 
 import 'dart:typed_data';
 
+import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:provider/provider.dart';
@@ -33,30 +34,35 @@ class MusicPlayerPanel extends StatelessWidget {
       // Idle — a slim one-line bar, not the full deck, so it doesn't eat the
       // tube when nothing's playing. Still present and startable: a play button
       // and the tracklist. The full deck only unfolds while something plays.
-      return Row(
-        children: [
-          GestureDetector(
-            onTap: m.hasTracks ? () => m.toggle() : null,
-            behavior: HitTestBehavior.opaque,
-            child: Icon(Icons.play_arrow,
-                size: 20, color: m.hasTracks ? p.a : p.foot),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(m.hasTracks ? m.title : '—',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: glass(15, p.foot)),
-          ),
-          if (m.hasTracks) ...[
-            const SizedBox(width: 8),
+      return _wheel(
+        m,
+        Row(
+          children: [
             GestureDetector(
-              onTap: () => _showTracklist(context, m, p),
+              onTap: m.hasTracks ? () => m.toggle() : null,
               behavior: HitTestBehavior.opaque,
-              child: Icon(Icons.queue_music, color: p.mid, size: 18),
+              child: Icon(Icons.play_arrow,
+                  size: 20, color: m.hasTracks ? p.a : p.foot),
             ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(m.hasTracks ? m.title : '—',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: glass(15, p.foot)),
+            ),
+            if (m.hasTracks) ...[
+              const SizedBox(width: 8),
+              _volumeControl(p, m),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _showTracklist(context, m, p),
+                behavior: HitTestBehavior.opaque,
+                child: Icon(Icons.queue_music, color: p.mid, size: 18),
+              ),
+            ],
           ],
-        ],
+        ),
       );
     }
 
@@ -64,7 +70,9 @@ class MusicPlayerPanel extends StatelessWidget {
     final frac =
         total > 0 ? (m.position.inMilliseconds / total).clamp(0.0, 1.0) : 0.0;
 
-    return Column(
+    return _wheel(
+      m,
+      Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Now playing — marquee title, tracklist button, index.
@@ -121,6 +129,7 @@ class MusicPlayerPanel extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(_fmt(m.position), style: mono(10, p.foot)),
+            _volumeControl(p, m),
             Text(_fmt(m.duration), style: mono(10, p.foot)),
           ],
         ),
@@ -142,6 +151,58 @@ class MusicPlayerPanel extends StatelessWidget {
           ],
         ),
       ],
+      ),
+    );
+  }
+
+  /// Scroll the wheel anywhere over the deck to nudge the volume — up is louder.
+  /// A wheel signal isn't a drag, so it never disturbs the seek bar.
+  Widget _wheel(MusicController m, Widget child) => Listener(
+        onPointerSignal: (sig) {
+          if (sig is PointerScrollEvent) {
+            m.nudgeVolume(sig.scrollDelta.dy < 0 ? 0.05 : -0.05);
+          }
+        },
+        child: child,
+      );
+
+  /// Speaker + a short level bar: live feedback for the wheel, and a tap-target
+  /// (mute / unmute) that will also carry the volume on touch later.
+  Widget _volumeControl(Palette p, MusicController m) {
+    final icon = m.muted
+        ? Icons.volume_off
+        : m.volume < 0.5
+            ? Icons.volume_down
+            : Icons.volume_up;
+    return GestureDetector(
+      onTap: () => m.toggleMute(),
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: m.muted ? p.foot : p.mid),
+          const SizedBox(width: 5),
+          Container(
+            width: 44,
+            height: 4,
+            decoration: BoxDecoration(
+              color: p.dim,
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: m.volume.clamp(0.0, 1.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: p.a,
+                  borderRadius: BorderRadius.circular(2),
+                  boxShadow: [BoxShadow(color: p.aAlpha(0.5), blurRadius: 4)],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
