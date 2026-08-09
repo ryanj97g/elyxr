@@ -9,7 +9,7 @@ name: windows-build
 
 on:
   push:
-    branches: [windows-client, main, main]
+    branches: [windows-client, main]
   workflow_dispatch:
 
 permissions:
