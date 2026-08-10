@@ -101,6 +101,9 @@ class _CornerSpeakerState extends State<CornerSpeaker>
   }
 }
 
+// The deep case shadow used for the moulded recesses and contact shadows.
+const Color _deep = Color(0xFF05070A);
+
 class _CornerSpeakerPainter extends CustomPainter {
   final Palette p;
   final double level; // 0..1 bass energy now
@@ -124,7 +127,8 @@ class _CornerSpeakerPainter extends CustomPainter {
         : RRect.fromRectAndCorners(rect,
             bottomRight: outer, topLeft: notch, topRight: small, bottomLeft: small);
 
-    // Metal, tuned to the chassis' dark lower body so it reads as the same case.
+    // Base metal, the same body gradient as the chassis so the corner reads as
+    // one continuous piece of the case, not a separate part sitting on it.
     canvas.drawRRect(
       pod,
       Paint()
@@ -134,28 +138,101 @@ class _CornerSpeakerPainter extends CustomPainter {
           colors: [p.m2, p.m3],
         ).createShader(rect),
     );
-    // A hairline highlight along the top edge — the moulded bevel.
+    // A bright hairline where the raised metal catches light on its top/outer
+    // edge, then a soft dark contact shadow just inside the edges where the
+    // screen curves in — together the corner reads as a formed part of the case.
     canvas.drawRRect(
       pod.deflate(0.5),
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
-        ..color = p.mh.withValues(alpha: 0.5),
+        ..color = p.mh.withValues(alpha: 0.55),
+    );
+    canvas.drawRRect(
+      pod.deflate(2),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = _deep.withValues(alpha: 0.45)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
 
-    // The woofer.
     final c = size.center(Offset.zero);
     final r = math.min(size.width, size.height) / 2 - 6;
 
-    // The basket: a recessed ring (the fixed housing).
-    canvas.drawCircle(c, r, Paint()..color = p.mv1);
+    // A raised metal flange the driver is bolted to: top-lit (light at the top,
+    // dark at the bottom) so it domes out of the case.
+    final flangeR = r + 3.5;
+    final flangeRect = Rect.fromCircle(center: c, radius: flangeR);
     canvas.drawCircle(
-        c,
-        r,
+      c,
+      flangeR,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [p.mh, p.m3],
+        ).createShader(flangeRect),
+    );
+    canvas.drawCircle(
+      c,
+      flangeR,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [p.mt, _deep],
+        ).createShader(flangeRect),
+    );
+
+    // Four mounting screws set into the flange — the bolted-into-the-panel cue.
+    final screwOrbit = flangeR - 3;
+    for (final ang in const [0.785, 2.356, 3.927, 5.498]) {
+      final sc = c + Offset(math.cos(ang), math.sin(ang)) * screwOrbit;
+      final srect = Rect.fromCircle(center: sc, radius: 2.2);
+      canvas.drawCircle(
+        sc,
+        2.2,
+        Paint()
+          ..shader = RadialGradient(
+            center: const Alignment(-0.3, -0.3),
+            colors: [p.mt, const Color(0xFF14181C)],
+          ).createShader(srect),
+      );
+      canvas.drawCircle(
+        sc,
+        2.2,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.4
-          ..color = p.mh);
+          ..strokeWidth = 0.6
+          ..color = _deep.withValues(alpha: 0.6),
+      );
+    }
+
+    // The basket well, recessed into the flange: dark at the top rim lifting to
+    // a little light at the bottom — the inverse of the raised flange, so it
+    // reads sunken. An inner-rim shadow deepens the recess.
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_deep, p.m2],
+        ).createShader(Rect.fromCircle(center: c, radius: r)),
+    );
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..color = _deep.withValues(alpha: 0.7)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+    );
 
     // The BOOM: a wide, bright accent flare plus an expanding shockwave ring,
     // punching out on every beat. This is the rave — it spills past the basket
