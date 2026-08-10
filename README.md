@@ -112,18 +112,6 @@ elyxr is a live window into the trove, not a copy of it:
 
 No syncing by hand; using the files *is* the sync.
 
-### The music player
-
-The player is a permanent fixture of the files view:
-
-- Playing an audio file makes its **whole folder a playlist** (any depth), and the
-  next track **preloads** near the end so gaps stay short.
-- A real-time **lightshow**: the actual FFT of the audio at the play head; drives
-  the spectrum, the corner woofers, and (in Nostalgia Mode) the tube's edge glow.
-- **Scroll the wheel anywhere over the deck** to change volume.
-- An `.m4a` that's secretly an MP4 with video plays **audio-only**: no picture
-  window.
-
 ---
 
 ## Updates
