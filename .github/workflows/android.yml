@@ -50,6 +50,9 @@ jobs:
         run: |
           build=$(git rev-list --count HEAD)
           commit=$(git rev-parse --short HEAD)
+          # Share the build number with later steps — the release step names the
+          # build-numbered APK with it, and a shell local doesn't cross steps.
+          echo "ELYXR_BUILD=$build" >> "$GITHUB_ENV"
           # The repo only carries the Linux runner; scaffold the Android one.
           # --org fixes the package to com.elyxr.elyxr so the committed
           # MainActivity/LymnalService (package com.elyxr.elyxr) drop straight in.
@@ -185,9 +188,15 @@ jobs:
             --dart-define=ELYXR_BUILD=$build \
             --dart-define=ELYXR_COMMIT=$commit
 
-          # A stable filename for the in-app updater to fetch.
+          # A stable filename for the in-app updater to fetch...
           cp build/app/outputs/flutter-apk/app-debug.apk \
              build/app/outputs/flutter-apk/elyxr.apk
+          # ...and a build-numbered copy beside it. The stable name is replaced in
+          # place on every run, so a browser or CDN holding that URL can serve an
+          # older APK that looks current — and a sideload leaves no receipt saying
+          # which one you got. This copy makes the filename itself the answer.
+          cp build/app/outputs/flutter-apk/app-debug.apk \
+             "build/app/outputs/flutter-apk/elyxr-$build.apk"
 
       - name: Upload the APK
         uses: actions/upload-artifact@v4
@@ -207,4 +216,6 @@ jobs:
           tag_name: android-latest
           name: elyxr Android (latest)
           make_latest: false
-          files: elyxr/build/app/outputs/flutter-apk/elyxr.apk
+          files: |
+            elyxr/build/app/outputs/flutter-apk/elyxr.apk
+            elyxr/build/app/outputs/flutter-apk/elyxr-${{ env.ELYXR_BUILD }}.apk

@@ -855,6 +855,11 @@ class _DeviceRows extends StatelessWidget {
     );
   }
 
+  /// The first 7 of a commit hash — enough to identify it, short enough to sit on
+  /// one line. 'unknown' when nothing stamped it.
+  String _shortCommit(String c) =>
+      c.length >= 7 ? c.substring(0, 7) : c;
+
   /// A plain "update this device" action — no version numbers, just what it's
   /// doing: tap to update, then UPDATING… while it runs, or an amber retry with
   /// the reason if it couldn't finish.
@@ -892,6 +897,21 @@ class _DeviceRows extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(text, style: glass(19, color)),
+            ),
+          ),
+          // Exactly what this device is running, and what the server is running.
+          // Sideloading an APK gives no receipt, so without this the only way to
+          // tell a stale install from a current one is to hunt for a feature and
+          // guess — and a build that silently didn't update looks identical to a
+          // change that didn't work.
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              appBuild > 0
+                  ? 'THIS DEVICE: BUILD $appBuild · ${_shortCommit(appCommit)}'
+                      '${serverBuild > 0 ? '   SERVER: BUILD $serverBuild' : ''}'
+                  : 'THIS DEVICE: UNSTAMPED BUILD',
+              style: mono(11, p.foot, spacing: 0.1),
             ),
           ),
           if (failed && u.error != null)
