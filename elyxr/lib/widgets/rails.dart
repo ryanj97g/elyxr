@@ -184,13 +184,18 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
             onTapCancel: _release,
             onTap: _tap,
             behavior: HitTestBehavior.opaque,
-            // The whole mark scrunches down a touch on the press and bounces
-            // back on release (easeOutBack overshoot) — the tactile hold feel.
-            child: AnimatedScale(
-              scale: _holding ? 0.92 : 1.0,
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutBack,
-              child: _wordmark(p, lit),
+            // Nudged down 2px so it sits centred in the rail band (its top is
+            // the thin highlight hairline), not riding high against that line.
+            child: Transform.translate(
+              offset: const Offset(0, 2),
+              // The whole mark scrunches down a touch on the press and bounces
+              // back on release (easeOutBack overshoot) — the tactile hold feel.
+              child: AnimatedScale(
+                scale: _holding ? 0.92 : 1.0,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutBack,
+                child: _wordmark(p, lit),
+              ),
             ),
           ),
           const SizedBox(width: 9),
