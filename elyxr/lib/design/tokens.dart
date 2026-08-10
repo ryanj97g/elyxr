@@ -213,9 +213,11 @@ extension DensityLabel on Density {
       };
 
   double get pad => switch (this) {
-        Density.tight => 6,
-        Density.mid => 10,
-        Density.roomy => 15,
+        // Row padding. A file row is a touch target, so even TIGHT keeps a row
+        // near the ~44px a finger needs; MID and ROOMY go past it.
+        Density.tight => 9,
+        Density.mid => 13,
+        Density.roomy => 18,
       };
 
   /// The base glass font. Density's size change is applied globally through the
@@ -334,10 +336,15 @@ class Palette {
       bright = _s.mono
           ? _c(oklchArgb(0.90, 0, 0))
           : _c(trueArgb(0.88 + 0.06 * glowT, h, maxC * 0.9 * glowBoost));
-      soft = _c(trueArgb(0.34, h, maxC * 0.55 * wc));
-      mid = _c(trueArgb(0.66, h, maxC * wc));
-      dim = _c(trueArgb(0.44, h, maxC * 0.85 * wc));
-      foot = _c(trueArgb(0.52, h, maxC * 0.70 * wc));
+      // Lifted across the board: the old values (0.34 / 0.66 / 0.44 / 0.52) read
+      // as faded on the tube for anything that wasn't key text — an inactive
+      // shuffle icon on `foot`, a secondary label on `soft`. Every terminal
+      // element that isn't `bright` gets the same lift, so the hierarchy between
+      // them is unchanged and only the floor comes up.
+      soft = _c(trueArgb(0.46, h, maxC * 0.55 * wc));
+      mid = _c(trueArgb(0.72, h, maxC * wc));
+      dim = _c(trueArgb(0.54, h, maxC * 0.85 * wc));
+      foot = _c(trueArgb(0.62, h, maxC * 0.70 * wc));
       glow = _c(trueArgb(0.60 + 0.07 * glowT, h, maxC * wc));
       tubeBg = _c(trueArgb(0.085, h, 0.020 * wc));
       bloom = 0.07 + 0.30 * glowT;

@@ -348,6 +348,21 @@ class _TickerState extends State<_Ticker> with SingleTickerProviderStateMixin {
 
 // ------------------------------------------------------------ action bar ---
 
+/// Wrap a label or glyph in a hit box a finger can actually land on. Most
+/// controls in this screen are bare text, and a GestureDetector around bare text
+/// only catches the glyph — around 12px tall, well under the ~44px a touch target
+/// needs. The padding is transparent, so the layout keeps its density and only the
+/// tappable area grows. Horizontal padding doubles as the gap between neighbours.
+Widget _tap({required Widget child, VoidCallback? onTap, double pad = 11}) =>
+    GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 7, vertical: pad),
+        child: child,
+      ),
+    );
+
 class _ActionBar extends StatefulWidget {
   final Palette palette;
   const _ActionBar({required this.palette});
@@ -399,7 +414,7 @@ class _ActionBarState extends State<_ActionBar> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 2),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
       child: Row(
         children: [
@@ -410,43 +425,34 @@ class _ActionBarState extends State<_ActionBar> {
                 overflow: TextOverflow.ellipsis),
           ),
           const SizedBox(width: 12),
-          // Always one line: the actions ride a FittedBox that scales them down to
-          // fit rather than ever wrapping to a second row (and never a scroll — a
-          // mouse can't drag one, which would hide an action).
+          // The actions WRAP when they don't fit; they used to ride a scale-down
+          // FittedBox, which kept one line at any width by shrinking the labels —
+          // on a phone that meant ~10px text with a hit box thinner than a finger.
+          // Wrapping costs a second row and hides nothing (the old objection was
+          // to a scroll, which a mouse can't drag; that doesn't apply here).
           Expanded(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Row(
-                  children: [
-                    _action(p, 'RENAME',
-                        single == null ? null : () => _rename(context, browse, p, single!.name)),
-                    const SizedBox(width: 14),
-                    _action(p, 'DOWNLOAD',
-                        has ? () => _download(context, browse, actions) : null),
-                    const SizedBox(width: 14),
-                    _action(p, 'MOVE', has ? () => _move(context, browse, p) : null),
-                    const SizedBox(width: 14),
-                    _action(p, 'DELETE', has ? () => _delete(context, browse, p) : null),
-                    if (has) ...[
-                      const SizedBox(width: 16),
-                      GestureDetector(
-                        onTap: browse.clearSelection,
-                        behavior: HitTestBehavior.opaque,
-                        child: Text('✕', style: glass(16, p.mid)),
-                      ),
-                    ],
-                    const SizedBox(width: 16),
-                    GestureDetector(
-                      onTap: browse.cycleSort,
-                      behavior: HitTestBehavior.opaque,
-                      child: Text('${browse.sort.label} ▾',
-                          style: chassis(10, p.mid, spacing: 0.09)),
-                    ),
-                  ],
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              runAlignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _action(p, 'RENAME',
+                    single == null ? null : () => _rename(context, browse, p, single!.name)),
+                _action(p, 'DOWNLOAD',
+                    has ? () => _download(context, browse, actions) : null),
+                _action(p, 'MOVE', has ? () => _move(context, browse, p) : null),
+                _action(p, 'DELETE', has ? () => _delete(context, browse, p) : null),
+                if (has)
+                  _tap(
+                    onTap: browse.clearSelection,
+                    child: Text('✕', style: glass(16, p.mid)),
+                  ),
+                _tap(
+                  onTap: browse.cycleSort,
+                  child: Text('${browse.sort.label} ▾',
+                      style: chassis(13, p.mid, spacing: 0.09)),
                 ),
-              ),
+              ],
             ),
           ),
         ],
@@ -468,9 +474,8 @@ class _ActionBarState extends State<_ActionBar> {
 
   // A null onTap means the action doesn't apply to the current selection: it
   // stays in place, greyed and inert, so the bar never changes shape.
-  Widget _action(Palette p, String label, VoidCallback? onTap) => GestureDetector(
+  Widget _action(Palette p, String label, VoidCallback? onTap) => _tap(
         onTap: onTap,
-        behavior: HitTestBehavior.opaque,
         child: Text(label,
             style: onTap == null
                 ? glass(16, p.dim)
@@ -588,7 +593,7 @@ class _Breadcrumbs extends StatelessWidget {
     final browse = context.watch<BrowseController>();
     final parts = browse.crumbs;
     return Container(
-      padding: const EdgeInsets.fromLTRB(13, 6, 13, 4),
+      padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
       child: Row(
         children: [
           Flexible(
@@ -609,25 +614,21 @@ class _Breadcrumbs extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          GestureDetector(
+          // These were 10px type with no padding at all — the smallest targets in
+          // the app, sitting next to a Spacer's worth of unused room.
+          _tap(
             onTap: () => _newFolder(context, browse, p),
-            behavior: HitTestBehavior.opaque,
-            child: Text('＋ NEW', style: chassis(10, p.mid, spacing: 0.09)),
+            child: Text('＋ NEW', style: chassis(13, p.mid, spacing: 0.09)),
           ),
-          const SizedBox(width: 12),
-          GestureDetector(
+          _tap(
             onTap: () => _pickUpload(context),
-            behavior: HitTestBehavior.opaque,
-            child: Text('▴ ADD', style: chassis(10, p.mid, spacing: 0.09)),
+            child: Text('▴ ADD', style: chassis(13, p.mid, spacing: 0.09)),
           ),
-          if (browse.canGoUp) ...[
-            const SizedBox(width: 12),
-            GestureDetector(
+          if (browse.canGoUp)
+            _tap(
               onTap: browse.goUp,
-              behavior: HitTestBehavior.opaque,
-              child: Text('▲ UP', style: chassis(10, p.mid, spacing: 0.09)),
+              child: Text('▲ UP', style: chassis(13, p.mid, spacing: 0.09)),
             ),
-          ],
         ],
       ),
     );
@@ -650,9 +651,9 @@ class _Breadcrumbs extends StatelessWidget {
     await actions.uploadPaths(files.map((f) => f.path).toList());
   }
 
-  Widget _crumb(String label, Color color, VoidCallback onTap) => GestureDetector(
+  Widget _crumb(String label, Color color, VoidCallback onTap) => _tap(
         onTap: onTap,
-        behavior: HitTestBehavior.opaque,
+        pad: 10,
         child: Text(label, style: glass(15, color)),
       );
 }
@@ -814,7 +815,7 @@ class _Row extends StatelessWidget {
             SizedBox(
               width: 16,
               child: Text(
-                isDir ? '█' : '▫',
+                _typeGlyph(isDir),
                 style: glass(density.font, isDir ? (selected ? p.bright : p.a) : p.mid),
               ),
             ),
@@ -902,6 +903,23 @@ void _openEntry(BuildContext context, BrowseController browse, Entry entry) {
 
 // ------------------------------------------------------------- file grid ---
 
+/// The glyph that stands for an entry. Defined once so swapping in a real icon
+/// set later is one change here, not a hunt through the row, the grid and search.
+String _typeGlyph(bool isDir) => isDir ? '█' : '▫';
+
+/// A file's name without its extension. The grid shows the two apart — the name
+/// gets the middle, the type goes in a corner — so neither crowds the other.
+String _stripExt(String name) {
+  final dot = name.lastIndexOf('.');
+  return dot > 0 ? name.substring(0, dot) : name;
+}
+
+/// A file's extension on its own, or '' if it hasn't got one.
+String _extOf(String name) {
+  final dot = name.lastIndexOf('.');
+  return dot > 0 && dot < name.length - 1 ? name.substring(dot + 1) : '';
+}
+
 class _FileGrid extends StatelessWidget {
   final Palette palette;
   const _FileGrid({required this.palette});
@@ -917,12 +935,15 @@ class _FileGrid extends StatelessWidget {
       return GridView.builder(
         padding: const EdgeInsets.all(10),
         // Small file-explorer tiles: a compact icon over its name, many per row,
-        // not big squares. Max tile width drives the column count.
+        // not big squares. Max tile width drives the column count. Square, where
+        // they used to be 1.22× taller than wide — the old height came from the
+        // name wrapping around its extension, which now lives in a corner instead,
+        // so the same tile is shorter and more rows fit on screen.
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 78,
+          maxCrossAxisExtent: 76,
           mainAxisSpacing: 6,
           crossAxisSpacing: 6,
-          childAspectRatio: 0.82,
+          childAspectRatio: 1.0,
         ),
         itemCount: rows.length,
         itemBuilder: (context, i) {
@@ -937,29 +958,43 @@ class _FileGrid extends StatelessWidget {
             onDoubleTap: () => _openEntry(context, browse, e),
             onLongPress: () => browse.toggle(i),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 3),
               decoration: BoxDecoration(
                 color: selected ? p.aAlpha(0.15) : null,
-                border: Border.all(color: selected ? p.a : p.dim),
+                // Fainter than the old solid p.dim on every tile, which made a
+                // full grid read as a wall of boxes rather than as its contents.
+                border: Border.all(color: selected ? p.a : p.aAlpha(0.2)),
                 borderRadius: BorderRadius.circular(3),
                 boxShadow: selected ? [BoxShadow(color: p.aAlpha(0.33), blurRadius: 10)] : null,
               ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(e.isDir ? '█' : '▫',
-                      style: glass(e.isDir ? 20 : 17, e.isDir ? p.a : p.glow)),
-                  const SizedBox(height: 3),
-                  Text(e.name,
+                  Expanded(
+                    child: Center(
+                      child: Text(_typeGlyph(e.isDir),
+                          style: glass(e.isDir ? 21 : 18, e.isDir ? p.a : p.glow)),
+                    ),
+                  ),
+                  Text(e.isDir ? e.name : _stripExt(e.name),
                       maxLines: 2,
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                       style: glass(10.5, selected ? (p.dark ? Colors.white : Colors.black) : (e.isDir ? p.bright : p.mid))),
-                  const SizedBox(height: 1),
-                  Text(e.isDir ? '${e.childCount ?? 0}' : fmtSize(e.sizeBytes),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: glass(9, p.mid)),
+                  const SizedBox(height: 2),
+                  // The corners carry what used to crowd the name: size on the
+                  // left, file type on the right.
+                  Row(
+                    children: [
+                      Text(e.isDir ? '${e.childCount ?? 0}' : fmtSize(e.sizeBytes),
+                          maxLines: 1, style: glass(8.5, p.foot)),
+                      const Spacer(),
+                      if (!e.isDir)
+                        Text(_extOf(e.name).toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: glass(8.5, p.foot)),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -1072,10 +1107,10 @@ class _SearchResults extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             onTap: () => browse.openHit(hit),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
               child: Row(
                 children: [
-                  SizedBox(width: 16, child: Text(hit.isDir ? '█' : '▫', style: glass(16, hit.isDir ? p.a : p.mid))),
+                  SizedBox(width: 16, child: Text(_typeGlyph(hit.isDir), style: glass(16, hit.isDir ? p.a : p.mid))),
                   const SizedBox(width: 7),
                   Expanded(
                     child: Column(

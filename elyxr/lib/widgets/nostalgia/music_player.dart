@@ -53,8 +53,11 @@ class MusicPlayerPanel extends StatelessWidget {
                 : GestureDetector(
                     onTap: canBuiltIn ? () => m.toggle() : null,
                     behavior: HitTestBehavior.opaque,
-                    child: Icon(Icons.play_arrow,
-                        size: 20, color: canBuiltIn ? p.a : p.foot),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(Icons.play_arrow,
+                          size: 26, color: canBuiltIn ? p.a : p.foot),
+                    ),
                   ),
             const SizedBox(width: 8),
             Expanded(
@@ -70,7 +73,10 @@ class MusicPlayerPanel extends StatelessWidget {
               GestureDetector(
                 onTap: () => _showTracklist(context, m, p),
                 behavior: HitTestBehavior.opaque,
-                child: Icon(Icons.queue_music, color: p.mid, size: 18),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(Icons.queue_music, color: p.mid, size: 20),
+                ),
               ),
             ],
           ],
@@ -110,7 +116,10 @@ class MusicPlayerPanel extends StatelessWidget {
               GestureDetector(
                 onTap: () => _showTracklist(context, m, p),
                 behavior: HitTestBehavior.opaque,
-                child: Icon(Icons.queue_music, color: p.mid, size: 18),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(Icons.queue_music, color: p.mid, size: 20),
+                ),
               ),
             ],
             const SizedBox(width: 8),
@@ -142,7 +151,10 @@ class MusicPlayerPanel extends StatelessWidget {
             onTapDown: (d) => seekTo(d.localPosition.dx),
             onHorizontalDragUpdate: (d) => seekTo(d.localPosition.dx),
             child: SizedBox(
-              height: 14,
+              // 14 was thinner than a fingertip for a control you DRAG, which
+              // needs more slop than one you tap. The painter centres itself, so
+              // the extra height is invisible.
+              height: 24,
               child: CustomPaint(
                 painter: _SeekPainter(frac, p.a, p.dim),
                 size: Size.infinite,
@@ -227,11 +239,11 @@ class MusicPlayerPanel extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: m.muted ? p.foot : p.mid),
+          Icon(icon, size: 16, color: m.muted ? p.foot : p.mid),
           const SizedBox(width: 5),
           Container(
             width: 44,
-            height: 4,
+            height: 6,
             decoration: BoxDecoration(
               color: p.dim,
               borderRadius: BorderRadius.circular(2),
@@ -259,8 +271,8 @@ class MusicPlayerPanel extends StatelessWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(icon, color: active ? p.a : p.foot, size: 18),
+          padding: const EdgeInsets.all(10),
+          child: Icon(icon, color: active ? p.a : p.foot, size: 22),
         ),
       );
 
@@ -269,14 +281,14 @@ class MusicPlayerPanel extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: EdgeInsets.all(big ? 7 : 5),
+        padding: EdgeInsets.all(big ? 11 : 9),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: p.a.withValues(alpha: 0.6)),
           boxShadow:
               big ? [BoxShadow(color: p.aAlpha(0.25), blurRadius: 10)] : null,
         ),
-        child: Icon(icon, color: p.a, size: big ? 24 : 18),
+        child: Icon(icon, color: p.a, size: big ? 30 : 22),
       ),
     );
   }
@@ -313,7 +325,7 @@ class MusicPlayerPanel extends StatelessWidget {
                       },
                       behavior: HitTestBehavior.opaque,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 5),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
                         child: Row(
                           children: [
                             Text(cur ? '▶ ' : '   ', style: glass(15, p.a)),
