@@ -65,6 +65,24 @@ class LymnalClient {
         if (json) 'Content-Type': 'application/json',
       };
 
+  // ---- playable sources ----
+
+  /// A source a media backend can open *directly* for [path], instead of us
+  /// fetching the whole file first: the download URL plus the headers needed to
+  /// authorise it. `/v1/download` streams from disk and honours Range, so a
+  /// backend handed this URL buffers natively and starts on the first chunk
+  /// rather than waiting for the last one.
+  ///
+  /// Overridden by [LocalTroveClient], where the file is already on this
+  /// machine and the answer is its path (no HTTP, no headers, no wait).
+  (String uri, Map<String, String>? headers) mediaSource(String path) =>
+      (_uri('/v1/download', {'path': path}).toString(), _headers());
+
+  /// The absolute on-disk path for [path] when the trove lives on this machine,
+  /// else null. Only a local trove has one; over the network there is no file to
+  /// point at until something downloads it.
+  String? localPathFor(String path) => null;
+
   // ---- endpoints ----
 
   Future<Health> health() async {

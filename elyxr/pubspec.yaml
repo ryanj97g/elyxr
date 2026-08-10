@@ -18,15 +18,17 @@ dependencies:
   desktop_drop: ^0.5.0
   cross_file: ^0.3.4
   open_filex: ^4.0.0
-  # Inline video preview (Windows + Android). libs_video bundles the native mpv.
+  # Music playback and inline video preview, both on libmpv. Music opens sources
+  # directly (a local trove file, or the Range-served /v1/download URL), so a
+  # track starts on its first chunk instead of waiting for a whole download, and
+  # no video is ever decoded for the deck. libs_video supplies the native mpv.
   media_kit: ^1.1.0
   media_kit_video: ^1.1.0
   media_kit_libs_video: ^1.0.0
   window_manager: ^0.4.2
-  # Audio via the system's GStreamer on Linux — uses the OS codecs (built for the
-  # OS's own glibc), so no bundled-library incompatibilities. Replaced
-  # flutter_soloud, whose precompiled codec libs required a newer glibc than most
-  # systems have and failed to load entirely.
+  # The Nostalgia Mode sound effects only — short bundled one-shots, which is all
+  # this is still here for. Music moved to media_kit above, which streams and
+  # can set the auth headers a trove URL needs; audioplayers can do neither.
   audioplayers: ^6.0.0
 
 dev_dependencies:

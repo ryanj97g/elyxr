@@ -200,6 +200,21 @@ class LocalTroveClient extends LymnalClient {
     return {'deleted': deleted, 'failed': failed, 'freed_bytes': 0};
   }
 
+  /// The file is right here on this disk, so a media backend opens it directly —
+  /// nothing is fetched, copied or waited for, and no auth header is needed.
+  @override
+  (String uri, Map<String, String>? headers) mediaSource(String path) =>
+      (_abs(path), null);
+
+  @override
+  String? localPathFor(String path) {
+    try {
+      return _abs(path);
+    } on LymnalError {
+      return null; // a path that leaves the trove isn't ours to hand out
+    }
+  }
+
   @override
   Future<List<int>> downloadBytes(String path) async {
     final f = File(_abs(path));

@@ -97,8 +97,9 @@ Future<void> main() async {
   // forget; it never blocks startup.
   OpenExternal.sweepStale();
 
-  // No global audio init needed — audioplayers creates players on demand and
-  // uses the system's GStreamer, so there's nothing to start up here.
+  // Music needs no init beyond MediaKit.ensureInitialized() above (it builds its
+  // player on demand); the Nostalgia sound effects create a one-shot player per
+  // clip, so there's nothing else to start up here.
 
   runApp(ShakeToClose(
     child: ElyxrApp(

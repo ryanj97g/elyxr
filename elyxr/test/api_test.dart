@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:elyxr/api/api_error.dart';
+import 'package:elyxr/api/local_trove_client.dart';
 import 'package:elyxr/api/lymnal_client.dart';
 
 LymnalClient clientReturning(
@@ -94,5 +95,41 @@ void main() {
       throwsA(isA<ConnectionError>()
           .having((e) => e.fault, 'fault', ConnectionFault.unreachable)),
     );
+  });
+
+  // What the music player opens instead of downloading a whole file first: over
+  // the network it's the download URL, and it MUST carry the bearer token, since
+  // /v1/download rejects an unauthenticated request.
+  test('a media source over the network is the download URL, with auth',
+      () async {
+    final c = LymnalClient(baseUrl: 'http://x:7749', token: 'lym_abc');
+    final (uri, headers) = c.mediaSource('music/song.mp3');
+    expect(uri, startsWith('http://x:7749/v1/download?'));
+    expect(uri, contains('path=music%2Fsong.mp3'));
+    expect(headers?['Authorization'], 'Bearer lym_abc');
+  });
+
+  test('there is no local path for a trove across the network', () {
+    final c = LymnalClient(baseUrl: 'http://x:7749', token: 't');
+    expect(c.localPathFor('music/song.mp3'), isNull);
+  });
+
+  // On the server device the file is right here, so the player opens it straight
+  // off the disk — no URL, no auth header, nothing fetched.
+  test('a local trove hands back the file itself, unauthenticated', () {
+    final root = Directory.systemTemp.createTempSync('elyxr_trove_test');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final c = LocalTroveClient(root.path);
+    final (uri, headers) = c.mediaSource('music/song.mp3');
+    expect(uri, '${root.path}/music/song.mp3');
+    expect(headers, isNull);
+    expect(c.localPathFor('music/song.mp3'), '${root.path}/music/song.mp3');
+  });
+
+  test('a local trove refuses to hand out a path that climbs out of it', () {
+    final root = Directory.systemTemp.createTempSync('elyxr_trove_esc');
+    addTearDown(() => root.deleteSync(recursive: true));
+    final c = LocalTroveClient(root.path);
+    expect(c.localPathFor('../../etc/passwd'), isNull);
   });
 }

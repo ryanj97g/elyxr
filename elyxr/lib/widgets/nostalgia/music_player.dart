@@ -1,6 +1,6 @@
 // The music player deck: now-playing title, a draggable seek bar, shuffle/repeat,
 // a tracklist, play/pause + skip, and a real spectrum visualizer. Every control
-// drives real playback (audioplayers); the visualizer reads the current track's
+// drives real playback (media_kit); the visualizer reads the current track's
 // analysed spectrogram off the live play head (see MusicController) and never
 // affects playback.
 
@@ -78,9 +78,10 @@ class MusicPlayerPanel extends StatelessWidget {
       );
     }
 
-    // A trove stream is a single file — no playlist to shuffle/skip through.
-    // The built-in playlist controls only appear for the easter-egg soundtrack.
-    final playlist = egg && !m.isStream;
+    // A trove folder IS a playlist, so it gets the full transport — shuffle, prev,
+    // next and repeat all act on that folder and nothing outside it. The built-in
+    // soundtrack still needs Nostalgia on to show its own.
+    final playlist = m.isStream ? m.count > 1 : egg;
 
     final total = m.duration.inMilliseconds;
     final frac =
@@ -95,8 +96,8 @@ class MusicPlayerPanel extends StatelessWidget {
         Row(
           children: [
             Text('♪ ', style: glass(16, p.a)),
-            // A spinner while the next track is being fetched (e.g. an advance
-            // that wasn't preloaded in time), so the wait is visible.
+            // A spinner while the current track is opening or buffering, so any
+            // wait before the sound starts is visible.
             if (m.loadingTrove) ...[_spinner(p), const SizedBox(width: 6)],
             Expanded(
               child: SizedBox(
@@ -104,7 +105,7 @@ class MusicPlayerPanel extends StatelessWidget {
                 child: Marquee(text: m.title, style: glass(17, p.bright)),
               ),
             ),
-            if (egg) ...[
+            if (egg || m.isStream) ...[
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: () => _showTracklist(context, m, p),
@@ -113,7 +114,11 @@ class MusicPlayerPanel extends StatelessWidget {
               ),
             ],
             const SizedBox(width: 8),
-            Text(m.isStream ? 'TROVE' : '${m.index + 1}/${m.count}',
+            // A folder still says TROVE, but now carries its position in it too.
+            Text(
+                m.isStream
+                    ? 'TROVE ${m.index + 1}/${m.count}'
+                    : '${m.index + 1}/${m.count}',
                 style: mono(11, p.mid)),
           ],
         ),
@@ -155,8 +160,9 @@ class MusicPlayerPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        // Transport. A single trove stream gets just play/pause; the built-in
-        // soundtrack (Nostalgia) gets the full shuffle · prev · next · repeat.
+        // Transport. shuffle · prev · next · repeat whenever there's a list to
+        // move through — a trove folder or the built-in soundtrack; a lone track
+        // gets just play/pause.
         Row(
           mainAxisAlignment: playlist
               ? MainAxisAlignment.spaceEvenly
@@ -302,7 +308,7 @@ class MusicPlayerPanel extends StatelessWidget {
                     final cur = i == m.index;
                     return GestureDetector(
                       onTap: () {
-                        m.playIndex(i);
+                        m.playAt(i);
                         Navigator.of(ctx).pop();
                       },
                       behavior: HitTestBehavior.opaque,
