@@ -93,13 +93,14 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
-  /// The wordmark. It is ONE static Text: the glyph geometry (size, spacing,
-  /// position) is identical on every frame, so the letters can never grow,
-  /// shrink, shift, or blink. While idle, a gleam sweeps across it done purely by
-  /// animating the text's FILL: a soft brighter band slides left to right through
-  /// the letters via the text's foreground gradient. Nothing about the layout,
-  /// and no second copy or offscreen layer, is involved, so there is nothing to
-  /// pulse. While lit (Settings/holding) it glows the accent instead, no gleam.
+  /// The wordmark. The letters look and behave exactly as before: the same
+  /// metal-light mark with its 1px emboss, and the caller's tap/hold gesture that
+  /// opens Settings is untouched. ONLY the idle gleam is rebuilt. The letters are
+  /// the WINDOW: drawn once as a text-shaped mask onto a base fill plus a diagonal
+  /// light stripe that sweeps across behind them (a cutout, not an overlay). The
+  /// stripe never aligns to the glyphs, it just passes behind them, so there is
+  /// nothing to size-match and nothing that can drift or pulse. While lit
+  /// (Settings/holding) it glows the accent, no gleam, unchanged.
   Widget _wordmark(Palette p, bool lit) {
     const emboss = [Shadow(color: Color(0xFF0C0D0F), offset: Offset(0, 1))];
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -124,54 +125,41 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
       );
     }
 
-    // Idle: one Text, its geometry fixed forever. Measure it once so the sweep
-    // spans exactly the glyphs; only the foreground gradient changes per frame.
-    final idle = TextStyle(
+    // Idle: the letters are a window. They're rendered exactly once, as a
+    // text-shaped mask, over a base fill (their resting colour) plus a diagonal
+    // light stripe that sweeps behind them. At rest the fill is a flat p.ml and
+    // the mark is pixel-identical to before; mid-sweep the stripe passes
+    // through. The glyph geometry never moves, so nothing can pulse or drift.
+    final glyph = TextStyle(
       fontFamily: Fonts.chassis,
       fontSize: 15,
       fontWeight: FontWeight.w700,
       letterSpacing: 15 * 0.4,
     );
     final probe = TextPainter(
-      text: TextSpan(text: 'ELYXR', style: idle),
+      text: TextSpan(text: 'ELYXR', style: glyph),
       textDirection: TextDirection.ltr,
     )..layout();
-    final w = probe.width, h = probe.height;
-    final hi = Color.lerp(p.ml, p.a, 0.45)!; // the gleam colour: a gentle brighten
 
     return Padding(
       padding: const EdgeInsets.only(left: 6),
-      child: AnimatedBuilder(
-        animation: _shine,
-        builder: (context, _) {
-          final t = _shine.value;
-          Paint? fg;
-          if (t > 0.0 && t < 1.0) {
-            // The bright band's centre travels from off the left to off the right.
-            final c = -0.2 + t * 1.4;
-            fg = Paint()
-              ..shader = LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [p.ml, p.ml, hi, p.ml, p.ml],
-                stops: [
-                  0.0,
-                  (c - 0.16).clamp(0.0, 1.0),
-                  c.clamp(0.0, 1.0),
-                  (c + 0.16).clamp(0.0, 1.0),
-                  1.0,
-                ],
-              ).createShader(Rect.fromLTWH(0, 0, w, h));
-          }
-          // color and foreground are mutually exclusive: solid ml at rest, the
-          // gradient fill mid-sweep. The emboss shadow is constant either way.
-          return Text(
-            'ELYXR',
-            style: fg == null
-                ? idle.copyWith(color: p.ml, shadows: emboss)
-                : idle.copyWith(foreground: fg, shadows: emboss),
-          );
-        },
+      // One px of headroom below so the 1px emboss isn't clipped.
+      child: SizedBox(
+        width: probe.width,
+        height: probe.height + 1,
+        child: AnimatedBuilder(
+          animation: _shine,
+          builder: (context, _) => CustomPaint(
+            painter: _WordmarkGleam(
+              base: p.ml,
+              // A light phosphor tint for the sweep, never pure white so the
+              // mark keeps its metal feel.
+              highlight: Color.lerp(p.ml, p.bright, 0.75)!,
+              glyph: glyph,
+              t: _shine.value,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -289,6 +277,92 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
     if (tip != null) w = Tooltip(message: tip, child: w);
     return w;
   }
+}
+
+/// Draws the idle wordmark as a cutout: the base colour (and, mid-sweep, a
+/// diagonal light stripe) filled into the exact shape of the letters, with the
+/// same 1px dark emboss beneath. The letters are stamped once as a dstIn mask,
+/// so the glyph geometry never moves; only the stripe behind them travels,
+/// which is why nothing can pulse or drift. When [t] is 0 or 1 (resting) it's a
+/// flat base fill: pixel-identical to the plain mark.
+class _WordmarkGleam extends CustomPainter {
+  final Color base;
+  final Color highlight;
+  final TextStyle glyph;
+  final double t; // sweep position 0..1; only 0<t<1 shows the stripe
+  const _WordmarkGleam({
+    required this.base,
+    required this.highlight,
+    required this.glyph,
+    required this.t,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // The emboss: the same dark shadow one pixel down, painted first so it sits
+    // behind the mark (matches the const emboss used on the lit/reduced path).
+    final shadow = TextPainter(
+      text: TextSpan(
+        text: 'ELYXR',
+        style: glyph.copyWith(color: const Color(0xFF0C0D0F)),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    shadow.paint(canvas, const Offset(0, 1));
+
+    // Everything below composites in its own layer so the final dstIn mask
+    // clips only the fill, not the emboss beneath it.
+    final bounds = Offset.zero & size;
+    canvas.saveLayer(bounds, Paint());
+
+    // Base fill: the letters' resting colour, across the whole box.
+    canvas.drawRect(bounds, Paint()..color = base);
+
+    // The gleam: a diagonal light stripe sweeping left to right behind the
+    // letters. Wider than any glyph and rotated, so it never lines up with the
+    // text; it just passes through. A thinner parallel streak trails it.
+    if (t > 0.0 && t < 1.0) {
+      final w = size.width, h = size.height;
+      canvas.save();
+      // Travel the stripe's centre from off the left edge to off the right.
+      final cx = -0.45 * w + t * 1.9 * w;
+      canvas.translate(cx, h / 2);
+      canvas.rotate(-0.52); // ~30 degrees off vertical
+      canvas.drawRect(
+        Rect.fromCenter(center: Offset.zero, width: 11, height: h * 3),
+        Paint()
+          ..color = highlight.withValues(alpha: 0.7)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      );
+      canvas.drawRect(
+        Rect.fromCenter(center: const Offset(10, 0), width: 3.5, height: h * 3),
+        Paint()
+          ..color = highlight.withValues(alpha: 0.4)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+      );
+      canvas.restore();
+    }
+
+    // Punch the letters out of the fill: keep only where the glyphs are.
+    final mask = TextPainter(
+      text: TextSpan(
+        text: 'ELYXR',
+        style: glyph.copyWith(
+          foreground: Paint()
+            ..blendMode = BlendMode.dstIn
+            ..color = const Color(0xFFFFFFFF),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    mask.paint(canvas, Offset.zero);
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _WordmarkGleam old) =>
+      old.t != t || old.base != base || old.highlight != highlight;
 }
 
 /// The bottom rail: TEXT/GRID rocker · status LED. (The optional file-browser
