@@ -100,9 +100,30 @@ class _EdgeLightPainter extends CustomPainter {
     final show = ((0.14 + 0.86 * hit) * fade).clamp(0.0, 1.0);
     if (show <= 0.01) return;
 
-    // The ring hugs just inside the tube's rounded content edge (radius 12).
-    final rect = (Offset.zero & size).deflate(2);
-    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(11));
+    // The ring hugs just inside the tube edge, but its two BOTTOM corners scoop
+    // UP and INWARD so the lit edge curves AROUND the corner speakers that sit
+    // in the chassis corners, instead of running straight across behind them —
+    // so the screen reads as moulded around the woofers. The three constants are
+    // tunable to match the pods: `cut` is how wide the scoop is (≈ the speaker
+    // width), `rise` how far up it lifts (≈ how far the pod reaches into the
+    // screen), `cr` the top corner radius.
+    const d = 2.0; // inset from the tube edge
+    const cr = 11.0; // top corner radius
+    const cut = 60.0; // scoop width from each side (speaker pod is ~66)
+    const rise = 30.0; // scoop height (the pod overlaps the tube by ~30)
+    final l = d, t = d, r = size.width - d, b = size.height - d;
+
+    final path = Path()
+      ..moveTo(l + cr, t)
+      ..lineTo(r - cr, t)
+      ..arcToPoint(Offset(r, t + cr), radius: const Radius.circular(cr))
+      ..lineTo(r, b - rise)
+      ..quadraticBezierTo(r - cut, b - rise, r - cut, b) // scoop the bottom-right
+      ..lineTo(l + cut, b)
+      ..quadraticBezierTo(l + cut, b - rise, l, b - rise) // scoop the bottom-left
+      ..lineTo(l, t + cr)
+      ..arcToPoint(Offset(l + cr, t), radius: const Radius.circular(cr))
+      ..close();
 
     // Uniform accent all the way round, lifting toward the bright phosphor on
     // the hardest hits for a white-hot flash.
@@ -110,16 +131,16 @@ class _EdgeLightPainter extends CustomPainter {
 
     // A wide blurred pass for the bloom that spills onto the glass, then a crisp
     // brighter line right on the edge. Both flash together.
-    canvas.drawRRect(
-      rrect,
+    canvas.drawPath(
+      path,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 5 + 20 * hit
         ..color = col.withValues(alpha: (show * 0.9).clamp(0.0, 1.0))
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 + 22 * hit),
     );
-    canvas.drawRRect(
-      rrect,
+    canvas.drawPath(
+      path,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5 + 3 * hit
