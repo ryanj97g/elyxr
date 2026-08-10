@@ -1,10 +1,11 @@
-// The browser's file-type classification and the one table an icon set replaces.
-// Worth pinning: every one of these is a pure function the whole file tree leans
-// on, and the last test is what stops a new FileKind from shipping without
-// anything to draw for it.
+// The browser's file-type classification and the icon each type resolves to. Worth
+// pinning: these are pure functions the whole file tree leans on, and two of the
+// tests here stop a whole class of silent breakage — a kind with no icon mapped,
+// and a mapping that points at an SVG nobody ever drew.
+
+import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:elyxr/design/file_icons.dart';
@@ -74,65 +75,64 @@ void main() {
         FileKind.audio);
   });
 
-  test('every kind has something to draw', () {
+  test('every kind has an icon, so none can fall through to nothing', () {
     for (final k in FileKind.values) {
-      final mark = kFileMarks[k];
-      expect(mark, isNotNull, reason: 'no mark for $k');
-      // Exactly one of the two forms, never both and never neither.
-      expect(mark!.char != null || mark.icon != null, isTrue, reason: '$k');
-      expect(mark.char != null && mark.icon != null, isFalse, reason: '$k');
+      expect(kKindGlyphs[k], isNotNull, reason: 'no glyph mapped for $k');
     }
   });
 
-  test('folders and files still draw what they always have', () {
-    // Guards the promise that adding the seam changed nothing on screen. When a
-    // real set lands these become icons and this test is the one to update.
-    expect(kFileMarks[FileKind.folder]!.char, '█');
-    expect(kFileMarks[FileKind.audio]!.char, '▫');
-  });
-
-  // The asset path is one line of string interpolation whose failure mode is a
-  // silent miss at runtime — an escaped '\$' still compiles and still type-checks,
-  // it just looks for a file nobody will ever create. So pin the literal strings.
-  test('a kind resolves to its own svg, with the interpolation intact', () {
-    expect(fileGlyphAsset(FileKind.audio), 'assets/icons/filetype/audio.svg');
-    expect(fileGlyphAsset(FileKind.folder), 'assets/icons/filetype/folder.svg');
-    expect(fileGlyphAsset(FileKind.spreadsheet),
-        'assets/icons/filetype/spreadsheet.svg');
-    for (final k in FileKind.values) {
-      expect(fileGlyphAsset(k), contains(k.name));
-      expect(fileGlyphAsset(k), isNot(contains(r'$')));
+  test('every mapped icon name is a file that actually exists', () {
+    final names = {...kKindGlyphs.values, ...kExtGlyphs.values};
+    for (final n in names) {
+      expect(File('assets/icons/filetype/$n.svg').existsSync(), isTrue,
+          reason: 'kExtGlyphs/kKindGlyphs points at a missing $n.svg');
     }
   });
 
-  test('each mark form is exactly one form', () {
-    const c = FileMark.char('▫');
-    expect([c.char != null, c.icon != null, c.svg].where((b) => b).length, 1);
-    const s = FileMark.svg();
-    expect([s.char != null, s.icon != null, s.svg].where((b) => b).length, 1);
-    const i = FileMark.icon(Icons.folder);
-    expect([i.char != null, i.icon != null, i.svg].where((b) => b).length, 1);
+  test('an extension icon wins over its kind icon', () {
+    // .js is code, but it has a glyph of its own, so it must not fall back.
+    expect(fileKindOf('app.js'), FileKind.code);
+    expect(glyphNameFor('app.js'), 'js');
+    // .rb is code with no glyph of its own, so it takes the kind's.
+    expect(glyphNameFor('app.rb'), 'code');
+    // A shell script is code, but reads better as a terminal.
+    expect(glyphNameFor('build.sh'), 'terminal');
+    // A folder is a folder before anything else.
+    expect(glyphNameFor('archive.zip', isDir: true), 'folder');
   });
 
-  testWidgets('every mark form renders, and the svg asset is really bundled',
+  test('the tracker and chiptune formats each keep their own glyph', () {
+    for (final e in ['mod', 'xm', 's3m', 'it', 'stm', 'okt', 'med', '669',
+                     'ahx', 'sid', 'nsf']) {
+      expect(glyphNameFor('tune.$e'), e, reason: '.$e lost its own glyph');
+    }
+  });
+
+  test('a kind resolves to its own asset, with the interpolation intact', () {
+    expect(glyphAsset('audio'), 'assets/icons/filetype/audio.svg');
+    expect(glyphAsset('js'), 'assets/icons/filetype/js.svg');
+    for (final n in kKindGlyphs.values) {
+      expect(glyphAsset(n), isNot(contains(r'$')));
+    }
+  });
+
+  testWidgets('a glyph renders for a file, a folder and an unknown type',
       (tester) async {
-    // A character and a font glyph.
-    for (final kind in [FileKind.folder, FileKind.audio]) {
+    for (final probe in [
+      ('42mg.mp3', false),
+      ('MUSIC TEST!', true),
+      ('thing.qqq', false),
+    ]) {
       await tester.pumpWidget(MaterialApp(
-        home: FileGlyph(kind: kind, size: 16, color: const Color(0xFF00FF66)),
+        home: FileGlyph(
+          name: probe.$1,
+          isDir: probe.$2,
+          size: 16,
+          color: const Color(0xFF00FF66),
+        ),
       ));
-      expect(tester.takeException(), isNull, reason: '$kind');
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: probe.$1);
     }
-    // The SVG path, against the placeholder committed alongside this. Proves the
-    // pubspec asset entry and the path both hold before a real set arrives.
-    await tester.pumpWidget(MaterialApp(
-      home: SvgPicture.asset(
-        fileGlyphAsset(FileKind.unknown),
-        colorFilter:
-            const ColorFilter.mode(Color(0xFF00FF66), BlendMode.srcIn),
-      ),
-    ));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
   });
 }

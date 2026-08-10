@@ -801,7 +801,9 @@ class _Row extends StatelessWidget {
             SizedBox(
               width: 16,
               child: FileGlyph(
-                kind: fileKindOf(entry.name, isDir: isDir, mime: entry.mime),
+                name: entry.name,
+                isDir: isDir,
+                mime: entry.mime,
                 size: density.font,
                 color: isDir ? (selected ? p.bright : p.a) : p.mid,
               ),
@@ -955,7 +957,9 @@ class _FileGrid extends StatelessWidget {
                   Expanded(
                     child: Center(
                       child: FileGlyph(
-                        kind: fileKindOf(e.name, isDir: e.isDir, mime: e.mime),
+                        name: e.name,
+                        isDir: e.isDir,
+                        mime: e.mime,
                         size: e.isDir ? 21 : 18,
                         color: e.isDir ? p.a : p.glow,
                       ),
@@ -1099,7 +1103,8 @@ class _SearchResults extends StatelessWidget {
                   SizedBox(
                       width: 16,
                       child: FileGlyph(
-                          kind: fileKindOf(hit.name, isDir: hit.isDir),
+                          name: hit.name,
+                          isDir: hit.isDir,
                           size: 16,
                           color: hit.isDir ? p.a : p.mid)),
                   const SizedBox(width: 7),

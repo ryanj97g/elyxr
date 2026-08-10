@@ -4,10 +4,10 @@
 // search results) and all three go through here, so the look of a file type is
 // decided in exactly one file.
 //
-// Nothing here changes what's on screen yet: every kind still draws the same two
-// terminal characters the browser has always used. What it does is put the seam
-// in place — see kFileMarks for the one table an icon set replaces, a kind at a
-// time, without a half-finished grid in between.
+// The drawn set lives in assets/icons/filetype/ — monochrome silhouettes, tinted
+// from the palette at draw time, so they carry no colour of their own. Two lookup
+// layers (see kExtGlyphs / kKindGlyphs): a file's own extension if an icon was
+// drawn for it, otherwise the icon for its kind.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -148,112 +148,113 @@ FileKind fileKindOf(String name, {bool isDir = false, String? mime}) {
   return FileKind.unknown;
 }
 
-/// What gets drawn for a kind: a character from the terminal's own vocabulary, an
-/// SVG from the glyph set, or a glyph from an icon font. Three forms rather than
-/// one so a set can land in pieces — see [kFileMarks].
-class FileMark {
-  /// A character the browser draws itself.
-  final String? char;
+// ---- the drawn set ----------------------------------------------------------
+//
+// The committed glyph set is finer-grained than FileKind in places: as well as one
+// icon per kind there are icons for individual extensions (.JS, .MD, .PDF, and a
+// deep bench of tracker/chiptune formats). So the lookup is two layers — the exact
+// extension first, then the kind it belongs to — which means a .js gets the JS
+// glyph while a .rb still gets the generic code glyph, with no gaps either way.
 
-  /// A glyph from an icon font (a .ttf declared in pubspec.yaml).
-  final IconData? icon;
-
-  /// An SVG at `assets/icons/filetype/<kind>.svg`. The path is derived from the
-  /// kind rather than written out, so there's nothing to typo and nothing to keep
-  /// in sync.
-  final bool svg;
-
-  const FileMark.char(String this.char)
-      : icon = null,
-        svg = false;
-  const FileMark.icon(IconData this.icon)
-      : char = null,
-        svg = false;
-  const FileMark.svg()
-      : char = null,
-        icon = null,
-        svg = true;
-}
-
-// The block and the small square the browser has always drawn. Named, because
-// they're the fallback every kind sits on until it has an icon of its own.
-const FileMark _block = FileMark.char('█');
-const FileMark _square = FileMark.char('▫');
-
-/// THE SWAP POINT for a glyph icon set.
-///
-/// One line per kind. Replace a line's [FileMark.char] with [FileMark.svg] (for
-/// `assets/icons/filetype/<kind>.svg`) or [FileMark.icon] (for an icon font) and
-/// that kind switches over everywhere at once — text rows, grid tiles and search
-/// results — while every other kind keeps the character it has now. So the set can
-/// land a few kinds at a time and the grid never looks half-finished.
-///
-/// Either form inherits the palette colour and the terminal's size scaling from
-/// [FileGlyph], so the set stays colour-agnostic and no call site ever moves. See
-/// assets/icons/filetype/README.md for the drawing contract.
-const Map<FileKind, FileMark> kFileMarks = <FileKind, FileMark>{
-  FileKind.folder: _block,
-  FileKind.audio: _square,
-  FileKind.video: _square,
-  FileKind.image: _square,
-  FileKind.document: _square,
-  FileKind.spreadsheet: _square,
-  FileKind.presentation: _square,
-  FileKind.archive: _square,
-  FileKind.code: _square,
-  FileKind.text: _square,
-  FileKind.data: _square,
-  FileKind.font: _square,
-  FileKind.disk: _square,
-  FileKind.app: _square,
-  FileKind.unknown: _square,
+/// Extension → icon basename, for the icons drawn at finer grain than a kind.
+/// Consulted BEFORE [kKindGlyphs]; anything absent falls through to its kind.
+const Map<String, String> kExtGlyphs = <String, String>{
+  // labelled by extension
+  'js': 'js', 'json': 'json', 'html': 'html', 'css': 'css', 'svg': 'svg',
+  'csv': 'csv', 'md': 'md', 'txt': 'txt', 'log': 'log', 'pdf': 'pdf',
+  'rtf': 'rtf', 'doc': 'doc', 'docx': 'doc', 'gif': 'gif',
+  // shells get the terminal glyph rather than the generic code one
+  'sh': 'terminal', 'bash': 'terminal', 'zsh': 'terminal', 'ps1': 'terminal',
+  'bat': 'terminal', 'cmd': 'terminal',
+  // databases
+  'db': 'database', 'sqlite': 'database', 'sqlite3': 'database',
+  // certificates and calendars
+  'pem': 'cert', 'crt': 'cert', 'cer': 'cert', 'der': 'cert', 'pfx': 'cert',
+  'ics': 'calendar',
+  // trackers and chiptunes — one glyph each, since telling them apart is most of
+  // the point of having them
+  'mod': 'mod', 'xm': 'xm', 's3m': 's3m', 'it': 'it', 'stm': 'stm',
+  'okt': 'okt', 'med': 'med', '669': '669', 'ahx': 'ahx', 'sid': 'sid',
+  'nsf': 'nsf',
 };
 
-/// The asset path holding a kind's SVG. Derived from the kind so there's no path
-/// to typo, and public so a test can pin the exact string — this is one line of
-/// string interpolation whose failure mode is a silent miss at runtime rather than
-/// anything the compiler would catch.
-String fileGlyphAsset(FileKind kind) => 'assets/icons/filetype/${kind.name}.svg';
-
-/// Draw the mark for one entry. The only thing that renders a file's type, so
-/// swapping characters for icons is invisible to every caller.
+/// Kind → icon basename. The fallback layer: everything lands here if the
+/// extension has no glyph of its own.
 ///
-/// [size] is in the same units the surrounding [glass] text uses and gets the
-/// same terminal scaling, so an icon lands optically the same size as the
-/// character it replaced. [color] comes from the palette at the call site, which
-/// is what keeps an icon set theme-driven rather than carrying its own colour.
+/// A kind mapped to 'file' has no glyph drawn for it yet and borrows the generic
+/// one — better than dropping back to a bare character now that a real set
+/// exists. Give it its own name here once it's drawn.
+const Map<FileKind, String> kKindGlyphs = <FileKind, String>{
+  FileKind.folder: 'folder',
+  FileKind.audio: 'audio',
+  FileKind.video: 'video',
+  FileKind.image: 'image',
+  FileKind.document: 'file', // no generic document glyph yet
+  FileKind.spreadsheet: 'spreadsheet',
+  FileKind.presentation: 'file', // none drawn yet
+  FileKind.archive: 'archive',
+  FileKind.code: 'code',
+  FileKind.text: 'file', // txt/md/log are labelled; the generic one isn't drawn
+  FileKind.data: 'file',
+  FileKind.font: 'font',
+  FileKind.disk: 'disk',
+  FileKind.app: 'app',
+  FileKind.unknown: 'unknown',
+};
+
+/// The icon basename for an entry: its extension's own glyph if the set has one,
+/// else its kind's. Never null — every kind has an entry, so there is always
+/// something to draw.
+String glyphNameFor(String name, {bool isDir = false, String? mime}) {
+  if (!isDir) {
+    final dot = name.lastIndexOf('.');
+    if (dot > 0 && dot < name.length - 1) {
+      final hit = kExtGlyphs[name.substring(dot + 1).toLowerCase()];
+      if (hit != null) return hit;
+    }
+  }
+  return kKindGlyphs[fileKindOf(name, isDir: isDir, mime: mime)] ?? 'unknown';
+}
+
+/// The asset path for an icon basename.
+///
+/// Public so a test can pin the exact string — this is one line of interpolation
+/// whose failure mode is a silent miss at runtime rather than anything the
+/// compiler would catch, and it has already shipped broken once.
+String glyphAsset(String name) => 'assets/icons/filetype/$name.svg';
+
+/// Draw the glyph for one entry. The only thing that renders a file's type, so the
+/// row, the grid and search can never disagree about what a file looks like.
+///
+/// [size] is in the same units the surrounding [glass] text uses and gets the same
+/// terminal scaling, so a glyph lands optically where its character did. [color]
+/// comes from the palette at the call site: the artwork is repainted in it via
+/// BlendMode.srcIn, so whatever colour the SVG was exported with never reaches the
+/// screen and the set follows the theme like everything else.
 class FileGlyph extends StatelessWidget {
-  final FileKind kind;
+  final String name;
+  final bool isDir;
+  final String? mime;
   final double size;
   final Color color;
 
   const FileGlyph({
     super.key,
-    required this.kind,
+    required this.name,
     required this.size,
     required this.color,
+    this.isDir = false,
+    this.mime,
   });
 
   @override
   Widget build(BuildContext context) {
-    final mark =
-        kFileMarks[kind] ?? (kind == FileKind.folder ? _block : _square);
-    // Scaled like the glass text it sits among, not raw pixels — otherwise a
-    // glyph would ignore the terminal's own type scale and read undersized.
     final px = size * kGlassScale;
-    final icon = mark.icon;
-    if (icon != null) return Icon(icon, size: px, color: color);
-    if (mark.svg) {
-      return SvgPicture.asset(
-        fileGlyphAsset(kind),
-        width: px,
-        height: px,
-        // Repaints every visible pixel in the palette colour, so the artwork
-        // carries no colour of its own — whatever it was exported with is
-        // discarded and only the shape survives.
-        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      );
-    }
-    return Text(mark.char!, style: glass(size, color));
+    return SvgPicture.asset(
+      glyphAsset(glyphNameFor(name, isDir: isDir, mime: mime)),
+      width: px,
+      height: px,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    );
   }
 }
