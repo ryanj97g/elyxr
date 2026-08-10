@@ -14,6 +14,30 @@ import 'oklch.dart';
 
 Color _c(int argb) => Color(argb);
 
+/// The tube outline: a rounded rectangle whose two BOTTOM corners scoop up and
+/// inward, so the screen curves around the corner speakers that sit in the
+/// chassis corners (so they read as moulded in, not stuck on). Shared by the
+/// tube's own clip and the music edge light so the two always match. [inset]
+/// pulls the outline in from the edges; [corner] is the top corner radius; [cut]
+/// is how wide each bottom scoop is (about the speaker width); [rise] is how far
+/// up the scoop lifts (about how far the pod reaches into the screen).
+Path notchedTubePath(double w, double h,
+    {double inset = 0, double corner = 12, double cut = 60, double rise = 30}) {
+  final l = inset, t = inset, r = w - inset, b = h - inset;
+  final cr = corner;
+  return Path()
+    ..moveTo(l + cr, t)
+    ..lineTo(r - cr, t)
+    ..arcToPoint(Offset(r, t + cr), radius: Radius.circular(cr))
+    ..lineTo(r, b - rise)
+    ..quadraticBezierTo(r - cut, b - rise, r - cut, b) // scoop the bottom-right
+    ..lineTo(l + cut, b)
+    ..quadraticBezierTo(l + cut, b - rise, l, b - rise) // scoop the bottom-left
+    ..lineTo(l, t + cr)
+    ..arcToPoint(Offset(l + cr, t), radius: Radius.circular(cr))
+    ..close();
+}
+
 /// The three typefaces, one job each (DESIGN.md · Type). These are mutable so
 /// the terminal face can be swapped from Settings — every call site reads
 /// through the `glass`/`chassis`/`mono` helpers, so changing the family here

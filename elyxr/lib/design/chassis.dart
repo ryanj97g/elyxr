@@ -147,7 +147,13 @@ class Tube extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = palette;
-    return DecoratedBox(
+    return ClipPath(
+      // The tube is recessed into the metal chassis, and its two bottom corners
+      // scoop up and inward (see notchedTubePath) so the glass curves around the
+      // corner speakers moulded into the chassis corners. This is permanent, not
+      // tied to the lightshow; the edge light uses the same shape so they align.
+      clipper: const _TubeClipper(),
+      child: DecoratedBox(
       decoration: BoxDecoration(
         color: p.tubeBg,
         borderRadius: BorderRadius.circular(14),
@@ -232,8 +238,21 @@ class Tube extends StatelessWidget {
             ),
         ],
       ),
+      ),
     );
   }
+}
+
+/// Clips the tube to the notched outline (rounded top, the two bottom corners
+/// scooped around the corner speakers). Shares notchedTubePath with the edge
+/// light. Top corner radius 14 matches the tube's own border radius.
+class _TubeClipper extends CustomClipper<Path> {
+  const _TubeClipper();
+  @override
+  Path getClip(Size size) =>
+      notchedTubePath(size.width, size.height, corner: 14);
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
 
 /// Hairline scanlines every 4px — a faint *phosphor-tinted* line so the raster
