@@ -1,13 +1,12 @@
 // The settings screen, reached only by holding the wordmark. Replaces the files
 // view inside the same tube, with the same scanlines and sweep. Numbered
-// sections, an inverted accent header, and HOLD ELYXR TO EXIT in the footer.
+// sections and an inverted accent header.
 
 import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:window_manager/window_manager.dart';
 
 import '../design/text.dart';
 import '../design/tokens.dart';
@@ -102,7 +101,6 @@ class SettingsView extends StatelessWidget {
                 // escape hatch to unlock the fixed window's size. In-memory only
                 // (never saved, off on every launch). Not a listed feature.
                 const SizedBox(height: 44),
-                _ResizeRow(palette: p),
                 const SizedBox(height: 8),
               ],
             ),
@@ -114,7 +112,6 @@ class SettingsView extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('ELYXR 0.9 · lymnal 0.9', style: mono(10, p.foot)),
-                Text('HOLD ELYXR TO EXIT', style: chassis(10, p.mid, spacing: 0.1)),
               ],
             ),
           ),
@@ -151,60 +148,6 @@ class SettingsView extends StatelessWidget {
           body,
         ],
       );
-}
-
-/// The buried, undocumented resize escape hatch. Understated on purpose — it
-/// reads as a stray line, not a feature. Flips the in-memory allowResize flag
-/// (never saved) and applies it straight to the window. Off on every launch.
-class _ResizeRow extends StatelessWidget {
-  final Palette palette;
-  const _ResizeRow({required this.palette});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = context.watch<SettingsController>();
-    final p = palette;
-    final on = s.allowResize;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () async {
-        final v = !on;
-        s.allowResize = v;
-        try {
-          await windowManager.setResizable(v);
-          await windowManager.setMaximizable(v);
-        } catch (_) {}
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text('allow window resizing', style: glass(13, p.foot)),
-            ),
-            Container(
-              width: 26,
-              height: 14,
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-              decoration: BoxDecoration(
-                color: p.mv1,
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: on ? p.a : p.mb,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// The Nostalgia Mode master switch (and, once it's on, the sound sub-switch).

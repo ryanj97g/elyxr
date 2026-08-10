@@ -46,11 +46,6 @@ class SettingsController extends ChangeNotifier {
   // opt-in rather than hijacking the player the moment Nostalgia turns on — and
   // so a trove folder you're streaming stays your music source.
   bool _demoMode2000s = false;
-  // A dev-only escape hatch: let the normally-locked window be resized. Purely
-  // in-memory — never persisted, never on by default, off on every launch, and
-  // undocumented. The window is meant to be a fixed size; this is the buried way
-  // out for when it isn't.
-  bool _allowResize = false;
   // Whether the settings screen is showing. Kept here, not in the home widget's
   // own state, so a rebuild (e.g. while dragging a colour swatch) can never wipe
   // it and bounce you out of settings. In-memory; resets to the files view on
@@ -72,7 +67,6 @@ class SettingsController extends ChangeNotifier {
   String get termFont => _termFont;
   bool get nostalgia => _nostalgia;
   bool get demoMode2000s => _demoMode2000s;
-  bool get allowResize => _allowResize;
   bool get inSettings => _inSettings;
 
   void _load() {
@@ -148,14 +142,6 @@ class SettingsController extends ChangeNotifier {
   /// rebuild so any new faces appear in the picker. Dev convenience.
   Future<void> reloadFonts() async {
     await reloadCustomFontsFromDisk();
-    notifyListeners();
-  }
-
-  // In-session only, like nostalgia: never written to prefs, so it's off on
-  // every launch. Applying it to the actual window is the settings toggle's job.
-  set allowResize(bool v) {
-    if (_allowResize == v) return;
-    _allowResize = v;
     notifyListeners();
   }
 

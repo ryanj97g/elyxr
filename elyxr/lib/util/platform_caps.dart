@@ -17,7 +17,7 @@ class Caps {
       Platform.isLinux || Platform.isWindows || Platform.isMacOS;
 
   /// A managed desktop window via window_manager: frameless sizing, drag-to-move,
-  /// the minimize/close screws, shake-to-close, the resize toggle. Desktop only —
+  /// the minimize/close screws, shake-to-close. Desktop only —
   /// on a phone the app is simply full-screen.
   static bool get hasWindowManager => isDesktop;
 
