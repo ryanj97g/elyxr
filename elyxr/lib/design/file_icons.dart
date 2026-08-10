@@ -46,8 +46,23 @@ const Map<String, FileKind> kExtKinds = <String, FileKind>{
   'flac': FileKind.audio, 'm4a': FileKind.audio, 'aac': FileKind.audio,
   'opus': FileKind.audio, 'wma': FileKind.audio, 'aiff': FileKind.audio,
   'aif': FileKind.audio, 'mid': FileKind.audio, 'midi': FileKind.audio,
+  // Trackers and chiptunes. The first four plus the wider libopenmpt bench are
+  // all playable (kModuleExts in state/music.dart, guarded by a test that this
+  // list doesn't drift from it); sid and nsf are here so they read as music in the
+  // browser even though nothing decodes them yet.
   'xm': FileKind.audio, 'mod': FileKind.audio, 's3m': FileKind.audio,
-  'it': FileKind.audio,
+  'it': FileKind.audio, '669': FileKind.audio, 'okt': FileKind.audio,
+  'stm': FileKind.audio, 'med': FileKind.audio, 'mtm': FileKind.audio,
+  'dbm': FileKind.audio, 'dmf': FileKind.audio, 'gdm': FileKind.audio,
+  'imf': FileKind.audio, 'mdl': FileKind.audio, 'ptm': FileKind.audio,
+  'ult': FileKind.audio, 'amf': FileKind.audio, 'far': FileKind.audio,
+  'psm': FileKind.audio, 'j2b': FileKind.audio, 'mo3': FileKind.audio,
+  'umx': FileKind.audio, 'mt2': FileKind.audio, 'dsm': FileKind.audio,
+  'stx': FileKind.audio, 'nst': FileKind.audio, 'wow': FileKind.audio,
+  'm15': FileKind.audio, 'mptm': FileKind.audio, 'ams': FileKind.audio,
+  'dtm': FileKind.audio, 'plm': FileKind.audio, 'symmod': FileKind.audio,
+  'stp': FileKind.audio, 'sid': FileKind.audio, 'nsf': FileKind.audio,
+  'ahx': FileKind.audio,
 
   // video
   'mp4': FileKind.video, 'mkv': FileKind.video, 'avi': FileKind.video,

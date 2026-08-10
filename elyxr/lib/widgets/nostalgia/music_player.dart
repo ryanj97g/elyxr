@@ -61,10 +61,16 @@ class MusicPlayerPanel extends StatelessWidget {
                   ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(loading ? 'LOADING…' : (canBuiltIn ? m.title : '—'),
+              child: Text(
+                  loading
+                      ? 'LOADING…'
+                      : (m.notice ?? (canBuiltIn ? m.title : '—')),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: glass(15, loading ? p.mid : p.foot)),
+                  // A file that can't be decoded says so here. Otherwise a tap on
+                  // one looked exactly like a tap on nothing.
+                  style: glass(15,
+                      m.notice != null ? p.a : (loading ? p.mid : p.foot))),
             ),
             if (canBuiltIn && !loading) ...[
               const SizedBox(width: 8),
@@ -131,6 +137,14 @@ class MusicPlayerPanel extends StatelessWidget {
                 style: mono(11, p.mid)),
           ],
         ),
+        if (m.notice != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(m.notice!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: glass(13, p.a)),
+          ),
         const SizedBox(height: 6),
         // Real spectrum — the actual audio of the current track, analysed into a
         // spectrogram and read straight off the live play head. It's the true

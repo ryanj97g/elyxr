@@ -35,7 +35,24 @@ import '../util/lymnal_host.dart';
 /// (see _renderModule) so they play too.
 const kAudioExts = {
   'ogg', 'mp3', 'wav', 'flac', 'm4a', 'aac', 'opus',
-  'xm', 'mod', 's3m', 'it',
+  ...kModuleExts,
+};
+
+/// Tracker formats. Every one of these is rendered to PCM by libopenmpt before it
+/// plays, which all three platforms already carry — Android bundles the library
+/// itself, Linux installs openmpt123, and the Windows ffmpeg build includes it. So
+/// this list is "what libopenmpt reads", not a per-platform compromise.
+///
+/// NOT here, because libopenmpt doesn't read them: .sid needs libsidplayfp and
+/// .nsf needs a NES APU emulator. They have icons but no decoder, and adding one
+/// means bundling a second native library per platform.
+const kModuleExts = {
+  // the four that were always supported
+  'mod', 'xm', 's3m', 'it',
+  // the rest of libopenmpt's bench, in the same family
+  '669', 'okt', 'stm', 'med', 'mtm', 'dbm', 'dmf', 'gdm', 'imf', 'mdl',
+  'ptm', 'ult', 'amf', 'far', 'psm', 'j2b', 'mo3', 'umx', 'mt2', 'dsm',
+  'stx', 'nst', 'wow', 'm15', 'mptm', 'ams', 'dtm', 'plm', 'symmod', 'stp',
 };
 
 bool isAudioName(String name) =>
@@ -89,6 +106,13 @@ class MusicController extends ChangeNotifier {
   // Which media the visualizer is already working on, so opening a folder (which
   // both calls _pointAnalysisAtCurrent and gets a playlist event) fetches once.
   String? _analysisUri;
+  // Trove path -> the local file we resolved it to. Only modules land here: they
+  // can't be streamed, so they're fetched and rendered to WAV before playback and
+  // the playlist carries that WAV. The visualizer reads it straight from here
+  // instead of fetching the module a second time.
+  final Map<String, String> _localFor = {};
+  // Temp files the current queue owns (fetched modules and their WAVs).
+  List<String> _queueTemps = const [];
 
   // Playback volume (0..1), applied to every source and remembered across
   // launches. _preMute holds the level to come back to when unmuting.
@@ -370,6 +394,12 @@ class MusicController extends ChangeNotifier {
       String trovePath, int token) async {
     final client = _troveClient;
     if (client == null) return null;
+    // A module was already fetched and rendered to WAV to play it at all — read
+    // that, rather than pulling the module down a second time.
+    final rendered = _localFor[trovePath];
+    if (rendered != null && File(rendered).existsSync()) {
+      return (rendered, const <String>[]);
+    }
     final local = client.localPathFor(trovePath);
     if (local != null && File(local).existsSync()) {
       return (local, const <String>[]); // the trove file; not ours to delete
@@ -544,9 +574,13 @@ class MusicController extends ChangeNotifier {
     _trove = false;
     _troveQueue = const [];
     _byUri.clear();
+    _localFor.clear();
+    _sweep(_queueTemps);
+    _queueTemps = const [];
     _plist = null;
     _opening = false;
     _buffering = false;
+    _notice = null;
     try {
       await _player.stop();
     } catch (_) {}
@@ -570,8 +604,13 @@ class MusicController extends ChangeNotifier {
     return r;
   }
 
-  static const _moduleExts = {'xm', 'mod', 's3m', 'it'};
-  bool _isModule(String ext) => _moduleExts.contains(ext.toLowerCase());
+  bool _isModule(String ext) => kModuleExts.contains(ext.toLowerCase());
+
+  /// A file the player couldn't decode, or null. Shown by the deck instead of
+  /// leaving a tap look like nothing happened — the failure mode that made
+  /// icon-only support indistinguishable from real support.
+  String? get notice => _notice;
+  String? _notice;
 
   /// Extract a bundled asset to a real file the player can open, rendering a
   /// tracker module to WAV on the way. Cached by asset key, so switching back to
@@ -684,14 +723,40 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
 
     _byUri.clear();
+    _localFor.clear();
+    _sweep(_queueTemps);
+    _queueTemps = const [];
+    final owned = <String>[];
+    final unplayable = <String>[];
     final medias = <Media>[];
-    for (final (path, name) in queue) {
-      final (src, headers) = client.mediaSource(path);
-      final media = Media(src, httpHeaders: headers);
+    var start = 0;
+    for (var i = 0; i < queue.length; i++) {
+      final (path, name) = queue[i];
+      final resolved = await _sourceFor(client, path, owned);
+      if (resolved == null) {
+        // A module whose renderer isn't there. Leaving it in the playlist would
+        // make mpv stall on a file it can't open, so it's dropped and named.
+        unplayable.add(name);
+        continue;
+      }
+      if (i == index) start = medias.length;
+      final media = Media(resolved.$1, httpHeaders: resolved.$2);
       _byUri[media.uri] = (path, name);
       medias.add(media);
     }
-    final start = index.clamp(0, medias.length - 1);
+    _queueTemps = owned;
+    _notice = unplayable.isEmpty
+        ? null
+        : unplayable.length == 1
+            ? "can't decode ${_pretty(unplayable.first)}"
+            : "can't decode ${unplayable.length} files in this folder";
+    if (medias.isEmpty) {
+      _opening = false;
+      _trove = false;
+      notifyListeners();
+      return;
+    }
+    start = start.clamp(0, medias.length - 1);
     try {
       await _applyRepeat();
       await _player.open(Playlist(medias, index: start));
@@ -711,6 +776,54 @@ class MusicController extends ChangeNotifier {
       _trove = false;
     }
     notifyListeners();
+  }
+
+  /// What the player should open for [path], and the headers it needs — or null if
+  /// this file can't be decoded at all.
+  ///
+  /// Everything libmpv reads is handed over as a SOURCE and streamed. A tracker
+  /// module can't be: libmpv only reads one if its ffmpeg happens to carry
+  /// libopenmpt, which is true on some builds and not others. Rather than let
+  /// playback depend on that, a module is always fetched and rendered to WAV by
+  /// libopenmpt itself — which every platform here ships — and the playlist gets
+  /// the WAV. Modules are small, so the fetch is quick; this is the one format
+  /// family that doesn't stream.
+  Future<(String, Map<String, String>?)?> _sourceFor(
+      LymnalClient client, String path, List<String> owned) async {
+    final dot = path.lastIndexOf('.');
+    final ext = dot >= 0 ? path.substring(dot + 1).toLowerCase() : '';
+    if (!_isModule(ext)) return client.mediaSource(path);
+    final raw = await _fetchToTemp(client, path, ext, owned);
+    if (raw == null) return null;
+    final wav = await _renderModule(raw, ext);
+    if (wav == raw) return null; // no renderer, or it failed — not playable
+    owned.add(wav);
+    _localFor[path] = wav; // the visualizer can read this instead of refetching
+    return (wav, null);
+  }
+
+  /// Pull a trove file down to a temp path, recording it as owned so the queue
+  /// cleans it up. Returns null if the fetch failed.
+  Future<String?> _fetchToTemp(LymnalClient client, String path, String ext,
+      List<String> owned) async {
+    final local = client.localPathFor(path);
+    if (local != null && File(local).existsSync()) return local; // already here
+    try {
+      final dir = await getTemporaryDirectory();
+      final f =
+          File('${dir.path}/elyxr_src_${path.hashCode & 0x7fffffff}.$ext');
+      final sink = f.openWrite();
+      try {
+        await client.downloadTo(path, sink);
+        await sink.flush();
+      } finally {
+        await sink.close();
+      }
+      owned.add(f.path);
+      return f.path;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Switch off the video track for what's loaded. The player has no video output
@@ -850,6 +963,7 @@ class MusicController extends ChangeNotifier {
   void dispose() {
     _analysisToken++;
     _closeAnalysis(); // close the visualizer handle, drop any temp
+    _sweep(_queueTemps);
     _nostalgiaStop?.cancel();
     for (final s in _subs) {
       s.cancel();

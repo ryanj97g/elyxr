@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:elyxr/design/file_icons.dart';
+import 'package:elyxr/state/music.dart' show kAudioExts, kModuleExts;
 
 void main() {
   test('a folder is a folder whatever it is called', () {
@@ -73,6 +74,35 @@ void main() {
     // lymnal sniffing an .mp3 as octet-stream must not demote it to unknown.
     expect(fileKindOf('42mg.mp3', mime: 'application/octet-stream'),
         FileKind.audio);
+  });
+
+  // The classifier and the player keep separate lists — one decides what a file
+  // LOOKS like, the other what it can PLAY. They are allowed to differ (a .sid
+  // reads as music with no decoder behind it) but never in the direction that
+  // matters: anything playable must read as audio, or the browser would show a
+  // playable track as an unknown blob.
+  test('everything the player can play reads as audio', () {
+    for (final e in kAudioExts) {
+      expect(fileKindOf('tune.$e'), FileKind.audio, reason: '.$e');
+    }
+  });
+
+  test('every playable module is classified, none silently dropped', () {
+    for (final e in kModuleExts) {
+      expect(kExtKinds[e], FileKind.audio,
+          reason: '.$e is playable but missing from kExtKinds');
+    }
+  });
+
+  // These two have icons and read as music, but nothing decodes them. Pinned so
+  // the state is deliberate rather than an oversight someone "fixes" by adding
+  // them to the player's list, where they would fail at render time.
+  test('sid and nsf read as music but are not claimed as playable', () {
+    expect(fileKindOf('tune.sid'), FileKind.audio);
+    expect(fileKindOf('tune.nsf'), FileKind.audio);
+    expect(kAudioExts.contains('sid'), isFalse);
+    expect(kAudioExts.contains('nsf'), isFalse);
+    expect(kAudioExts.contains('ahx'), isFalse);
   });
 
   test('every kind has an icon, so none can fall through to nothing', () {
