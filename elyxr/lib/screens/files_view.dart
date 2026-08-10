@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 
 import '../api/api_error.dart';
 import '../api/models.dart';
+import '../design/file_icons.dart';
 import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/actions.dart';
@@ -814,9 +815,10 @@ class _Row extends StatelessWidget {
           children: [
             SizedBox(
               width: 16,
-              child: Text(
-                _typeGlyph(isDir),
-                style: glass(density.font, isDir ? (selected ? p.bright : p.a) : p.mid),
+              child: FileGlyph(
+                kind: fileKindOf(entry.name, isDir: isDir, mime: entry.mime),
+                size: density.font,
+                color: isDir ? (selected ? p.bright : p.a) : p.mid,
               ),
             ),
             const SizedBox(width: 7),
@@ -903,10 +905,6 @@ void _openEntry(BuildContext context, BrowseController browse, Entry entry) {
 
 // ------------------------------------------------------------- file grid ---
 
-/// The glyph that stands for an entry. Defined once so swapping in a real icon
-/// set later is one change here, not a hunt through the row, the grid and search.
-String _typeGlyph(bool isDir) => isDir ? '█' : '▫';
-
 /// A file's name without its extension. The grid shows the two apart — the name
 /// gets the middle, the type goes in a corner — so neither crowds the other.
 String _stripExt(String name) {
@@ -971,8 +969,11 @@ class _FileGrid extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Center(
-                      child: Text(_typeGlyph(e.isDir),
-                          style: glass(e.isDir ? 21 : 18, e.isDir ? p.a : p.glow)),
+                      child: FileGlyph(
+                        kind: fileKindOf(e.name, isDir: e.isDir, mime: e.mime),
+                        size: e.isDir ? 21 : 18,
+                        color: e.isDir ? p.a : p.glow,
+                      ),
                     ),
                   ),
                   Text(e.isDir ? e.name : _stripExt(e.name),
@@ -1110,7 +1111,12 @@ class _SearchResults extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
               child: Row(
                 children: [
-                  SizedBox(width: 16, child: Text(_typeGlyph(hit.isDir), style: glass(16, hit.isDir ? p.a : p.mid))),
+                  SizedBox(
+                      width: 16,
+                      child: FileGlyph(
+                          kind: fileKindOf(hit.name, isDir: hit.isDir),
+                          size: 16,
+                          color: hit.isDir ? p.a : p.mid)),
                   const SizedBox(width: 7),
                   Expanded(
                     child: Column(
