@@ -4,6 +4,8 @@
 // recent problems. It talks to lymnal's local admin surface (connected by the
 // app root).
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,6 +25,11 @@ class ServerControls extends StatefulWidget {
 }
 
 class _ServerControlsState extends State<ServerControls> {
+  // While the panel is open and pairing is on, poll for new requests so one
+  // that arrives after you opened the panel shows up on its own; without this
+  // you'd have to close and reopen the panel to see it.
+  Timer? _poll;
+
   @override
   void initState() {
     super.initState();
@@ -30,6 +37,19 @@ class _ServerControlsState extends State<ServerControls> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) context.read<ServerController>().refresh();
     });
+    _poll = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted) return;
+      final s = context.read<ServerController>();
+      // Only poll when there's something to catch: pairing is open. Closed,
+      // no new request can arrive, so we stay quiet.
+      if (s.available && (s.status?.pairingOpen ?? false)) s.pollPending();
+    });
+  }
+
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
   }
 
   @override
