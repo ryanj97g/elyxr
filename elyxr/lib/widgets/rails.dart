@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../design/text.dart';
-import '../util/build_info.dart';
 import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
@@ -246,15 +245,9 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
           ),
           const SizedBox(width: 9),
           // The version sits on the metal, so it uses the fixed chassis face —
-          // it stays put when the terminal (screen) face is swapped.
-          //
-          // The build number rides along with it. It was already stamped into
-          // every build (--dart-define=ELYXR_BUILD, the commit count) and shown
-          // absolutely nowhere, which made "is this actually the newest APK?"
-          // unanswerable from the app itself — the exact question you ask after
-          // sideloading. Absent (0) only on a hand-run flutter build.
-          Text(appBuild > 0 ? 'v0.9·$appBuild' : 'v0.9',
-              style: chassis(9, p.mt)),
+          // it stays put when the terminal (screen) face is swapped. Just the
+          // version: the build number belongs in Settings, not on the chassis.
+          Text('v0.9', style: chassis(9, p.mt)),
           const SizedBox(width: 9),
           // Right screw quietly closes the window (desktop only).
           _screw(p,
