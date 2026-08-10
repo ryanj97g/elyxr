@@ -1,13 +1,20 @@
-// Woofers built into the bottom corners of the chassis. Each is a metal pod
-// shaped to the corner — it covers the tube's corner underneath (a reverse
-// notch), so the screen reads as moulded around a real speaker — with a grille
-// that bumps to the music's bass. Not faked: the bass comes from the same live
+// The woofers: just the drivers. Each one sits in a hole in the chassis metal —
+// the cradle cut out of the glass at a bottom corner (see notchedTubePath and
+// Tube._driver) — so the metal wrapping it is the case's own surface.
+//
+// This file paints NO metal. It used to draw its own 66x66 metal pod with its own
+// gradient, its own bright outline and its own contact shadow, which is precisely
+// why the speakers read as parts stuck onto the case rather than moulded into it:
+// a tile with an outline is a separate object no matter how well it's shaded. All
+// of that is gone. What's left is the recess rim, the basket, the cone and the
+// dust cap — a driver, and nothing it's bolted to.
+//
+// The cone bumps to the music's bass. Not faked: it comes from the same live
 // spectrum the visualizer uses (MusicController.visualizerBars, off the play
-// head). Still a metal grille when nothing's playing.
+// head). Still a resting driver when nothing's playing.
 
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:provider/provider.dart';
@@ -17,10 +24,8 @@ import '../state/music.dart';
 
 class CornerSpeaker extends StatefulWidget {
   final Palette palette;
-  final bool left; // bottom-left vs bottom-right — corner shaping mirrors.
-  final double size;
-  /// When false the woofer is just a resting metal grille. It thumps to whatever
-  /// is playing whenever this is true.
+  /// When false the woofer is just a resting driver. It thumps to whatever is
+  /// playing whenever this is true.
   final bool reactive;
   /// Nostalgia Mode: crank the bass response so the cone really slams. Off, the
   /// woofer still bumps to the music, just gentler.
@@ -28,10 +33,8 @@ class CornerSpeaker extends StatefulWidget {
   const CornerSpeaker(
       {super.key,
       required this.palette,
-      required this.left,
       this.reactive = false,
-      this.intense = false,
-      this.size = 66});
+      this.intense = false});
 
   @override
   State<CornerSpeaker> createState() => _CornerSpeakerState();
@@ -86,15 +89,10 @@ class _CornerSpeakerState extends State<CornerSpeaker>
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: SizedBox(
-        width: widget.size,
-        height: widget.size,
-        child: ValueListenableBuilder<double>(
-          valueListenable: _bass,
-          builder: (_, v, __) => CustomPaint(
-            painter: _CornerSpeakerPainter(
-                widget.palette, v.clamp(0.0, 1.0), widget.left),
-          ),
+      child: ValueListenableBuilder<double>(
+        valueListenable: _bass,
+        builder: (_, v, __) => CustomPaint(
+          painter: _CornerSpeakerPainter(widget.palette, v.clamp(0.0, 1.0)),
         ),
       ),
     );
@@ -107,113 +105,35 @@ const Color _deep = Color(0xFF05070A);
 class _CornerSpeakerPainter extends CustomPainter {
   final Palette p;
   final double level; // 0..1 bass energy now
-  final bool left;
-  const _CornerSpeakerPainter(this.p, this.level, this.left);
+  const _CornerSpeakerPainter(this.p, this.level);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
+    // The box is the whole dome, so the driver is centred in it and the boom has
+    // room to spill onto the metal around it.
+    final c = size.center(Offset.zero);
+    const r = kDriverR;
 
-    // The metal pod filling the corner. The OUTER corner (the chassis corner)
-    // rounds to the chassis radius; the INNER corner (facing the screen) rounds
-    // larger, so the tube appears to curve around the speaker — the reverse
-    // notch. The pod covers whatever tube corner is beneath it.
-    const outer = Radius.circular(8); // matches the chassis border radius
-    const notch = Radius.circular(20); // the screen's curve around the woofer
-    const small = Radius.circular(3);
-    final pod = left
-        ? RRect.fromRectAndCorners(rect,
-            bottomLeft: outer, topRight: notch, topLeft: small, bottomRight: small)
-        : RRect.fromRectAndCorners(rect,
-            bottomRight: outer, topLeft: notch, topRight: small, bottomLeft: small);
-
-    // Base metal, the same body gradient as the chassis so the corner reads as
-    // one continuous piece of the case, not a separate part sitting on it.
-    canvas.drawRRect(
-      pod,
-      Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [p.m2, p.m3],
-        ).createShader(rect),
-    );
-    // A bright hairline where the raised metal catches light on its top/outer
-    // edge, then a soft dark contact shadow just inside the edges where the
-    // screen curves in — together the corner reads as a formed part of the case.
-    canvas.drawRRect(
-      pod.deflate(0.5),
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = p.mh.withValues(alpha: 0.55),
-    );
-    canvas.drawRRect(
-      pod.deflate(2),
+    // The rim of the hole the driver is set into. Dark at the top where the metal
+    // above overhangs it, lightening at the bottom where light bounces back up —
+    // the inverse of a raised part, which is what makes it read as sunk INTO the
+    // case rather than sitting on it. This is the only edge drawn anywhere near
+    // the speaker; there is deliberately no ring around anything.
+    canvas.drawCircle(
+      c,
+      r + 1.5,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3
-        ..color = _deep.withValues(alpha: 0.45)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-    );
-
-    final c = size.center(Offset.zero);
-    final r = math.min(size.width, size.height) / 2 - 6;
-
-    // A raised metal flange the driver is bolted to: top-lit (light at the top,
-    // dark at the bottom) so it domes out of the case.
-    final flangeR = r + 3.5;
-    final flangeRect = Rect.fromCircle(center: c, radius: flangeR);
-    canvas.drawCircle(
-      c,
-      flangeR,
-      Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [p.mh, p.m3],
-        ).createShader(flangeRect),
-    );
-    canvas.drawCircle(
-      c,
-      flangeR,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2
-        ..shader = LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [p.mt, _deep],
-        ).createShader(flangeRect),
+          colors: [_deep, p.mh.withValues(alpha: 0.5)],
+        ).createShader(Rect.fromCircle(center: c, radius: r + 1.5)),
     );
 
-    // Four mounting screws set into the flange — the bolted-into-the-panel cue.
-    final screwOrbit = flangeR - 3;
-    for (final ang in const [0.785, 2.356, 3.927, 5.498]) {
-      final sc = c + Offset(math.cos(ang), math.sin(ang)) * screwOrbit;
-      final srect = Rect.fromCircle(center: sc, radius: 2.2);
-      canvas.drawCircle(
-        sc,
-        2.2,
-        Paint()
-          ..shader = RadialGradient(
-            center: const Alignment(-0.3, -0.3),
-            colors: [p.mt, const Color(0xFF14181C)],
-          ).createShader(srect),
-      );
-      canvas.drawCircle(
-        sc,
-        2.2,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 0.6
-          ..color = _deep.withValues(alpha: 0.6),
-      );
-    }
-
-    // The basket well, recessed into the flange: dark at the top rim lifting to
-    // a little light at the bottom — the inverse of the raised flange, so it
-    // reads sunken. An inner-rim shadow deepens the recess.
+    // The basket well: dark at the top lifting to a little light at the bottom,
+    // with an inner-rim shadow deepening the recess.
     canvas.drawCircle(
       c,
       r,
@@ -281,5 +201,5 @@ class _CornerSpeakerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CornerSpeakerPainter old) =>
-      old.level != level || old.left != left || old.p != p;
+      old.level != level || old.p != p;
 }

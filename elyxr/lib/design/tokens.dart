@@ -5,6 +5,7 @@
 // sits in one phosphor colour and stays that colour. A new accent is one row.
 
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/painting.dart';
@@ -14,25 +15,80 @@ import 'oklch.dart';
 
 Color _c(int argb) => Color(argb);
 
-/// The tube outline: a rounded rectangle whose two BOTTOM corners scoop up and
-/// inward, so the screen curves around the corner speakers that sit in the
-/// chassis corners (so they read as moulded in, not stuck on). Shared by the
-/// tube's own clip and the music edge light so the two always match. [inset]
-/// pulls the outline in from the edges; [corner] is the top corner radius; [cut]
-/// is how wide each bottom scoop is (about the speaker width); [rise] is how far
-/// up the scoop lifts (about how far the pod reaches into the screen).
-Path notchedTubePath(double w, double h,
-    {double inset = 0, double corner = 12, double cut = 60, double rise = 30}) {
+// ---- the speaker cradles moulded into the chassis ----------------------------
+//
+// The chassis metal wraps each bottom-corner driver on its top and both sides,
+// and the driver sits in a hole in that metal. There is no speaker "panel" drawn
+// anywhere: the glass is clipped away in a dome at each bottom corner, and what
+// shows through is the chassis Container's OWN gradient. So the metal around a
+// driver is the same continuous surface as the rest of the case — not a matching
+// shape painted to look like it, which is what a separate pod could never be.
+//
+// Both the dome (the glass edge) and the driver share one centre, so the metal
+// between them is [kDriverMetal] thick everywhere by construction rather than by
+// tuning. Everything below is in the TUBE's coordinate space — the cradle and the
+// driver must be measured from the same origin or the seam comes back.
+
+/// Radius of the driver's basket — the visible speaker.
+const double kDriverR = 23;
+
+/// Metal between the basket and the glass, all the way round the dome.
+const double kDriverMetal = 12;
+
+/// Radius of the dome the glass curves around: the basket plus its metal.
+const double kDomeR = kDriverR + kDriverMetal;
+
+/// How far a driver's centre sits in from the tube's side and bottom edges.
+///
+/// Less than [kDomeR] on purpose. If it equalled the dome radius the dome would
+/// meet each edge at a single tangent point and the cradle would read as a ball
+/// on a neck; pulling the centre in makes the dome cross both edges, so the metal
+/// merges into the case over a real width and swallows the corner completely.
+/// Still ≥ [kDriverR], so the basket itself never breaks the tube's edge.
+const double kDriverInset = 24;
+
+/// Half the chord the dome cuts on an edge it crosses.
+final double _domeHalfChord =
+    math.sqrt(kDomeR * kDomeR - kDriverInset * kDriverInset);
+
+/// Where the dome crosses a side wall, measured up from the tube's bottom.
+final double kCradleRise = kDriverInset + _domeHalfChord;
+
+/// Where the dome crosses the bottom edge, measured in from a side wall.
+final double kCradleSpan = kDriverInset + _domeHalfChord;
+
+/// The centre of one bottom-corner driver, in tube coordinates. The dome the
+/// glass curves around is concentric with it.
+Offset driverCentre(double w, double h, {required bool left}) => Offset(
+      left ? kDriverInset : w - kDriverInset,
+      h - kDriverInset,
+    );
+
+/// The tube outline: a rounded rectangle whose two BOTTOM corners are cut away in
+/// a dome, so the glass curves around the speaker cradled in the chassis metal
+/// behind it. Shared by the tube's own clip and the music edge light so the two
+/// always match. [inset] pulls the outline in from the edges; [corner] is the top
+/// corner radius.
+///
+/// [inset] shrinks the domes with the outline, so an inset copy stays clear of the
+/// drivers instead of cutting across them.
+Path notchedTubePath(double w, double h, {double inset = 0, double corner = 12}) {
   final l = inset, t = inset, r = w - inset, b = h - inset;
   final cr = corner;
+  final dome = Radius.circular(kDomeR - inset);
+  final rise = kCradleRise - inset;
+  final span = kCradleSpan - inset;
   return Path()
     ..moveTo(l + cr, t)
     ..lineTo(r - cr, t)
     ..arcToPoint(Offset(r, t + cr), radius: Radius.circular(cr))
+    // Down the right wall to where the right dome cuts it, then around the
+    // outside of that dome to the bottom edge.
     ..lineTo(r, b - rise)
-    ..quadraticBezierTo(r - cut, b - rise, r - cut, b) // scoop the bottom-right
-    ..lineTo(l + cut, b)
-    ..quadraticBezierTo(l + cut, b - rise, l, b - rise) // scoop the bottom-left
+    ..arcToPoint(Offset(r - span, b), radius: dome, clockwise: false)
+    // Across the bottom between the two cradles, then around the left dome.
+    ..lineTo(l + span, b)
+    ..arcToPoint(Offset(l, b - rise), radius: dome, clockwise: false)
     ..lineTo(l, t + cr)
     ..arcToPoint(Offset(l + cr, t), radius: Radius.circular(cr))
     ..close();

@@ -393,14 +393,12 @@ class _ActionBarState extends State<_ActionBar> {
 
     // The file actions LIVE here permanently — they are never a pop-up and never
     // replace anything. With nothing picked they're greyed out; picking files
-    // lights them and swaps the left label for the selection figures, plus a ✕
-    // to clear. The sort chip is always on the right.
-    final figures = !has
-        ? 'FILES'
-        : _res == null
-            ? fmtCount(browse.selection.length, 'item')
-            : '${fmtCount(_res!.fileCount, 'file')} · ${fmtSize(_res!.totalBytes)}';
-
+    // lights them and adds a ✕ to clear. The sort chip is always on the right.
+    //
+    // There is no selection-figures label. It used to hold the left third of this
+    // bar to say "FILES", which is what the header above already implies, and with
+    // files picked it said a count the list itself shows — so it cost the actions
+    // the room they needed and bought nothing. The whole width is theirs now.
     // RENAME acts on a single pick only (it lost its long-press when
     // click-and-hold became multi-select); it stays greyed for none or many.
     Entry? single;
@@ -415,48 +413,35 @@ class _ActionBarState extends State<_ActionBar> {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
-      child: Row(
-        children: [
-          Flexible(
-            child: Text(figures,
-                style: glass(16, has ? p.bright : p.foot),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
-          ),
-          const SizedBox(width: 12),
-          // The actions WRAP when they don't fit; they used to ride a scale-down
-          // FittedBox, which kept one line at any width by shrinking the labels —
-          // on a phone that meant ~10px text with a hit box thinner than a finger.
-          // Wrapping costs a second row and hides nothing (the old objection was
-          // to a scroll, which a mouse can't drag; that doesn't apply here).
-          Expanded(
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              runAlignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                _action(p, 'RENAME',
-                    single == null ? null : () => _rename(context, browse, p, single!.name)),
-                _action(p, 'DOWNLOAD',
-                    has ? () => _download(context, browse, actions) : null),
-                _action(p, 'MOVE', has ? () => _move(context, browse, p) : null),
-                _action(p, 'DELETE', has ? () => _delete(context, browse, p) : null),
-                if (has)
-                  _tap(
-                    onTap: browse.clearSelection,
-                    child: Text('✕', style: glass(16, p.mid)),
-                  ),
-                _tap(
-                  onTap: browse.cycleSort,
-                  child: Text('${browse.sort.label} ▾',
-                      style: chassis(13, p.mid, spacing: 0.09)),
-                ),
-              ],
+      // ONE line, always. Never wrapped — four verbs breaking across three ragged
+      // rows is not a layout. With the figures label gone they fit at full size at
+      // the app's width; the FittedBox is only a floor for a genuinely narrower
+      // window, where a slight scale-down still beats a wrap.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          children: [
+            _action(p, 'RENAME',
+                single == null ? null : () => _rename(context, browse, p, single!.name)),
+            _action(p, 'DOWNLOAD',
+                has ? () => _download(context, browse, actions) : null),
+            _action(p, 'MOVE', has ? () => _move(context, browse, p) : null),
+            _action(p, 'DELETE', has ? () => _delete(context, browse, p) : null),
+            if (has)
+              _tap(
+                onTap: browse.clearSelection,
+                child: Text('✕', style: glass(16, p.mid)),
+              ),
+            _tap(
+              onTap: browse.cycleSort,
+              child: Text('${browse.sort.label} ▾',
+                  style: chassis(13, p.mid, spacing: 0.09)),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -78,25 +78,11 @@ class Chassis extends StatelessWidget {
               ],
             ),
           ),
-          // Woofers moulded into the bottom corners: each covers the tube's
-          // bottom corner beneath it (a reverse notch) and the end of the
-          // bottom rail — which is why the rail's controls are inset to live in
-          // the space between them.
-          // The woofers thump to whatever's playing at all times; Nostalgia Mode
-          // only cranks the intensity (the full light show — the edge glow — is
-          // still Nostalgia-only, layered in the tube above).
-          Positioned(
-            left: 0,
-            bottom: 0,
-            child: CornerSpeaker(
-                palette: p, left: true, reactive: true, intense: nostalgia),
-          ),
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: CornerSpeaker(
-                palette: p, left: false, reactive: true, intense: nostalgia),
-          ),
+          // The woofers used to be positioned here, over the metal. They now live
+          // in the Tube (see its build), because the cradle they sit in is cut out
+          // of the glass and both have to be measured from the same origin — from
+          // out here the tube's rect isn't known, which is how the driver and the
+          // glass edge drifted out of alignment in the first place.
         ],
       ),
     );
@@ -147,11 +133,49 @@ class Tube extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = palette;
+    // The glass is clipped to the notched outline, and the drivers sit in the two
+    // domes that clip cuts out of its bottom corners. They are siblings of the
+    // clip, NOT children of it — inside it they'd be clipped away, since they are
+    // deliberately outside the glass. Both read the tube's own size, so the cradle
+    // and the driver in it can never drift apart.
+    //
+    // Nothing here paints metal. The dome is a hole in the glass, so what shows
+    // through is the chassis Container's own gradient — one continuous case
+    // surface, which is something a separate speaker panel can only imitate.
+    return LayoutBuilder(builder: (context, box) {
+      final w = box.maxWidth, h = box.maxHeight;
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(child: _glass(p)),
+          for (final left in const [true, false]) _driver(p, w, h, left: left),
+        ],
+      );
+    });
+  }
+
+  /// One woofer, dropped into the cradle at a bottom corner. The box is the full
+  /// dome so a hard bass hit can spill its glow onto the metal around the driver.
+  Widget _driver(Palette p, double w, double h, {required bool left}) {
+    final c = driverCentre(w, h, left: left);
+    return Positioned(
+      left: c.dx - kDomeR,
+      top: c.dy - kDomeR,
+      width: kDomeR * 2,
+      height: kDomeR * 2,
+      // The woofers thump to whatever's playing at all times; Nostalgia Mode only
+      // cranks the intensity (the full light show — the edge glow — is still
+      // Nostalgia-only, layered in the glass).
+      child: CornerSpeaker(palette: p, reactive: true, intense: nostalgia),
+    );
+  }
+
+  Widget _glass(Palette p) {
     return ClipPath(
-      // The tube is recessed into the metal chassis, and its two bottom corners
-      // scoop up and inward (see notchedTubePath) so the glass curves around the
-      // corner speakers moulded into the chassis corners. This is permanent, not
-      // tied to the lightshow; the edge light uses the same shape so they align.
+      // The two bottom corners are cut away in a dome (see notchedTubePath) so the
+      // glass curves around the speakers cradled in the metal behind it. Permanent,
+      // not tied to the lightshow; the edge light uses the same outline so the two
+      // always agree.
       clipper: const _TubeClipper(),
       child: DecoratedBox(
       decoration: BoxDecoration(
