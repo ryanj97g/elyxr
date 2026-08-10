@@ -433,7 +433,25 @@ if [ "$APP" = 1 ]; then
     # differently); empty if it failed for some other reason.
     miss="$(grep -oE "'[A-Za-z0-9_./+-]+\.h' file not found|[A-Za-z0-9_./+-]+\.h: No such file" "$BUILD_LOG" 2>/dev/null \
              | grep -oE "[A-Za-z0-9_./+-]+\.h" | sort -u || true)"
-    if [ -z "$miss" ] || [ "$app_tries" -gt 3 ]; then
+    # pkg-config modules CMake couldn't resolve. A missing one doesn't have to
+    # fail where it's looked up: media_kit_video calls pkg_check_modules WITHOUT
+    # `REQUIRED`, so an absent mpv silently skips creating PkgConfig::mpv and the
+    # build dies much later on "links to PkgConfig::mpv but the target was not
+    # found" — which never mentions mpv being missing, and reads like a typo in
+    # someone else's CMake. Catch both that and the REQUIRED wording, keep only
+    # the modules pkg-config really can't see, and then treat each one's .pc file
+    # exactly like a missing header: ask apt-file who ships it.
+    missmod=""
+    if command -v pkg-config >/dev/null 2>&1; then
+      for m in $( { grep -oE 'PkgConfig::[A-Za-z0-9_.+-]+' "$BUILD_LOG" 2>/dev/null \
+                      | sed 's/^PkgConfig:://'
+                    grep -oE "None of the required '[A-Za-z0-9_.+-]+' found" "$BUILD_LOG" 2>/dev/null \
+                      | sed -E "s/None of the required '([^']+)' found/\\1/"
+                  } | sort -u ); do
+        pkg-config --exists "$m" 2>/dev/null || missmod="$missmod $m"
+      done
+    fi
+    if { [ -z "$miss" ] && [ -z "$missmod" ]; } || [ "$app_tries" -gt 3 ]; then
       echo "${RED}the app build failed — full output at $BUILD_LOG${RST}"
       false  # hand off to the error trap; the log is kept
     fi
@@ -449,8 +467,14 @@ if [ "$APP" = 1 ]; then
       p="$(apt-file search --package-only "$h" 2>/dev/null | head -n1 || true)"
       [ -n "$p" ] && pkgs="$pkgs $p"
     done
+    # A pkg-config module is shipped as <module>.pc; the leading slash keeps
+    # 'mpv.pc' from also matching something like 'libmpv-extra.pc'.
+    for m in $missmod; do
+      p="$(apt-file search --package-only "/$m.pc" 2>/dev/null | head -n1 || true)"
+      [ -n "$p" ] && pkgs="$pkgs $p"
+    done
     if [ -z "$pkgs" ]; then
-      echo "${RED}couldn't find a package providing:$miss${RST}"
+      echo "${RED}couldn't find a package providing:$miss$missmod${RST}"
       false
     fi
     echo "  a plugin needs a system library — installing:$pkgs"
