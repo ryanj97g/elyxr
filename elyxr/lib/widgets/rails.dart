@@ -279,12 +279,13 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
   }
 }
 
-/// Draws the idle wordmark as a cutout: the base colour (and, mid-sweep, a
-/// diagonal light stripe) filled into the exact shape of the letters, with the
-/// same 1px dark emboss beneath. The letters are stamped once as a dstIn mask,
-/// so the glyph geometry never moves; only the stripe behind them travels,
-/// which is why nothing can pulse or drift. When [t] is 0 or 1 (resting) it's a
-/// flat base fill: pixel-identical to the plain mark.
+/// Draws the idle wordmark so the letters are the only thing painted: the base
+/// colour (and, mid-sweep, a diagonal light stripe) confined to the exact shape
+/// of the glyphs, with the same 1px dark emboss beneath. The letters are drawn
+/// once as an opaque mask, then the fill and the stripe are clipped to that mask
+/// (srcIn/srcATop), so nothing ever escapes the glyphs and nothing pulses or
+/// drifts. When [t] is 0 or 1 (resting) it's a flat base fill: pixel-identical
+/// to the plain mark.
 class _WordmarkGleam extends CustomPainter {
   final Color base;
   final Color highlight;
@@ -297,30 +298,38 @@ class _WordmarkGleam extends CustomPainter {
     required this.t,
   });
 
+  TextPainter _paintFor(Color c) => TextPainter(
+        text: TextSpan(text: 'ELYXR', style: glyph.copyWith(color: c)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
   @override
   void paint(Canvas canvas, Size size) {
     // The emboss: the same dark shadow one pixel down, painted first so it sits
     // behind the mark (matches the const emboss used on the lit/reduced path).
-    final shadow = TextPainter(
-      text: TextSpan(
-        text: 'ELYXR',
-        style: glyph.copyWith(color: const Color(0xFF0C0D0F)),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    shadow.paint(canvas, const Offset(0, 1));
+    _paintFor(const Color(0xFF0C0D0F)).paint(canvas, const Offset(0, 1));
 
-    // Everything below composites in its own layer so the final dstIn mask
-    // clips only the fill, not the emboss beneath it.
+    // Everything below composites in its own layer so the fill and stripe can be
+    // clipped to the letter shape without touching the emboss beneath.
     final bounds = Offset.zero & size;
     canvas.saveLayer(bounds, Paint());
 
-    // Base fill: the letters' resting colour, across the whole box.
-    canvas.drawRect(bounds, Paint()..color = base);
+    // 1) The letters themselves, opaque. This is the shape; colour here is only
+    // a placeholder, the fill in step 2 replaces it.
+    _paintFor(const Color(0xFFFFFFFF)).paint(canvas, Offset.zero);
 
-    // The gleam: a diagonal light stripe sweeping left to right behind the
-    // letters. Wider than any glyph and rotated, so it never lines up with the
-    // text; it just passes through. A thinner parallel streak trails it.
+    // 2) The resting colour, kept only where the letters are (srcIn reads the
+    // letters' alpha). At rest this is all that shows: the plain mark.
+    canvas.drawRect(
+      bounds,
+      Paint()
+        ..color = base
+        ..blendMode = BlendMode.srcIn,
+    );
+
+    // 3) The gleam: a diagonal light stripe crossing the letters left to right,
+    // wider than any glyph and rotated so it never lines up with the text. srcATop
+    // keeps it strictly inside the letters. A thinner parallel streak trails it.
     if (t > 0.0 && t < 1.0) {
       final w = size.width, h = size.height;
       canvas.save();
@@ -332,30 +341,18 @@ class _WordmarkGleam extends CustomPainter {
         Rect.fromCenter(center: Offset.zero, width: 11, height: h * 3),
         Paint()
           ..color = highlight.withValues(alpha: 0.7)
+          ..blendMode = BlendMode.srcATop
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
       );
       canvas.drawRect(
         Rect.fromCenter(center: const Offset(10, 0), width: 3.5, height: h * 3),
         Paint()
           ..color = highlight.withValues(alpha: 0.4)
+          ..blendMode = BlendMode.srcATop
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
       );
       canvas.restore();
     }
-
-    // Punch the letters out of the fill: keep only where the glyphs are.
-    final mask = TextPainter(
-      text: TextSpan(
-        text: 'ELYXR',
-        style: glyph.copyWith(
-          foreground: Paint()
-            ..blendMode = BlendMode.dstIn
-            ..color = const Color(0xFFFFFFFF),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    mask.paint(canvas, Offset.zero);
 
     canvas.restore();
   }
