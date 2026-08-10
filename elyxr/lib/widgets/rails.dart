@@ -152,9 +152,9 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
           builder: (context, _) => CustomPaint(
             painter: _WordmarkGleam(
               base: p.ml,
-              // A light phosphor tint for the sweep, never pure white so the
-              // mark keeps its metal feel.
-              highlight: Color.lerp(p.ml, p.bright, 0.75)!,
+              // A near-white metallic flash for the sweep, as specced: a clean
+              // light stripe crossing the silver, not a coloured glow.
+              highlight: Color.lerp(p.ml, const Color(0xFFFFFFFF), 0.9)!,
               glyph: glyph,
               t: _shine.value,
             ),
