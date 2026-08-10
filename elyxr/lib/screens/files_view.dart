@@ -24,13 +24,38 @@ import '../state/transfers.dart';
 import '../util/drag_out.dart';
 import '../util/format.dart';
 import '../util/open_external.dart';
+import '../widgets/deck_slot.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/nostalgia/music_player.dart';
 import '../widgets/tactile.dart';
 import '../widgets/transfer_panel.dart';
 
 class FilesView extends StatelessWidget {
-  const FilesView({super.key});
+  /// Where the deck ends up, published for the screensaver to cut a hole at.
+  final DeckSlotRect? deckRect;
+
+  /// The screensaver is up. The deck stays visible through it — dimmed, since it
+  /// is the only lit thing on a sleeping tube and full brightness would make it
+  /// look like the saver had failed rather than deliberately spared it.
+  final bool saver;
+
+  const FilesView({super.key, this.deckRect, this.saver = false});
+
+  /// The deck, reporting its position so the screensaver can spare it. Wrapped in
+  /// its own method because it now has two jobs beyond being a widget: it is the
+  /// hole the saver clips around, and it dims while the saver is up.
+  Widget _deck(Palette p) {
+    Widget deck = Container(
+      padding: const EdgeInsets.fromLTRB(13, 8, 13, 8),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: p.dim)),
+      ),
+      child: MusicPlayerPanel(palette: p),
+    );
+    if (saver) deck = Opacity(opacity: 0.75, child: deck);
+    final rect = deckRect;
+    return rect == null ? deck : DeckSlot(notifier: rect, child: deck);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,13 +78,7 @@ class FilesView extends StatelessWidget {
             // action bar — always visible, in every mode. Nostalgia Mode is
             // just one thing that drives it (auto-starting the built-in tracks);
             // it is not a gate on the player.
-            Container(
-              padding: const EdgeInsets.fromLTRB(13, 8, 13, 8),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: p.dim)),
-              ),
-              child: MusicPlayerPanel(palette: p),
-            ),
+            _deck(p),
             _ActionBar(palette: p),
             _Breadcrumbs(palette: p),
             Expanded(

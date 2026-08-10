@@ -12,7 +12,9 @@ import '../design/tokens.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
 import '../widgets/nostalgia/cursor_trail.dart';
-import '../widgets/nostalgia/matrix_rain.dart';
+import '../state/music.dart';
+import '../widgets/deck_slot.dart';
+import '../widgets/nostalgia/saver_layer.dart';
 import '../widgets/nostalgia/snake_game.dart';
 import '../widgets/nostalgia/transfer_hud.dart';
 import '../widgets/rails.dart';
@@ -33,6 +35,9 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _idleAfter = Duration(seconds: 30);
   bool _idle = false;
   Timer? _idleTimer;
+  // Where the music deck is, so the saver can leave a hole for it. Published by
+  // the deck itself (see DeckSlot) because only it knows where it ended up.
+  final _deckRect = DeckSlotRect();
   // The hidden Snake minigame (wordmark ×7 in Nostalgia Mode).
   bool _game = false;
 
@@ -47,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _deckRect.dispose();
     _idleTimer?.cancel();
     _cursor.dispose();
     super.dispose();
@@ -88,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (settings.inSettings) {
       tubeChild = const SettingsView();
     } else {
-      tubeChild = const FilesView();
+      tubeChild = FilesView(deckRect: _deckRect, saver: showSaver);
     }
 
     // Density is a global text scale for everything on the glass — the whole
@@ -104,7 +110,14 @@ class _HomeScreenState extends State<HomeScreen> {
       // A click wakes the screensaver; movement only resets the idle countdown
       // and feeds the cursor trail. An ancestor of the whole tree, so it sees
       // the event even when the screensaver overlay absorbs the waking click.
-      onPointerDown: (_) => _wake(),
+      onPointerDown: (e) {
+        // The deck is exempt while the saver is up: it's left showing through on
+        // purpose, so using it — play, skip, scrub — must not be the thing that
+        // dismisses the saver. Everything else still wakes on a click.
+        final deck = _deckRect.value;
+        if (showSaver && deck != null && deck.contains(e.position)) return;
+        _wake();
+      },
       onPointerMove: (e) {
         _cursor.value = e.localPosition;
         _activity();
@@ -113,6 +126,11 @@ class _HomeScreenState extends State<HomeScreen> {
         _cursor.value = e.localPosition;
         _activity();
       },
+      // A scroll has never dismissed the saver (only a pointer down does), so
+      // while it's up the wheel is free to do something else: the volume, from
+      // anywhere on screen rather than only over the deck. The deck's own wheel
+      // handler stands down while the saver is up so a scroll over it isn't
+      // counted twice.
       onPointerSignal: (_) => _activity(),
       child: Chassis(
         palette: p,
@@ -134,12 +152,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   onExit: () => setState(() => _game = false),
                 )
               : showSaver
-                  ? GestureDetector(
-                      // A click dismisses the screensaver and is absorbed here so
-                      // it doesn't also click a file underneath.
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _wake,
-                      child: MatrixRain(palette: p),
+                  ? SaverLayer(
+                      palette: p,
+                      deckRect: _deckRect,
+                      onWake: _wake,
+                      onVolume: (d) =>
+                          context.read<MusicController>().nudgeVolume(d),
                     )
                   : null,
           child: tubeChild,
