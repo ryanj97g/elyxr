@@ -3,6 +3,8 @@
 // on, and the last test is what stops a new FileKind from shipping without
 // anything to draw for it.
 
+import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:elyxr/design/file_icons.dart';
@@ -87,5 +89,50 @@ void main() {
     // real set lands these become icons and this test is the one to update.
     expect(kFileMarks[FileKind.folder]!.char, '█');
     expect(kFileMarks[FileKind.audio]!.char, '▫');
+  });
+
+  // The asset path is one line of string interpolation whose failure mode is a
+  // silent miss at runtime — an escaped '\$' still compiles and still type-checks,
+  // it just looks for a file nobody will ever create. So pin the literal strings.
+  test('a kind resolves to its own svg, with the interpolation intact', () {
+    expect(fileGlyphAsset(FileKind.audio), 'assets/icons/filetype/audio.svg');
+    expect(fileGlyphAsset(FileKind.folder), 'assets/icons/filetype/folder.svg');
+    expect(fileGlyphAsset(FileKind.spreadsheet),
+        'assets/icons/filetype/spreadsheet.svg');
+    for (final k in FileKind.values) {
+      expect(fileGlyphAsset(k), contains(k.name));
+      expect(fileGlyphAsset(k), isNot(contains(r'$')));
+    }
+  });
+
+  test('each mark form is exactly one form', () {
+    const c = FileMark.char('▫');
+    expect([c.char != null, c.icon != null, c.svg].where((b) => b).length, 1);
+    const s = FileMark.svg();
+    expect([s.char != null, s.icon != null, s.svg].where((b) => b).length, 1);
+    const i = FileMark.icon(Icons.folder);
+    expect([i.char != null, i.icon != null, i.svg].where((b) => b).length, 1);
+  });
+
+  testWidgets('every mark form renders, and the svg asset is really bundled',
+      (tester) async {
+    // A character and a font glyph.
+    for (final kind in [FileKind.folder, FileKind.audio]) {
+      await tester.pumpWidget(MaterialApp(
+        home: FileGlyph(kind: kind, size: 16, color: const Color(0xFF00FF66)),
+      ));
+      expect(tester.takeException(), isNull, reason: '$kind');
+    }
+    // The SVG path, against the placeholder committed alongside this. Proves the
+    // pubspec asset entry and the path both hold before a real set arrives.
+    await tester.pumpWidget(MaterialApp(
+      home: SvgPicture.asset(
+        fileGlyphAsset(FileKind.unknown),
+        colorFilter:
+            const ColorFilter.mode(Color(0xFF00FF66), BlendMode.srcIn),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }

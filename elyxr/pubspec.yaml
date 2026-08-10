@@ -30,6 +30,10 @@ dependencies:
   # this is still here for. Music moved to media_kit above, which streams and
   # can set the auth headers a trove URL needs; audioplayers can do neither.
   audioplayers: ^6.0.0
+  # Renders the file-type glyph set. The icons are monochrome silhouettes and are
+  # tinted from the palette at draw time (BlendMode.srcIn), so they carry no colour
+  # of their own and follow the theme like every other terminal element.
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -53,6 +57,7 @@ flutter:
 
   assets:
     - assets/branding/
+    - assets/icons/filetype/
     - assets/sounds/
     - assets/music/
     - assets/fonts/custom/

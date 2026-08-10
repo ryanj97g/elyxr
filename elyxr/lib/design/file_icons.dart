@@ -10,6 +10,7 @@
 // time, without a half-finished grid in between.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'text.dart';
 
@@ -147,15 +148,31 @@ FileKind fileKindOf(String name, {bool isDir = false, String? mime}) {
   return FileKind.unknown;
 }
 
-/// What gets drawn for a kind: either one character from the terminal's own
-/// vocabulary, or an icon from a real glyph set. Two cases rather than one so a
-/// set can land in pieces — see [kFileMarks].
+/// What gets drawn for a kind: a character from the terminal's own vocabulary, an
+/// SVG from the glyph set, or a glyph from an icon font. Three forms rather than
+/// one so a set can land in pieces — see [kFileMarks].
 class FileMark {
+  /// A character the browser draws itself.
   final String? char;
+
+  /// A glyph from an icon font (a .ttf declared in pubspec.yaml).
   final IconData? icon;
 
-  const FileMark.char(String this.char) : icon = null;
-  const FileMark.icon(IconData this.icon) : char = null;
+  /// An SVG at `assets/icons/filetype/<kind>.svg`. The path is derived from the
+  /// kind rather than written out, so there's nothing to typo and nothing to keep
+  /// in sync.
+  final bool svg;
+
+  const FileMark.char(String this.char)
+      : icon = null,
+        svg = false;
+  const FileMark.icon(IconData this.icon)
+      : char = null,
+        svg = false;
+  const FileMark.svg()
+      : char = null,
+        icon = null,
+        svg = true;
 }
 
 // The block and the small square the browser has always drawn. Named, because
@@ -165,18 +182,15 @@ const FileMark _square = FileMark.char('▫');
 
 /// THE SWAP POINT for a glyph icon set.
 ///
-/// One line per kind. Replace a line's [FileMark.char] with
-/// `FileMark.icon(yourIconData)` and that kind switches over everywhere at
-/// once — text rows, grid tiles and search results — while every other kind keeps
-/// the character it has now. So the set can land a few kinds at a time and the
-/// grid never looks half-finished.
+/// One line per kind. Replace a line's [FileMark.char] with [FileMark.svg] (for
+/// `assets/icons/filetype/<kind>.svg`) or [FileMark.icon] (for an icon font) and
+/// that kind switches over everywhere at once — text rows, grid tiles and search
+/// results — while every other kind keeps the character it has now. So the set can
+/// land a few kinds at a time and the grid never looks half-finished.
 ///
-/// A `.ttf` glyph font is the format that drops in with no other change: declare
-/// it in pubspec.yaml, expose each glyph as an `IconData(0xNNNN, fontFamily:
-/// 'YourFamily')`, and reference it here. Icons inherit the palette colour and the
-/// terminal's size scaling from [FileGlyph], so the set stays colour-agnostic and
-/// no call site needs touching. (An SVG set would work too, but needs a package
-/// and a change inside [FileGlyph] — the call sites still wouldn't move.)
+/// Either form inherits the palette colour and the terminal's size scaling from
+/// [FileGlyph], so the set stays colour-agnostic and no call site ever moves. See
+/// assets/icons/filetype/README.md for the drawing contract.
 const Map<FileKind, FileMark> kFileMarks = <FileKind, FileMark>{
   FileKind.folder: _block,
   FileKind.audio: _square,
@@ -194,6 +208,12 @@ const Map<FileKind, FileMark> kFileMarks = <FileKind, FileMark>{
   FileKind.app: _square,
   FileKind.unknown: _square,
 };
+
+/// The asset path holding a kind's SVG. Derived from the kind so there's no path
+/// to typo, and public so a test can pin the exact string — this is one line of
+/// string interpolation whose failure mode is a silent miss at runtime rather than
+/// anything the compiler would catch.
+String fileGlyphAsset(FileKind kind) => 'assets/icons/filetype/${kind.name}.svg';
 
 /// Draw the mark for one entry. The only thing that renders a file's type, so
 /// swapping characters for icons is invisible to every caller.
@@ -218,11 +238,21 @@ class FileGlyph extends StatelessWidget {
   Widget build(BuildContext context) {
     final mark =
         kFileMarks[kind] ?? (kind == FileKind.folder ? _block : _square);
+    // Scaled like the glass text it sits among, not raw pixels — otherwise a
+    // glyph would ignore the terminal's own type scale and read undersized.
+    final px = size * kGlassScale;
     final icon = mark.icon;
-    if (icon != null) {
-      // Scaled like the glass text it sits among, not raw pixels — otherwise an
-      // icon would ignore the terminal's own type scale and read undersized.
-      return Icon(icon, size: size * kGlassScale, color: color);
+    if (icon != null) return Icon(icon, size: px, color: color);
+    if (mark.svg) {
+      return SvgPicture.asset(
+        fileGlyphAsset(kind),
+        width: px,
+        height: px,
+        // Repaints every visible pixel in the palette colour, so the artwork
+        // carries no colour of its own — whatever it was exported with is
+        // discarded and only the shape survives.
+        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      );
     }
     return Text(mark.char!, style: glass(size, color));
   }
