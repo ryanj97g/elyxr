@@ -105,8 +105,9 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
     const emboss = [Shadow(color: Color(0xFF0C0D0F), offset: Offset(0, 1))];
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    // Lit or reduce-motion: no gleam. The mark sits in its colour (accent when
-    // lit, with a glow); AnimatedDefaultTextStyle eases the light-up on a hold.
+    // Lit or reduce-motion: no gleam. The mark is the accent colour throughout;
+    // holding for settings just tightens it and adds a glow (eased by
+    // AnimatedDefaultTextStyle), while at rest it carries the 1px emboss.
     if (lit || reduceMotion) {
       return Padding(
         padding: const EdgeInsets.only(left: 6),
@@ -117,7 +118,7 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
             fontSize: 15,
             fontWeight: FontWeight.w700,
             letterSpacing: lit ? 15 * 0.24 : 15 * 0.4,
-            color: lit ? p.a : p.ml,
+            color: p.a,
             shadows: lit ? [Shadow(color: p.a, blurRadius: 11)] : emboss,
           ),
           child: const Text('ELYXR'),
@@ -126,10 +127,10 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
     }
 
     // Idle: the letters are a window. They're rendered exactly once, as a
-    // text-shaped mask, over a base fill (their resting colour) plus a diagonal
-    // light stripe that sweeps behind them. At rest the fill is a flat p.ml and
-    // the mark is pixel-identical to before; mid-sweep the stripe passes
-    // through. The glyph geometry never moves, so nothing can pulse or drift.
+    // text-shaped mask filled with the accent colour, plus a diagonal light
+    // stripe that sweeps through them. At rest the fill is flat accent; mid-sweep
+    // the stripe passes through. The glyph geometry never moves, so nothing can
+    // pulse or drift.
     final glyph = TextStyle(
       fontFamily: Fonts.chassis,
       fontSize: 15,
@@ -151,10 +152,10 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
           animation: _shine,
           builder: (context, _) => CustomPaint(
             painter: _WordmarkGleam(
-              base: p.ml,
-              // A near-white metallic flash for the sweep, as specced: a clean
-              // light stripe crossing the silver, not a coloured glow.
-              highlight: Color.lerp(p.ml, const Color(0xFFFFFFFF), 0.9)!,
+              base: p.a,
+              // A near-white metallic flash for the sweep: a clean light stripe
+              // crossing the accent, not a coloured glow.
+              highlight: Color.lerp(p.a, const Color(0xFFFFFFFF), 0.9)!,
               glyph: glyph,
               t: _shine.value,
             ),
