@@ -55,7 +55,9 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
   void initState() {
     super.initState();
     _shineTimer = Timer.periodic(const Duration(milliseconds: 4500), (_) {
-      if (mounted && !widget.inSettings && !_holding) _shine.forward(from: 0);
+      // Gleam whenever it's not being actively held (including in settings, so
+      // the mark reads as its normal self there, not stuck lit).
+      if (mounted && !_holding) _shine.forward(from: 0);
     });
   }
 
@@ -112,7 +114,10 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
       return Padding(
         padding: const EdgeInsets.only(left: 6),
         child: AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 220),
+          // A little overshoot so the letters scrunch together with a bounce on
+          // the press, instead of sliding linearly.
+          curve: Curves.easeOutBack,
           style: TextStyle(
             fontFamily: Fonts.chassis,
             fontSize: 15,
@@ -126,39 +131,31 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
       );
     }
 
-    // Idle: the letters are a window. They're rendered exactly once, as a
-    // text-shaped mask filled white, plus a diagonal accent-colour stripe that
-    // sweeps through them. At rest the fill is flat white; mid-sweep the accent
-    // stripe passes through. The glyph geometry never moves, so nothing can
-    // pulse or drift.
+    // Idle: the letters are a window. They're painted once as a white
+    // text-shaped fill with a diagonal accent stripe sweeping through (see
+    // _WordmarkGleam). A transparent Text of the same glyphs is the CustomPaint
+    // child, so the mark lays out and vertically centres in the rail exactly
+    // like an ordinary Text (matching v0.9) — the painter just draws behind it.
     final glyph = TextStyle(
       fontFamily: Fonts.chassis,
       fontSize: 15,
       fontWeight: FontWeight.w700,
       letterSpacing: 15 * 0.4,
     );
-    final probe = TextPainter(
-      text: TextSpan(text: 'ELYXR', style: glyph),
-      textDirection: TextDirection.ltr,
-    )..layout();
 
     return Padding(
       padding: const EdgeInsets.only(left: 6),
-      // One px of headroom below so the 1px emboss isn't clipped.
-      child: SizedBox(
-        width: probe.width,
-        height: probe.height + 1,
-        child: AnimatedBuilder(
-          animation: _shine,
-          builder: (context, _) => CustomPaint(
-            painter: _WordmarkGleam(
-              base: const Color(0xFFFFFFFF),
-              // The gleam is the accent colour, sweeping across the white mark.
-              highlight: p.a,
-              glyph: glyph,
-              t: _shine.value,
-            ),
+      child: AnimatedBuilder(
+        animation: _shine,
+        builder: (context, _) => CustomPaint(
+          painter: _WordmarkGleam(
+            base: const Color(0xFFFFFFFF),
+            // The gleam is the accent colour, sweeping across the white mark.
+            highlight: p.a,
+            glyph: glyph,
+            t: _shine.value,
           ),
+          child: Text('ELYXR', style: glyph.copyWith(color: const Color(0x00000000))),
         ),
       ),
     );
@@ -167,7 +164,10 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final p = widget.palette;
-    final lit = widget.inSettings || _holding;
+    // Lit means the wordmark is actively being held (the press feedback). Once
+    // settings is open the hold is over, so the mark returns to its idle gleam
+    // rather than staying accent-lit.
+    final lit = _holding;
     return Padding(
       padding: const EdgeInsets.fromLTRB(3, 1, 3, 0),
       child: Row(
@@ -184,7 +184,14 @@ class _TopRailState extends State<TopRail> with SingleTickerProviderStateMixin {
             onTapCancel: _release,
             onTap: _tap,
             behavior: HitTestBehavior.opaque,
-            child: _wordmark(p, lit),
+            // The whole mark scrunches down a touch on the press and bounces
+            // back on release (easeOutBack overshoot) — the tactile hold feel.
+            child: AnimatedScale(
+              scale: _holding ? 0.92 : 1.0,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutBack,
+              child: _wordmark(p, lit),
+            ),
           ),
           const SizedBox(width: 9),
           // Hold progress bar, only visible while holding.
