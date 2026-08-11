@@ -429,7 +429,17 @@ class LymnalClient {
   Map<String, dynamic> _ok(http.Response r) {
     if (r.statusCode >= 200 && r.statusCode < 300) {
       if (r.body.isEmpty) return const {};
-      return (jsonDecode(r.body) as Map).cast<String, dynamic>();
+      try {
+        return (jsonDecode(r.body) as Map).cast<String, dynamic>();
+      } catch (_) {
+        // A 2xx whose body isn't lymnal's JSON means something else answered:
+        // a proxy, a captive portal, a sign-in page standing between us and the
+        // tailnet. Every error path below already allowed for an unreadable
+        // body; this one assumed success implied JSON, so a 200 page of HTML
+        // came out as an unhandled FormatException on character 1 instead of as
+        // a connection state the app knows how to show.
+        throw const ConnectionError(ConnectionFault.unreachable);
+      }
     }
     if (r.statusCode == 401) {
       throw const ConnectionError(ConnectionFault.notApproved);

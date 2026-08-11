@@ -97,6 +97,25 @@ void main() {
     );
   });
 
+  // A proxy, a captive portal or a sign-in page answering 200 with a page of
+  // HTML instead of lymnal answering with JSON. Every error path already allowed
+  // for an unreadable body; the success path assumed 2xx meant JSON, so this
+  // escaped as an unhandled FormatException on character 1 — which on Windows
+  // meant the app logged it and sat there.
+  test('a 200 that is not JSON reads as unreachable, not a crash', () async {
+    for (final body in ['<html><body>Sign in</body></html>', 'OK', '[1,2]']) {
+      final mock = MockClient((req) async => http.Response(body, 200));
+      final c =
+          LymnalClient(baseUrl: 'http://x:7749', token: 't', httpClient: mock);
+      await expectLater(
+        () => c.health(),
+        throwsA(isA<ConnectionError>()
+            .having((e) => e.fault, 'fault', ConnectionFault.unreachable)),
+        reason: 'a 2xx body of "$body" should not escape as a FormatException',
+      );
+    }
+  });
+
   // What the music player opens instead of downloading a whole file first: over
   // the network it's the download URL, and it MUST carry the bearer token, since
   // /v1/download rejects an unauthenticated request.

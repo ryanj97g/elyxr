@@ -138,7 +138,14 @@ class AdminClient {
 
   Map<String, dynamic> _decode(http.Response r) {
     if (r.statusCode >= 200 && r.statusCode < 300) {
-      return r.body.isEmpty ? {} : (jsonDecode(r.body) as Map).cast<String, dynamic>();
+      if (r.body.isEmpty) return {};
+      try {
+        return (jsonDecode(r.body) as Map).cast<String, dynamic>();
+      } catch (_) {
+        // Same hole as LymnalClient._ok had: a 2xx body that isn't JSON is
+        // something other than lymnal answering, not a successful call.
+        throw const ConnectionError(ConnectionFault.unreachable);
+      }
     }
     Map<String, dynamic> body;
     try {
