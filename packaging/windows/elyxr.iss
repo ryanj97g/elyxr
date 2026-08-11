@@ -10,7 +10,7 @@
 ; repair: it stops the app and lymnal, deletes the whole previous payload, writes
 ; the new one, and starts the service again. Deleting first rather than writing
 ; over the top is what makes a damaged or half-updated install heal instead of
-; staying broken — see [InstallDelete].
+; staying broken — see WipePayload in [Code].
 ;
 ; CI stages the build into packaging\windows\stage\ before compiling this, and
 ; passes the build number as /DAppVer=<n>.
@@ -45,23 +45,6 @@ UninstallDisplayIcon={app}\elyxr.exe
 ; someone runs setup by hand gives two processes writing the same files.
 SetupMutex=elyxr_setup_mutex
 
-[InstallDelete]
-; Runs BEFORE the new files are written, so re-running setup is a clean replace
-; rather than an overlay. Without it a file that shipped in an older version and
-; no longer exists would survive forever — for a Flutter bundle that means stale
-; assets and mismatched DLLs, which is exactly the "install is broken, reinstall
-; didn't fix it" case.
-;
-; Targeted deliberately, NOT a blanket wipe of {app}: the uninstaller
-; (unins000.exe/.dat) lives in there and deleting it would orphan the entry in
-; Settings > Apps. Everything listed here is payload this installer put there.
-Type: filesandordirs; Name: "{app}\data"
-Type: files; Name: "{app}\*.dll"
-Type: files; Name: "{app}\elyxr.exe"
-Type: files; Name: "{app}\lymnal.exe"
-Type: files; Name: "{app}\lymnal-launch.vbs"
-Type: files; Name: "{app}\config.example.toml"
-
 [Files]
 ; The app bundle (elyxr.exe + its DLLs + data\) and lymnal.exe, staged by CI…
 Source: "stage\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
@@ -87,8 +70,11 @@ Name: "{group}\Uninstall elyxr"; Filename: "{uninstallexe}"
 ; Start lymnal now, hidden, so the service is up without waiting for a re-login —
 ; including after a silent auto-update, which is why this isn't skipifsilent.
 Filename: "wscript.exe"; Parameters: """{app}\lymnal-launch.vbs"""; Flags: nowait runhidden
-; Offer to open the app after a normal (non-silent) install.
-Filename: "{app}\elyxr.exe"; Description: "Open elyxr"; Flags: nowait postinstall skipifsilent
+; Then bring the app back. Runs after the line above, so lymnal is already up.
+; No checkbox: an update that closed the app should reopen it rather than leave
+; someone staring at a desktop wondering whether it worked. ShouldRelaunch keeps a
+; silent update on a machine where the app WASN'T open from opening it uninvited.
+Filename: "{app}\elyxr.exe"; Flags: nowait; Check: ShouldRelaunch
 
 [UninstallRun]
 ; Stop the service and the app before their files go, so nothing is left running
@@ -108,12 +94,89 @@ Type: filesandordirs; Name: "{app}"
 // app itself wasn't, so updating while elyxr was open left elyxr.exe locked and
 // the install half-applied. Both are killed now, which is also what makes a
 // re-run able to repair a broken install rather than trip over it.
-function PrepareToInstall(var NeedsRestart: Boolean): String;
+// Was the app running when we arrived? Decides whether to bring it back.
+var
+  AppWasRunning: Boolean;
+
+// Is a process with this image name alive? tasklist's output is the answer, and
+// findstr's exit code carries it.
+function ProcessRunning(Exe: String): Boolean;
 var
   rc: Integer;
 begin
-  Exec('taskkill.exe', '/im lymnal.exe /f', '', SW_HIDE, ewWaitUntilTerminated, rc);
-  Exec('taskkill.exe', '/im elyxr.exe /f', '', SW_HIDE, ewWaitUntilTerminated, rc);
+  Result := Exec(ExpandConstant('{cmd}'),
+    '/c tasklist /fi "IMAGENAME eq ' + Exe + '" /nh | findstr /i "' + Exe + '" >nul',
+    '', SW_HIDE, ewWaitUntilTerminated, rc) and (rc = 0);
+end;
+
+// Kill it and WAIT until it is actually gone. taskkill returns as soon as it has
+// asked; the process still takes a moment to die and drop its file handles, and
+// deleting a payload out from under something that hasn't let go yet is how an
+// update half-applies. /t takes child processes too — lymnal spawns ffmpeg, and
+// an orphan holding ffmpeg.exe open would block the wipe.
+procedure KillAndWait(Exe: String);
+var
+  rc, i: Integer;
+begin
+  Exec('taskkill.exe', '/im ' + Exe + ' /t /f', '', SW_HIDE, ewWaitUntilTerminated, rc);
+  for i := 1 to 20 do
+  begin
+    if not ProcessRunning(Exe) then
+      exit;
+    Sleep(250);
+  end;
+end;
+
+// Empty the install folder, keeping only the uninstaller.
+//
+// This replaces a list that named each file it knew about, which quietly missed
+// anything a later build added. ffmpeg.exe is exactly that: CI stages it into the
+// app folder and the delete list never mentioned it, so a stale copy survived
+// every update. Enumerating what is actually on disk cannot drift out of step
+// with what gets shipped.
+//
+// unins* is spared deliberately: Inno's uninstaller lives here, and removing it
+// orphans the entry in Settings > Apps.
+procedure WipePayload();
+var
+  find: TFindRec;
+  dir, name: String;
+begin
+  dir := ExpandConstant('{app}');
+  if not DirExists(dir) then
+    exit;
+  if FindFirst(dir + '\*', find) then
+  begin
+    try
+      repeat
+        name := find.Name;
+        if (name <> '.') and (name <> '..') and (Pos('unins', Lowercase(name)) <> 1) then
+        begin
+          // $10 is FILE_ATTRIBUTE_DIRECTORY.
+          if (find.Attributes and $10) <> 0 then
+            DelTree(dir + '\' + name, True, True, True)
+          else
+            DeleteFile(dir + '\' + name);
+        end;
+      until not FindNext(find);
+    finally
+      FindClose(find);
+    end;
+  end;
+end;
+
+function ShouldRelaunch(): Boolean;
+begin
+  Result := AppWasRunning or (not WizardSilent());
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  // Note what to restore BEFORE killing it, or there is no way to tell after.
+  AppWasRunning := ProcessRunning('elyxr.exe');
+  KillAndWait('lymnal.exe');
+  KillAndWait('elyxr.exe');
+  WipePayload();
   Result := '';
 end;
 
