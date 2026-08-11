@@ -80,6 +80,18 @@ class _Root extends StatefulWidget {
 }
 
 class _RootState extends State<_Root> {
+  static Widget _pinned(Widget child) => Center(
+        child: FittedBox(
+          fit: BoxFit.contain,
+          child: SizedBox(
+            key: const ValueKey('elyxr-chassis'),
+            width: kAppWidth,
+            height: kAppHeight,
+            child: child,
+          ),
+        ),
+      );
+
   bool _openedOnce = false;
   bool _serverTried = false;
   bool _troveCleaned = false;
@@ -190,46 +202,21 @@ class _RootState extends State<_Root> {
         ? const HomeScreen()
         : (session.isFirstRun ? const FirstRunScreen() : const HomeScreen());
 
-    // The chassis is the real app: a fixed 440×884 portrait, ALWAYS rendered at
-    // full size. The window (kWindowWidth×kWindowHeight) is bigger than the
-    // chassis by kGlowMargin on every side — that extra ring is transparent,
-    // pure room for the glow to bleed into. FittedBox fits this whole box to the
-    // window (which is exactly this size → scale 1.0), so the chassis is never
-    // shrunk; on a genuinely short screen the whole thing scales together.
     final p = settings.palette;
-    final g = p.edgeGlow; // 0 at normal saturation, 1 at the very top.
+    final g = p.edgeGlow;
 
-    // On a phone there's no window and no room around the app for a glow to
-    // bleed into — the chassis IS the screen. Fill it edge to edge (below the
-    // status bar / above the nav bar via SafeArea), scaling the fixed portrait
-    // design up to the device. No outer glow ring, no transparent margin.
     if (Caps.isMobile) {
-      // True fullscreen at the device's own resolution. The chassis fills the
-      // ENTIRE screen — no SafeArea, no padding, no top strip. Two separate
-      // things make that real, and BOTH are required:
-      //   1) the system bars are hidden (immersiveSticky, see main.dart), and
-      //   2) the window draws into the camera-cutout band
-      //      (layoutInDisplayCutoutMode = SHORT_EDGES, see MainActivity.kt).
-      // Without (2), Android letterboxes the cutout strip solid black — the
-      // "black bar at the top" — no matter what happens on the Dart side. So
-      // don't reintroduce SafeArea/viewPadding here, but know the bar itself was
-      // the native cutout mode, not this widget.
       return Scaffold(
         backgroundColor: Colors.black,
         resizeToAvoidBottomInset: false,
-        body: child,
+        body: _pinned(child),
       );
     }
 
-    // Windows (and any non-Linux desktop): the window is opaque and sized to the
-    // chassis exactly, so there's no transparent ring to bleed a glow into — the
-    // ring would just be a black border. Fill the window with the chassis, no
-    // ring, like a phone. Only Linux (a genuinely transparent native window)
-    // gets the outward glow below.
     if (!Platform.isLinux) {
       return Scaffold(
         backgroundColor: Colors.black,
-        body: child,
+        body: _pinned(child),
       );
     }
 
