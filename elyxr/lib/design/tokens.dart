@@ -139,6 +139,21 @@ class Fonts {
 
   /// The ticker, and version strings. Nothing else.
   static String mono = 'IBM Plex Mono';
+
+  /// Faces tried, in order, for any character the chosen face doesn't have.
+  ///
+  /// Without a chain like this, a missing glyph escapes to whatever the operating
+  /// system provides — a different typeface on every platform, and on some
+  /// platforms nothing at all, which is a blank or a box in the middle of a
+  /// filename. These are fonts we ship, so a trove of Russian and Arabic names
+  /// renders the same on Windows as on Android instead of depending on what the
+  /// machine happens to have installed.
+  ///
+  /// Order is coverage, not preference: Handjet answers Cyrillic and Arabic,
+  /// DotGothic16 answers kana and kanji, and anything Handjet can't draw falls
+  /// through to it. Adding a script means bundling a face that has it and naming
+  /// it here — nothing at the call sites changes.
+  static const List<String> fallback = ['Handjet', 'DotGothic16'];
 }
 
 /// One selectable terminal face: the font family (must be declared in

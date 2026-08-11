@@ -16,9 +16,14 @@ const double kChassisScale = 1.12; // Chakra Petch control labels
 const double kMonoScale = 1.18; // IBM Plex Mono ticker/version
 
 /// VT323 — everything on the glass.
+///
+/// Every helper here carries [Fonts.fallback], which is what stops a filename in
+/// a script the chosen face doesn't have from being drawn by the OS — or from not
+/// being drawn at all. See the note on that list.
 TextStyle glass(double size, Color color, {double height = 1.0, double? spacing}) =>
     TextStyle(
       fontFamily: Fonts.glass,
+      fontFamilyFallback: Fonts.fallback,
       fontSize: size * kGlassScale,
       color: color,
       height: height,
@@ -30,6 +35,7 @@ TextStyle chassis(double size, Color color,
         {FontWeight weight = FontWeight.w600, double spacing = 0.1}) =>
     TextStyle(
       fontFamily: Fonts.chassis,
+      fontFamilyFallback: Fonts.fallback,
       fontSize: size * kChassisScale,
       color: color,
       fontWeight: weight,
@@ -41,6 +47,7 @@ TextStyle mono(double size, Color color,
         {FontWeight weight = FontWeight.w400, double spacing = 0.1}) =>
     TextStyle(
       fontFamily: Fonts.mono,
+      fontFamilyFallback: Fonts.fallback,
       fontSize: size * kMonoScale,
       color: color,
       fontWeight: weight,
