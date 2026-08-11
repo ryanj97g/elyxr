@@ -96,6 +96,13 @@ class SettingsView extends StatelessWidget {
                   const SizedBox(height: 13),
                   _section(p, '06', 'USE SYSTEM FILE BROWSER', _GateRow(palette: p)),
                 ],
+                // Android only: there's no accelerometer worth reading on a
+                // desktop, and no shake to make with a window that isn't held.
+                if (Caps.isAndroid) ...[
+                  const SizedBox(height: 13),
+                  _section(p, '06', 'SHAKE FOR TAILSCALE',
+                      _ShakeTailscaleRow(palette: p)),
+                ],
                 const SizedBox(height: 16),
                 // Buried at the very bottom, unnumbered, undocumented: a dev
                 // escape hatch to unlock the fixed window's size. In-memory only
@@ -288,6 +295,61 @@ class _NostalgiaRow extends StatelessWidget {
           ),
         Container(height: 1, color: p.dim),
       ],
+    );
+  }
+}
+
+/// Shake the phone to jump into Tailscale. Android only, off by default.
+///
+/// Opt-in on purpose: a gesture that launches another app is disruptive in a way
+/// that one which closes an app isn't, and a phone gets shaken in pockets and
+/// cars. The Tailscale action in the offline notice needs no setting and can't
+/// misfire — this is for the case where the link is broken and the app hasn't
+/// worked that out yet.
+class _ShakeTailscaleRow extends StatelessWidget {
+  final Palette palette;
+  const _ShakeTailscaleRow({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<SettingsController>();
+    final p = palette;
+    final on = s.shakeForTailscale;
+    return GestureDetector(
+      onTap: () => s.shakeForTailscale = !on,
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              on
+                  ? 'On — a hard shake opens the Tailscale app. Takes a few sharp shakes, so a pocket or a car ride will not set it off.'
+                  : 'Off — turn this on to open Tailscale by shaking the phone, for when the connection drops and elyxr has not noticed yet.',
+              style: glass(15, p.mid),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Container(
+            width: 34,
+            height: 18,
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+            decoration: BoxDecoration(
+              color: p.mv1,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Container(
+              width: 13,
+              height: 13,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: on ? p.a : p.mb,
+                boxShadow: on ? [BoxShadow(color: p.a, blurRadius: 6)] : null,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

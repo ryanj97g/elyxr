@@ -23,7 +23,9 @@ import '../state/settings.dart';
 import '../state/transfers.dart';
 import '../util/drag_out.dart';
 import '../util/format.dart';
+import '../util/lymnal_host.dart';
 import '../util/open_external.dart';
+import '../util/platform_caps.dart';
 import '../widgets/deck_slot.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/nostalgia/music_player.dart';
@@ -1063,11 +1065,30 @@ class _OfflineNotice extends StatelessWidget {
             if (fault == ConnectionFault.notApproved)
               GestureDetector(
                 onTap: () => session.forget(),
-                child: Text('REQUEST ACCESS AGAIN',
-                    style: chassis(11, p.a, spacing: 0.1)),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  child: Text('REQUEST ACCESS AGAIN',
+                      style: chassis(11, p.a, spacing: 0.1)),
+                ),
               )
-            else
+            else ...[
+              // The tailnet being down is the one fault with somewhere to go: it's
+              // Tailscale's problem, not the server's, and on a phone there's no
+              // terminal to fix it from. So offer it here, where the app has
+              // already worked out that's the cause — no gesture to know about and
+              // nothing to misfire.
+              if (fault == ConnectionFault.noTailnet && Caps.isAndroid)
+                GestureDetector(
+                  onTap: LymnalHost.openTailscale,
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    child: Text('OPEN TAILSCALE',
+                        style: chassis(11, p.a, spacing: 0.1)),
+                  ),
+                ),
               Text('RETRYING…', style: glass(14, p.mid)),
+            ],
           ],
         ),
       ),

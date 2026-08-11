@@ -48,6 +48,12 @@ class SettingsController extends ChangeNotifier {
   // opt-in rather than hijacking the player the moment Nostalgia turns on — and
   // so a trove folder you're streaming stays your music source.
   bool _demoMode2000s = false;
+  // Android only: shake the phone to jump into the Tailscale app. Off by default,
+  // because a gesture that launches another app is disruptive in a way that a
+  // gesture that closes one isn't — a phone gets shaken in pockets and cars. The
+  // Tailscale button in the offline notice needs no setting; this is the shortcut
+  // for when the link is broken and the app hasn't noticed yet.
+  bool _shakeForTailscale = false;
   // Whether the settings screen is showing. Kept here, not in the home widget's
   // own state, so a rebuild (e.g. while dragging a colour swatch) can never wipe
   // it and bounce you out of settings. In-memory; resets to the files view on
@@ -69,6 +75,7 @@ class SettingsController extends ChangeNotifier {
   String get termFont => _termFont;
   bool get nostalgia => _nostalgia;
   bool get demoMode2000s => _demoMode2000s;
+  bool get shakeForTailscale => _shakeForTailscale;
   bool get inSettings => _inSettings;
 
   void _load() {
@@ -92,6 +99,7 @@ class SettingsController extends ChangeNotifier {
     if (!termFaces.any((f) => f.family == _termFont)) _termFont = 'VT323';
     _nostalgia = _prefs.getBool('nostalgia') ?? false;
     _demoMode2000s = _prefs.getBool('demoMode2000s') ?? false;
+    _shakeForTailscale = _prefs.getBool('shakeForTailscale') ?? false;
     // Apply the chosen terminal face before the first frame builds. It governs
     // everything on the glass — the body text and the ticker/readouts alike —
     // since the ticker is part of the screen, not a separate face. Only the
@@ -137,6 +145,12 @@ class SettingsController extends ChangeNotifier {
   set nostalgia(bool v) {
     if (_nostalgia == v) return;
     _set('nostalgia', () => _nostalgia = v, () => _prefs.setBool('nostalgia', v));
+  }
+
+  set shakeForTailscale(bool v) {
+    if (_shakeForTailscale == v) return;
+    _set('shakeForTailscale', () => _shakeForTailscale = v,
+        () => _prefs.setBool('shakeForTailscale', v));
   }
 
   /// Re-scan the on-disk custom-fonts folder (uncommitted drops included) and

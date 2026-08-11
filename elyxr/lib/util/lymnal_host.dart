@@ -51,6 +51,21 @@ class LymnalHost {
     } catch (_) {}
   }
 
+  /// Bring up the Tailscale app. Everything here reaches the trove over the
+  /// tailnet, so when that's what's down, Tailscale is where you have to go — and
+  /// a phone has no terminal to go there from.
+  ///
+  /// True if Tailscale opened. False if it isn't installed, in which case the
+  /// native side opens its store listing instead, so the tap is never a no-op.
+  static Future<bool> openTailscale() async {
+    if (!Caps.isAndroid) return false;
+    try {
+      return await _ch.invokeMethod<bool>('openTailscale') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Decode a compressed audio file [inPath] (m4a/aac/mp3/…) to a 16-bit PCM WAV
   /// at [outPath] natively (MediaExtractor + MediaCodec). The WAV plays as pure
   /// audio (no video track) and is what the visualizer reads. Returns true on

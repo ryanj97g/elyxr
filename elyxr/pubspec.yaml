@@ -34,6 +34,7 @@ dependencies:
   # tinted from the palette at draw time (BlendMode.srcIn), so they carry no colour
   # of their own and follow the theme like every other terminal element.
   flutter_svg: ^2.3.0
+  sensors_plus: ^7.1.0
 
 dev_dependencies:
   flutter_test:

@@ -22,6 +22,7 @@ import 'state/trove_mount.dart';
 import 'state/updater.dart';
 import 'util/drag_out.dart';
 import 'util/paths.dart';
+import 'util/shake_to_tailscale.dart';
 import 'util/platform_caps.dart';
 import 'screens/first_run.dart';
 import 'screens/home.dart';
@@ -54,16 +55,20 @@ class ElyxrApp extends StatelessWidget {
         Provider(create: (_) => SoundController(settings)),
         ChangeNotifierProvider(create: (_) => MusicController()),
       ],
-      child: MaterialApp(
-        title: 'elyxr',
-        debugShowCheckedModeBanner: false,
-        color: Colors.transparent,
-        theme: ThemeData(
-          useMaterial3: true,
-          fontFamily: 'VT323',
-          scaffoldBackgroundColor: Colors.transparent,
+      // Inside the providers, because it follows the Settings toggle: switched
+      // off, it holds no accelerometer subscription at all.
+      child: ShakeToTailscale(
+        child: MaterialApp(
+          title: 'elyxr',
+          debugShowCheckedModeBanner: false,
+          color: Colors.transparent,
+          theme: ThemeData(
+            useMaterial3: true,
+            fontFamily: 'VT323',
+            scaffoldBackgroundColor: Colors.transparent,
+          ),
+          home: const _Root(),
         ),
-        home: const _Root(),
       ),
     );
   }

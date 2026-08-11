@@ -1,10 +1,12 @@
 package com.elyxr.elyxr
 
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -25,6 +27,10 @@ import java.nio.ByteOrder
 // client -> local-lymnal -> trove model as desktop.
 class MainActivity : FlutterActivity() {
     private val channel = "elyxr/lymnal"
+
+    companion object {
+        const val TAILSCALE_PKG = "com.tailscale.ipn"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,6 +91,13 @@ class MainActivity : FlutterActivity() {
                         LymnalService.stop(this)
                         result.success(null)
                     }
+                    // Bring up the Tailscale app. Everything here reaches the
+                    // trove over the tailnet, so when that's the thing that's
+                    // down, Tailscale is the only place worth going — and a phone
+                    // has no terminal to go there from. Returns true if it opened,
+                    // false if Tailscale isn't installed (in which case its store
+                    // listing is opened instead, so the tap still does something).
+                    "openTailscale" -> result.success(openTailscale())
                     // Decode a compressed audio file (m4a/aac/mp3/…) to a 16-bit
                     // PCM WAV. The phone has no ffmpeg, so this is how the app gets
                     // real samples: the WAV plays as pure audio (no video track to
@@ -110,6 +123,37 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // Launch the Tailscale app, or its store listing if it isn't installed.
+    //
+    // getLaunchIntentForPackage is a QUERY, and from Android 11 a query only sees
+    // packages the manifest declares interest in — so this needs the <queries>
+    // entry for com.tailscale.ipn that the Android CI job adds. Without it the
+    // lookup returns null even with Tailscale sitting right there on the device.
+    private fun openTailscale(): Boolean {
+        try {
+            val launch = packageManager.getLaunchIntentForPackage(TAILSCALE_PKG)
+            if (launch != null) {
+                startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return true
+            }
+        } catch (_: Exception) {
+            // Fall through to the store listing.
+        }
+        // Not installed. The store page is a more useful outcome than a tap that
+        // appears to do nothing at all.
+        return try {
+            startActivity(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://play.google.com/store/apps/details?id=$TAILSCALE_PKG")
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            false
+        } catch (_: Exception) {
+            false
+        }
     }
 
     // Decode the first audio track of [inPath] to a 16-bit little-endian PCM WAV

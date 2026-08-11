@@ -96,11 +96,18 @@ jobs:
           cp packaging/android/LymnalService.kt "$kdir/LymnalService.kt"
 
           # Manifest: the permissions lymnal needs (network + a long-running
-          # foreground service + its notification) and the <service> declaration.
+          # foreground service + its notification), the <service> declaration, and
+          # the one package the app looks up by name.
+          #
+          # The <queries> block is what lets MainActivity find Tailscale. From
+          # Android 11 a package query only sees packages the manifest declares
+          # interest in, so without this getLaunchIntentForPackage returns null even
+          # with Tailscale installed, and the OPEN TAILSCALE action does nothing.
+          #
           # Single-line sed only (GNU sed turns \n in the replacement into real
           # newlines); heredocs would break this YAML block scalar.
           manifest=android/app/src/main/AndroidManifest.xml
-          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application#' "$manifest"
+          sed -i 's#<application#<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <queries>\n        <package android:name="com.tailscale.ipn"/>\n    </queries>\n    <application#' "$manifest"
           # elyxr speaks plain http:// — to the server for pairing and to the
           # local lymnal proxy on loopback. Android blocks cleartext by default
           # (targetSdk >= 28), so without this every connection fails and the app
