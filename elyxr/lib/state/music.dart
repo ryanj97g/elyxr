@@ -224,7 +224,15 @@ class MusicController extends ChangeNotifier {
   Duration get position => _pos;
   Duration get duration => _dur;
   bool get isStream => _trove;
-  bool get active => _hasSource && (_playing || _pos > Duration.zero);
+  /// Something is loaded. True from the moment a track opens until playback is
+  /// stopped outright — deliberately NOT "is making sound right now".
+  ///
+  /// It used to also require `_playing || _pos > 0`, which meant the deck folded
+  /// itself away between tracks: advancing resets the position and drops `playing`
+  /// while mpv opens the next file, so the player collapsed to the idle bar and
+  /// sprang back on every song change. It also collapsed while merely paused. A
+  /// loaded player is a player, so the deck stays put.
+  bool get active => _hasSource;
   double get volume => _volume;
   bool get muted => _volume <= 0;
 
