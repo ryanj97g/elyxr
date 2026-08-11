@@ -37,30 +37,53 @@ Future<void> main() async {
   // A phone has no window to manage — the app is simply full-screen — so this is
   // skipped there (calling it would throw at startup).
   if (Caps.hasWindowManager) {
-    await windowManager.ensureInitialized();
-    // Linux's native runner owns a transparent window sized to include the glow
-    // ring. Windows windows are opaque, so the ring would paint as a black
-    // border — instead size the window to the chassis exactly (no ring) and let
-    // the chassis fill it, so there's no black margin.
-    final opts = Platform.isLinux
-        ? const WindowOptions(titleBarStyle: TitleBarStyle.hidden)
-        : const WindowOptions(
-            titleBarStyle: TitleBarStyle.hidden,
-            size: Size(kAppWidth, kAppHeight),
-            center: true,
-          );
-    await windowManager.waitUntilReadyToShow(
-      opts,
-      () async {
-        await windowManager.setAsFrameless();
-        // The window is a fixed size, so it must never maximize — otherwise a
-        // double-click on the rail (e.g. tapping the wordmark) snaps it fullscreen.
-        await windowManager.setResizable(false);
-        await windowManager.setMaximizable(false);
-        await windowManager.show();
-        await windowManager.focus();
-      },
-    );
+    // Every step here is best-effort, and showing the window is the ONLY one that
+    // matters. It used to be the fifth await in a row inside the callback below,
+    // so if any earlier one threw or stalled — and on Windows they can — show()
+    // never ran: the process started, took a taskbar slot, and never put anything
+    // on screen. Which is indistinguishable, to anyone using it, from the app
+    // being broken.
+    //
+    // So: one guarded call before showing, then show, then the cosmetic settings
+    // afterwards where they can't cost us a window. The whole block is timed out
+    // as well, because a hang here would stop runApp being reached at all.
+    Future<void> attempt(Future<void> Function() step) async {
+      try {
+        await step();
+      } catch (_) {}
+    }
+
+    try {
+      await windowManager.ensureInitialized();
+      // Linux's native runner owns a transparent window sized to include the glow
+      // ring. Windows windows are opaque, so the ring would paint as a black
+      // border — instead size the window to the chassis exactly (no ring) and let
+      // the chassis fill it, so there's no black margin.
+      final opts = Platform.isLinux
+          ? const WindowOptions(titleBarStyle: TitleBarStyle.hidden)
+          : const WindowOptions(
+              titleBarStyle: TitleBarStyle.hidden,
+              size: Size(kAppWidth, kAppHeight),
+              center: true,
+            );
+      await windowManager
+          .waitUntilReadyToShow(opts, () async {
+            // Before showing, so there's no flash of a title bar.
+            await attempt(windowManager.setAsFrameless);
+            await attempt(windowManager.show);
+            await attempt(windowManager.focus);
+            // After showing: the window is a fixed size and must never maximize
+            // (a double-click on the rail would otherwise snap it fullscreen), but
+            // neither of these is worth a hidden window if they misbehave.
+            await attempt(() => windowManager.setResizable(false));
+            await attempt(() => windowManager.setMaximizable(false));
+          })
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Window management failed or hung. Ask once more for a visible window and
+      // carry on regardless — an app with an ugly frame still works.
+      await attempt(windowManager.show);
+    }
   }
 
   // Register any dev-dropped fonts (assets/fonts/custom/) before settings apply
