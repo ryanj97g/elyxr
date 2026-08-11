@@ -381,6 +381,22 @@ final Map<Accent, AccentSpec> _specs = {
   Accent.mono: const AccentSpec(0, 0, 0, 0.72, mono: true),
 };
 
+
+/// Relative luminance, per WCAG — the sRGB channels linearised and weighted.
+double _relLuminance(Color c) {
+  double ch(double v) =>
+      v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+}
+
+/// WCAG contrast ratio between two colours, 1:1 (identical) to 21:1 (black on
+/// white). Used to choose text that can actually be read on a given fill.
+double _contrast(Color x, Color y) {
+  final a = _relLuminance(x), b = _relLuminance(y);
+  final hi = a > b ? a : b, lo = a > b ? b : a;
+  return (hi + 0.05) / (lo + 0.05);
+}
+
 /// A fully resolved palette for one (accent, light/dark) pairing, plus the two
 /// drag axes: `sat` (0.4–2.6) pushes a colour accent's saturation *and* glow;
 /// `monoL` (0.12–0.99) sets the white phosphor's lightness. Every colour is
@@ -427,9 +443,18 @@ class Palette {
     } else {
       a = _c(trueArgb(_s.baseL, h, accentChroma(_s.chromaMul, maxC, sat)));
     }
-    // Text that sits on the accent fill: dark ink on a light accent, else white.
-    final accL = _s.mono ? monoL : _s.baseL;
-    ink = accL > 0.70 ? _c(oklchArgb(0.24, 0, 0)) : const Color(0xFFFFFFFF);
+    // Text that sits on the accent fill — the SERVER header, the preview's
+    // filename and its PREV/NEXT controls.
+    //
+    // Picked by MEASURING contrast against the accent, not by comparing its
+    // lightness to a threshold. The threshold was `accL > 0.70`, and amber and
+    // pink have a baseL of exactly 0.70 — so they fell on the wrong side by a
+    // hair and got white text on a light fill: 2.71:1 on amber and 2.84:1 on
+    // pink, under even the 3:1 floor for large text. Measuring can't be wrong at
+    // a boundary, and it stays right when a hue is retuned.
+    final darkInk = _c(oklchArgb(0.24, 0, 0));
+    const whiteInk = Color(0xFFFFFFFF);
+    ink = _contrast(a, darkInk) >= _contrast(a, whiteInk) ? darkInk : whiteInk;
 
     // Metal: a neutral chassis with only a whisper of the hue (mono = pure grey).
     final mc = _s.mono ? 0.0 : 1.0; // whisper on/off
