@@ -80,10 +80,16 @@ void main() {
     await tester.pump(); // the follower attaches once the target has a layer
     // Measure the copy's CONTENT, not the follower: a follower's own box is its
     // layout position, and the link's transform applies to what's inside it.
-    final real = tester.getRect(find.byKey(const Key('real')));
+    //
+    // Position and WIDTH are the guarantee. Height deliberately isn't: the copy
+    // takes its natural height, because forcing it to the real deck's height
+    // turned any one-pixel difference into an overflow banner across the screen.
+    final real = kDeckPadding.deflateRect(
+        tester.getRect(find.byKey(const Key('real'))));
     final copy = tester.getRect(find.byKey(const Key('copy')));
-    expect(copy, kDeckPadding.deflateRect(real),
+    expect(copy.topLeft, real.topLeft,
         reason: 'the saver copy is offset from the deck it mirrors');
+    expect(copy.width, real.width, reason: 'the copy is a different width');
   });
 
   testWidgets('it still lands exactly when the deck moves and resizes',
@@ -96,8 +102,11 @@ void main() {
     await tester.pumpWidget(harness(top: 140, height: 120));
     await tester.pump();
     await tester.pump();
-    expect(tester.getRect(find.byKey(const Key('copy'))),
-        kDeckPadding.deflateRect(tester.getRect(find.byKey(const Key('real')))));
+    final real = kDeckPadding.deflateRect(
+        tester.getRect(find.byKey(const Key('real'))));
+    final copy = tester.getRect(find.byKey(const Key('copy')));
+    expect(copy.topLeft, real.topLeft);
+    expect(copy.width, real.width);
   });
 
   testWidgets('the rain covers everything — no hole is cut in it',

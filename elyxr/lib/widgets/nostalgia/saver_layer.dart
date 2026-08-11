@@ -48,6 +48,15 @@ class SaverLayer extends StatelessWidget {
   /// standing up the whole controller graph behind a real player.
   final WidgetBuilder? deckBuilder;
 
+  /// The text scale the real deck renders at (the density setting).
+  ///
+  /// Passed in rather than read here, because getting it wrong is invisible until
+  /// it isn't: HomeScreen applies that scale to the tube's CONTENT, and the saver
+  /// is the tube's overlay — outside it. The copy was drawing at 1.0 against a box
+  /// measured from a scaled original, which made it taller than its box and threw
+  /// an overflow banner across the screen.
+  final double textScale;
+
   const SaverLayer({
     super.key,
     required this.palette,
@@ -55,7 +64,16 @@ class SaverLayer extends StatelessWidget {
     required this.onWake,
     required this.onVolume,
     this.deckBuilder,
+    this.textScale = 1.0,
   });
+
+  /// Draw [child] at the deck's own text scale. Not applied to the rain, which has
+  /// never been scaled and shouldn't start.
+  Widget _atDeckScale(BuildContext context, Widget child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +123,8 @@ class SaverLayer extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Align(
                         alignment: Alignment.bottomCenter,
-                        child: _SaverTitle(palette: palette),
+                        child: _atDeckScale(
+                            context, _SaverTitle(palette: palette)),
                       ),
                     ),
                   ),
@@ -126,15 +145,22 @@ class SaverLayer extends StatelessWidget {
               child: CompositedTransformFollower(
                 link: deckRect.link,
                 showWhenUnlinked: false,
+                // Width is pinned to the deck's, height is NOT. Forcing the
+                // height meant any difference of a pixel or two between the copy
+                // and the original showed up as an overflow banner across the
+                // screen; letting it take its natural height means the worst case
+                // is the controls sitting a pixel off, which nobody can see.
                 child: SizedBox(
                   width: rect.width,
-                  height: rect.height,
                   // The same padding the real deck sits in, from the same constant,
                   // so the inner geometry matches rather than approximating it.
                   child: Padding(
                     padding: kDeckPadding,
-                    child: deckBuilder?.call(context) ??
-                        MusicPlayerPanel(palette: palette, saver: true),
+                    child: _atDeckScale(
+                      context,
+                      deckBuilder?.call(context) ??
+                          MusicPlayerPanel(palette: palette, saver: true),
+                    ),
                   ),
                 ),
               ),

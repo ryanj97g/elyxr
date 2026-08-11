@@ -155,6 +155,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? SaverLayer(
                       palette: p,
                       deckRect: _deckRect,
+                      // The same scale the tube's content is rendered at, so the
+                      // player copy matches the real deck instead of drawing at 1.0.
+                      textScale: settings.density.scale,
                       onWake: _wake,
                       onVolume: (d) =>
                           context.read<MusicController>().nudgeVolume(d),
