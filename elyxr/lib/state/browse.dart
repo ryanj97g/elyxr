@@ -220,6 +220,15 @@ class BrowseController extends ChangeNotifier {
     } on LymnalError catch (e) {
       // A folder that no longer exists offers to go up (§03).
       _state = e.code == 'NOT_FOUND' ? FolderState.gone : FolderState.ready;
+    } catch (_) {
+      // Nothing unforeseen may leave the list on READING… for good. An escaping
+      // exception used to do exactly that: the state stays `loading` and the
+      // notify below is never reached, so the folder reads as still loading
+      // forever with no way back. Offline is the honest state for "the call
+      // didn't produce a folder", and it retries on its own.
+      _state = FolderState.offline;
+      _fault = ConnectionFault.unreachable;
+      _scheduleRetry();
     }
     notifyListeners();
   }

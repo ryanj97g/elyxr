@@ -86,11 +86,28 @@ Future<void> main() async {
     }
   }
 
+  // Everything from here on is guarded as one block. The window is ALREADY on
+  // screen by now, and Flutter's window class is registered with no background
+  // brush — so a window with nothing painted in it isn't black, it's
+  // see-through. That is how a startup failure on Windows presented as "the app
+  // doesn't open at all": a real, visible, correctly sized window with an empty
+  // frameless hole where the app should be, and a process alive in the message
+  // loop holding a taskbar slot.
+  //
+  // So there is no path out of main() that doesn't paint something.
+  try {
+    await _start();
+  } catch (e) {
+    runApp(_StartupFailure('$e'));
+  }
+}
+
+Future<void> _start() async {
   // Register any dev-dropped fonts (assets/fonts/custom/) before settings apply
   // the saved terminal face — otherwise a saved custom face wouldn't exist yet.
   await loadCustomFonts();
 
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await _openPrefs();
   final settings = SettingsController(prefs);
   // A phone can't write ~/Downloads; give it a real app-writable folder the
   // first time (a path the user sets later is respected).
@@ -139,6 +156,85 @@ Future<void> main() async {
   // the UI follows along as they finish; neither can hold up the window.
   session.boot();
   transfers.load();
+}
+
+/// Open the saved settings, and recover if the store itself is unreadable.
+///
+/// On Windows and Linux, SharedPreferences is a JSON file that the plugin
+/// decodes with no error handling whatsoever — `json.decode` straight onto the
+/// file's contents. So one truncated or garbled write (a power cut, a forced
+/// kill mid-save) throws FormatException out of getInstance() and keeps throwing
+/// on every launch afterwards, because the bad bytes are on disk.
+///
+/// Settings are worth less than starting. An unreadable store is moved aside and
+/// we come back with defaults.
+Future<SharedPreferences> _openPrefs() async {
+  try {
+    return await SharedPreferences.getInstance();
+  } catch (_) {
+    await _setAsidePrefsFile();
+    // If it still won't open, let it go: the caller paints the failure on the
+    // glass. A visible reason beats a silent one, and it beats reaching for a
+    // test-only API to fake a store.
+    return SharedPreferences.getInstance();
+  }
+}
+
+/// Move an unreadable preferences file out of the way, keeping it as `.unreadable`
+/// so what was in it can still be looked at. Same directory the plugin uses.
+Future<void> _setAsidePrefsFile() async {
+  try {
+    final dir = await getApplicationSupportDirectory();
+    final sep = Platform.pathSeparator;
+    final f = File('${dir.path}${sep}shared_preferences.json');
+    if (!await f.exists()) return;
+    final kept = File('${f.path}.unreadable');
+    if (await kept.exists()) await kept.delete();
+    await f.rename(kept.path);
+  } catch (_) {
+    // If it can't even be moved, the retry above will fail and we fall back to
+    // in-memory defaults, which still starts.
+  }
+}
+
+/// The last resort: startup threw, so say so on the glass instead of leaving an
+/// invisible window. Deliberately plain — it must not depend on anything that
+/// could be the thing that just failed.
+class _StartupFailure extends StatelessWidget {
+  final String message;
+  const _StartupFailure(this.message);
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: ColoredBox(
+          color: const Color(0xFF0B0F0C),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('ELYXR COULDN\'T START',
+                      style: TextStyle(
+                          color: Color(0xFF2BE05E),
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 14),
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: SelectableText(message,
+                          style: const TextStyle(
+                              color: Color(0xFF9BB3A2), fontSize: 13)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 Future<Directory> _supportDir() async {
