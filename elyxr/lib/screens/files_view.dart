@@ -41,7 +41,7 @@ class FilesView extends StatelessWidget {
   /// The deck, reporting its box so the screensaver can draw its own copy of the
   /// player in exactly the same place. Not dimmed and not clipped around: the saver
   /// covers this one with rain and paints the stripped-back copy over the top.
-  Widget _deck(Palette p) {
+  Widget _deck(BuildContext context, Palette p) {
     final deck = Container(
       padding: kDeckPadding,
       decoration: BoxDecoration(
@@ -50,7 +50,12 @@ class FilesView extends StatelessWidget {
       child: MusicPlayerPanel(palette: p),
     );
     final rect = deckRect;
-    return rect == null ? deck : DeckSlot(notifier: rect, child: deck);
+    if (rect == null) return deck;
+    // Only an unfolded deck earns a screensaver exception. Minimized or empty, it
+    // is covered like everything else — there is nothing in it worth showing
+    // through, and a strip that shows nothing is worse than no strip at all.
+    final open = context.select<MusicController, bool>((m) => m.deckOpen);
+    return DeckSlot(notifier: rect, reporting: open, child: deck);
   }
 
   @override
@@ -74,7 +79,7 @@ class FilesView extends StatelessWidget {
             // action bar — always visible, in every mode. Nostalgia Mode is
             // just one thing that drives it (auto-starting the built-in tracks);
             // it is not a gate on the player.
-            _deck(p),
+            _deck(context, p),
             _ActionBar(palette: p),
             _Breadcrumbs(palette: p),
             Expanded(
@@ -783,10 +788,9 @@ class _Row extends StatelessWidget {
         if (HardwareKeyboard.instance.isShiftPressed) {
           browse.selectRange(index);
         } else {
-          _selectEntry(context, browse, index, entry);
+          _tapEntry(context, browse, index, entry);
         }
       },
-      onDoubleTap: () => _openEntry(context, browse, entry),
       // Drag a file sideways to pull it out of the window; where you drop it is
       // where it downloads. A vertical drag still scrolls the list.
       onHorizontalDragStart: isDir
@@ -861,10 +865,23 @@ class _Row extends StatelessWidget {
 /// A plain single click: select just this entry (its details fill the box
 /// below). If it's an audio file, one click also starts it in the in-app
 /// player — no extra button, no long-press.
-void _selectEntry(
+/// What one tap on a row or tile does.
+///
+/// A tap OPENS: a folder navigates into itself, an audio file starts the folder
+/// playing from that track, and anything else goes to its default app. It used to
+/// select, with a double tap to open — which is a mouse idiom, and on a phone
+/// meant every folder took two deliberate taps to enter.
+///
+/// Selecting is click-and-hold now, for rows and tiles alike. Shift-click still
+/// extends a selection on desktop, since that's a modifier rather than a plain
+/// tap.
+void _tapEntry(
     BuildContext context, BrowseController browse, int index, Entry entry) {
   browse.selectOnly(index);
-  if (entry.isDir || !isAudioName(entry.name)) return;
+  if (entry.isDir || !isAudioName(entry.name)) {
+    _openEntry(context, browse, entry);
+    return;
+  }
   final client = context.read<SessionController>().client;
   if (client == null) return;
   // Capture the controllers before any await so we don't touch context across
@@ -951,11 +968,10 @@ class _FileGrid extends StatelessWidget {
           final selected = browse.selection.contains(e.name);
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
-            // Single click = select this one; double-click = open it (folder
-            // navigates, file opens in the default app via lymbo); click-and-hold
-            // = multi-select.
-            onTap: () => _selectEntry(context, browse, i, e),
-            onDoubleTap: () => _openEntry(context, browse, e),
+            // Single click opens: a folder navigates into itself, an audio file
+            // starts the folder playing from it, anything else opens in the
+            // default app via lymbo. Click-and-hold selects.
+            onTap: () => _tapEntry(context, browse, i, e),
             onLongPress: () => browse.toggle(i),
             child: Container(
               padding: const EdgeInsets.fromLTRB(4, 4, 4, 3),

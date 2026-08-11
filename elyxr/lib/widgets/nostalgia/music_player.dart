@@ -53,13 +53,19 @@ class MusicPlayerPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = palette;
     final m = context.watch<MusicController>();
-    // The built-in tracker soundtrack is the Nostalgia Mode easter egg. With
-    // Nostalgia off, the player only plays what's in the trove (started from a
-    // file row) — the built-in playlist is neither startable nor listable.
-    final egg = context.watch<SettingsController>().nostalgia;
+    // The built-in tracker soundtrack is the 2000's Demo Mode easter egg, and it
+    // takes BOTH switches: Nostalgia for the whimsy at large, Demo Mode for this
+    // specific thing. With either off, the bundled assets don't exist as far as
+    // the player is concerned — not startable, not listable, not named. Without
+    // that, a fresh install opened onto a player announcing a tracker file nobody
+    // had asked for.
+    final settings = context.watch<SettingsController>();
+    final egg = settings.nostalgia && settings.demoMode2000s;
     final canBuiltIn = egg && m.hasTracks;
 
-    if (!m.active) {
+    // Minimized: nothing loaded, or a track the user paused and left. The second
+    // case keeps the song exactly where it is — only the controls are put away.
+    if (!m.deckOpen) {
       // Idle — a slim one-line bar, not the full deck, so it doesn't eat the
       // tube when nothing's playing. With Nostalgia on it can start/list the
       // built-in soundtrack; with it off it just rests (trove playback starts
@@ -67,19 +73,27 @@ class MusicPlayerPanel extends StatelessWidget {
       // While a tapped trove track is being fetched, this bar shows a spinner so
       // the tap has visible feedback before the deck appears.
       final loading = m.loadingTrove;
+      // A paused track is still in there, so the whole bar is the way back to the
+      // controls. With nothing loaded there's nothing to go back to and the bar
+      // stays inert.
+      final folded = m.active;
       return _wheel(
         m,
-        Row(
+        GestureDetector(
+          onTap: folded ? m.expandDeck : null,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
           children: [
             loading
                 ? _spinner(p)
                 : GestureDetector(
-                    onTap: canBuiltIn ? () => m.toggle() : null,
+                    onTap: (folded || canBuiltIn) ? () => m.toggle() : null,
                     behavior: HitTestBehavior.opaque,
                     child: Padding(
                       padding: const EdgeInsets.all(8),
                       child: Icon(Icons.play_arrow,
-                          size: 26, color: canBuiltIn ? p.a : p.foot),
+                          size: 26,
+                          color: (folded || canBuiltIn) ? p.a : p.foot),
                     ),
                   ),
             const SizedBox(width: 8),
@@ -87,7 +101,10 @@ class MusicPlayerPanel extends StatelessWidget {
               child: Text(
                   loading
                       ? 'LOADING…'
-                      : (m.notice ?? (canBuiltIn ? m.title : '—')),
+                      : (m.notice ??
+                          (folded || canBuiltIn
+                              ? (m.title.isEmpty ? '—' : m.title)
+                              : '—')),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   // A file that can't be decoded says so here. Otherwise a tap on
@@ -109,6 +126,7 @@ class MusicPlayerPanel extends StatelessWidget {
               ),
             ],
           ],
+          ),
         ),
       );
     }

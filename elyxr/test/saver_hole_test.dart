@@ -181,6 +181,30 @@ void main() {
     expect(big.bottom, closeTo(small.bottom, 0.01));
   });
 
+  testWidgets('a deck that is not open claims no exception at all',
+      (tester) async {
+    // A minimized or empty player is covered by the saver like everything else.
+    // Carving it out only draws the eye to a strip with nothing in it — and
+    // before the player learned to stay quiet, to one naming a bundled track
+    // nobody had asked to hear.
+    await tester.pumpWidget(MaterialApp(
+      home: SizedBox(
+        width: 400,
+        height: 300,
+        child: DeckSlot(
+          notifier: rect,
+          reporting: false,
+          child: const ColoredBox(color: Color(0xFF102030)),
+        ),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+    expect(rect.value, isNull,
+        reason: 'a folded deck reported a rect, so the saver would cut a hole '
+            'around an empty strip');
+  });
+
   testWidgets('the rain covers everything — no hole is cut in it',
       (tester) async {
     await tester.pumpWidget(harness());

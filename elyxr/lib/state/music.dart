@@ -91,6 +91,7 @@ class MusicController extends ChangeNotifier {
       );
       _p = made;
       _wire(made);
+      _relaxNetworkTimeout(made);
       _pushVolume();
       return made;
     } catch (_) {
@@ -98,6 +99,28 @@ class MusicController extends ChangeNotifier {
       _notice = 'audio unavailable on this device';
       return null;
     }
+  }
+
+  /// Give a slow track time to start instead of abandoning it.
+  ///
+  /// media_kit hardcodes mpv's `network-timeout` to 5 seconds for every player it
+  /// builds. A trove track is an HTTP stream, so any file that doesn't start
+  /// inside those 5 seconds is dropped by mpv — and because mpv owns the
+  /// playlist, it walks straight on to the next entry by itself. From the outside
+  /// that is a song being skipped the instant it's chosen, and nothing in here
+  /// can catch it: no error is raised, and the completion that follows looks
+  /// exactly like an ordinary mid-playlist advance.
+  ///
+  /// 30 seconds is long enough for a big file over a slow tailnet hop and still
+  /// short enough that a genuinely dead connection doesn't hang. Best-effort: an
+  /// old libmpv that rejects the property just keeps the default.
+  void _relaxNetworkTimeout(Player player) {
+    try {
+      final native = player.platform;
+      if (native is NativePlayer) {
+        native.setProperty('network-timeout', '30').catchError((_) {});
+      }
+    } catch (_) {}
   }
 
   /// True when the audio backend couldn't be created at all — the platform is
@@ -284,6 +307,59 @@ class MusicController extends ChangeNotifier {
   /// sprang back on every song change. It also collapsed while merely paused. A
   /// loaded player is a player, so the deck stays put.
   bool get active => _hasSource;
+
+  /// Whether the full deck is unfolded, as opposed to the slim idle bar.
+  ///
+  /// Loaded and not minimized. Distinct from [active] because a paused track
+  /// stays loaded while the deck folds away: the song is kept exactly where it
+  /// is, only the controls are put away.
+  bool get deckOpen => _hasSource && !_minimized;
+
+  /// True once a USER pause has sat long enough to fold the deck. Deliberately
+  /// not "not playing": mpv drops `playing` while it opens a file, buffers, or
+  /// steps between tracks, and none of those are the user putting the player
+  /// down.
+  bool _minimized = false;
+  Timer? _minimizeTimer;
+
+  /// Unfold the deck again — what tapping the idle bar does while a track is
+  /// still loaded. Doesn't resume; the controls simply come back.
+  void expandDeck() {
+    if (!_hasSource || !_minimized) return;
+    _minimized = false;
+    notifyListeners();
+  }
+
+  /// How long a user-initiated pause waits before the deck folds itself away.
+  static const Duration kMinimizeAfterPause = Duration(seconds: 30);
+
+  /// Start (or cancel) the fold-away countdown. Called only from the user's own
+  /// play/pause, never from the player's own comings and goings.
+  void _armMinimize(bool paused) {
+    _minimizeTimer?.cancel();
+    _minimizeTimer = null;
+    if (!paused) {
+      if (_minimized) {
+        _minimized = false;
+        notifyListeners();
+      }
+      return;
+    }
+    _minimizeTimer = Timer(kMinimizeAfterPause, () {
+      _minimizeTimer = null;
+      if (!_hasSource || _playing) return;
+      _minimized = true;
+      notifyListeners();
+    });
+  }
+
+  /// Drop the fold-away state entirely — a new track, or playback stopping.
+  void _resetMinimize() {
+    _minimizeTimer?.cancel();
+    _minimizeTimer = null;
+    _minimized = false;
+  }
+
   double get volume => _volume;
   bool get muted => _volume <= 0;
 
@@ -302,7 +378,13 @@ class MusicController extends ChangeNotifier {
   int get index => _trove ? (_plist?.index ?? 0) : _index;
 
   String get title {
-    if (!_trove) return hasTracks ? _pretty(_tracks[_index]) : 'no tracks';
+    // Nothing loaded means nothing to name. This used to fall through to the
+    // first bundled asset, so a player that had never played anything still
+    // announced a tracker filename — including on the screensaver, where it was
+    // the only thing on screen and read as if the app had started playing a file
+    // the user had never heard of.
+    if (!_hasSource) return '';
+    if (!_trove) return hasTracks ? _pretty(_tracks[_index]) : '';
     return titleAt(index);
   }
 
@@ -716,6 +798,7 @@ class MusicController extends ChangeNotifier {
   /// restarts the soundtrack). Clears the easter-egg shuffle too.
   Future<void> stopPlayback() async {
     _nostalgiaStop?.cancel();
+    _resetMinimize();
     _eggShuffle = false;
     _trove = false;
     _troveQueue = const [];
@@ -817,6 +900,7 @@ class MusicController extends ChangeNotifier {
   /// Play one track of the built-in soundtrack. Leaves trove mode.
   Future<void> playIndex(int i) async {
     if (_tracks.isEmpty) return;
+    _resetMinimize(); // a fresh track always arrives with the deck open
     _failed = false;
     _notice = null;
     _index = i % _tracks.length;
@@ -860,6 +944,7 @@ class MusicController extends ChangeNotifier {
   Future<void> playTroveQueue(
       LymnalClient client, List<(String, String)> queue, int index) async {
     if (queue.isEmpty) return;
+    _resetMinimize(); // a fresh track always arrives with the deck open
     _troveClient = client;
     _failed = false;
     _notice = null;
@@ -1013,6 +1098,10 @@ class MusicController extends ChangeNotifier {
     }
     try {
       await _player?.playOrPause();
+      // The only place a pause is known to be the user's doing. Everything else
+      // that clears `playing` — opening, buffering, advancing — must not fold the
+      // deck, so the countdown is armed from here and nowhere else.
+      _armMinimize(_playing);
     } catch (_) {}
   }
 
@@ -1133,6 +1222,7 @@ class MusicController extends ChangeNotifier {
     _closeAnalysis(); // close the visualizer handle, drop any temp
     _sweep(_queueTemps);
     _nostalgiaStop?.cancel();
+    _minimizeTimer?.cancel();
     for (final s in _subs) {
       s.cancel();
     }

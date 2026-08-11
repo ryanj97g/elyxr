@@ -8,7 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../design/chassis.dart';
+import '../design/text.dart';
 import '../design/tokens.dart';
+import '../state/browse.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
 import '../widgets/nostalgia/cursor_trail.dart';
@@ -17,6 +19,7 @@ import '../widgets/deck_slot.dart';
 import '../widgets/nostalgia/saver_layer.dart';
 import '../widgets/nostalgia/snake_game.dart';
 import '../widgets/nostalgia/transfer_hud.dart';
+import '../util/platform_caps.dart';
 import '../widgets/rails.dart';
 import 'files_view.dart';
 import 'settings_view.dart';
@@ -38,6 +41,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // Where the music deck is, so the saver can leave a hole for it. Published by
   // the deck itself (see DeckSlot) because only it knows where it ended up.
   final _deckRect = DeckSlotRect();
+  // Android back at the top of the trove: the first press arms the exit and says
+  // so, the second within the window leaves. Without the notice a back press that
+  // did nothing would read as the app ignoring the button.
+  bool _exitArmed = false;
+  Timer? _exitTimer;
   // The hidden Snake minigame (wordmark ×7 in Nostalgia Mode).
   bool _game = false;
 
@@ -52,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _exitTimer?.cancel();
     _deckRect.dispose();
     _idleTimer?.cancel();
     _cursor.dispose();
@@ -78,6 +87,16 @@ class _HomeScreenState extends State<HomeScreen> {
   // dismiss the screensaver once it's up — only a click does that.
   void _activity() {
     if (!_idle) _armIdle();
+  }
+
+  /// Arm the exit and say so, briefly. The window is short enough that a stray
+  /// press can't leave the app primed to quit minutes later.
+  void _armExit() {
+    _exitTimer?.cancel();
+    setState(() => _exitArmed = true);
+    _exitTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _exitArmed = false);
+    });
   }
 
   @override
@@ -179,11 +198,27 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
+    final browse = context.watch<BrowseController>();
+    // Back walks the app backwards before it leaves it: out of Settings, then up
+    // the trove one folder at a time, and only from the root does a second press
+    // exit. On desktop there's no hardware back, so this stays what it was.
+    final atRoot = !browse.canGoUp;
     return PopScope(
-      // Android back: leave Settings first rather than closing the app.
-      canPop: !settings.inSettings,
+      canPop: Caps.isAndroid
+          ? (!settings.inSettings && atRoot && _exitArmed)
+          : !settings.inSettings,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && settings.inSettings) settings.inSettings = false;
+        if (didPop) return;
+        if (settings.inSettings) {
+          settings.inSettings = false;
+          return;
+        }
+        if (!Caps.isAndroid) return;
+        if (!atRoot) {
+          browse.goUp();
+          return;
+        }
+        _armExit();
       },
       child: Stack(
         children: [
@@ -201,6 +236,33 @@ class _HomeScreenState extends State<HomeScreen> {
             Positioned.fill(
               child: IgnorePointer(
                 child: CursorTrail(cursor: _cursor, palette: p),
+              ),
+            ),
+          // "Press back again" — the first back press at the root. Over
+          // everything and ignoring pointers, so it can't take a tap meant for
+          // what's underneath it.
+          if (_exitArmed)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 96,
+              child: IgnorePointer(
+                child: Center(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                    decoration: BoxDecoration(
+                      color: p.tubeBg.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: p.aAlpha(0.7)),
+                      boxShadow: [
+                        BoxShadow(color: p.aAlpha(0.30), blurRadius: 14),
+                      ],
+                    ),
+                    child: Text('PRESS BACK AGAIN TO EXIT',
+                        style: chassis(11, p.a, spacing: 0.12)),
+                  ),
+                ),
               ),
             ),
         ],

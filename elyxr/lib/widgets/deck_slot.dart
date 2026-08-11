@@ -41,7 +41,20 @@ class DeckSlot extends StatefulWidget {
   final DeckSlotRect notifier;
   final Widget child;
 
-  const DeckSlot({super.key, required this.notifier, required this.child});
+  /// Whether this deck is worth an exception at all.
+  ///
+  /// False for the minimized bar, and the saver then covers it like everything
+  /// else. An empty or folded player has nothing to show through a screensaver —
+  /// carving a hole for it only draws the eye to a strip that reads as nothing,
+  /// or worse, names a track that isn't playing.
+  final bool reporting;
+
+  const DeckSlot({
+    super.key,
+    required this.notifier,
+    required this.child,
+    this.reporting = true,
+  });
 
   @override
   State<DeckSlot> createState() => _DeckSlotState();
@@ -57,6 +70,10 @@ class _DeckSlotState extends State<DeckSlot> {
 
   void _report() {
     if (!mounted) return;
+    if (!widget.reporting) {
+      widget.notifier.value = null;
+      return;
+    }
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final rect = box.localToGlobal(Offset.zero) & box.size;
