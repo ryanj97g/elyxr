@@ -130,10 +130,17 @@ class MusicPlayerPanel extends StatelessWidget {
         // Now playing — marquee title, tracklist button, index.
         Row(
           children: [
-            Text('♪ ', style: glass(16, p.a)),
+            // Part of the title strip, so it goes with it on the saver — it read
+            // as a stray glyph floating to the left of the visualizer, because the
+            // title it belongs to is drawn somewhere else entirely up there.
+            _keepSpace(Text('♪ ', style: glass(16, p.a))),
             // A spinner while the current track is opening or buffering, so any
-            // wait before the sound starts is visible.
-            if (m.loadingTrove) ...[_spinner(p), const SizedBox(width: 6)],
+            // wait before the sound starts is visible. Hidden on the saver for the
+            // same reason as the note: it belongs to a strip that isn't there.
+            if (m.loadingTrove) ...[
+              _keepSpace(_spinner(p)),
+              const SizedBox(width: 6),
+            ],
             Expanded(
               // On the saver the title isn't here at all — a one-line strip with a
               // scrolling name is the wrong shape for a sleeping screen, and

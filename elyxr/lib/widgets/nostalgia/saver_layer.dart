@@ -48,6 +48,11 @@ class SaverLayer extends StatelessWidget {
   /// standing up the whole controller graph behind a real player.
   final WidgetBuilder? deckBuilder;
 
+  /// The song title over the rain. Injectable for the same reason as
+  /// [deckBuilder]: what needs testing is where the block lands and how it grows,
+  /// which has nothing to do with where the text came from.
+  final WidgetBuilder? titleBuilder;
+
   /// The text scale the real deck renders at (the density setting).
   ///
   /// Passed in rather than read here, because getting it wrong is invisible until
@@ -64,6 +69,7 @@ class SaverLayer extends StatelessWidget {
     required this.onWake,
     required this.onVolume,
     this.deckBuilder,
+    this.titleBuilder,
     this.textScale = 1.0,
   });
 
@@ -97,41 +103,44 @@ class SaverLayer extends StatelessWidget {
             ),
           ),
         ),
-        // The title, as its own block sitting directly above the controls. Only
-        // when the real player is being drawn — a test substituting the deck gets
-        // no title either, since both hang off the same link.
-        if (deckBuilder == null)
-          ValueListenableBuilder<Rect?>(
-            valueListenable: deckRect,
-            builder: (context, rect, _) {
-              if (rect == null) return const SizedBox.shrink();
-              return Positioned(
-                left: 0,
-                top: 0,
-                child: CompositedTransformFollower(
-                  link: deckRect.link,
-                  showWhenUnlinked: false,
-                  // Anchored to the deck's TOP and offset upwards by its own
-                  // height, so the block ends where the controls begin. Bottom
-                  // aligned inside that box, so a long title grows upward into the
-                  // rain instead of pushing anything down.
-                  offset: const Offset(0, -_titleBox),
-                  child: SizedBox(
-                    width: rect.width,
-                    height: _titleBox,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: _atDeckScale(
-                            context, _SaverTitle(palette: palette)),
-                      ),
-                    ),
+        // The title, as its own block sitting directly above the controls.
+        ValueListenableBuilder<Rect?>(
+          valueListenable: deckRect,
+          builder: (context, rect, _) {
+            if (rect == null) return const SizedBox.shrink();
+            return Positioned(
+              left: 0,
+              top: 0,
+              child: CompositedTransformFollower(
+                link: deckRect.link,
+                showWhenUnlinked: false,
+                // The block's own BOTTOM edge is pinned to the top of the deck's
+                // content, and it has no height of its own — so it takes exactly
+                // the room the title needs and grows UPWARD into the rain as that
+                // grows. A bigger typeface, a bigger density scale or a longer name
+                // all get however many lines they want, and the controls below
+                // never move, because nothing about them depends on this height.
+                //
+                // This replaced a fixed box with three lines and an ellipsis, which
+                // meant the size the text wanted and the room it got were two
+                // different numbers that only agreed at one font size.
+                targetAnchor: Alignment.topLeft,
+                followerAnchor: Alignment.bottomLeft,
+                offset: Offset(0, kDeckPadding.top),
+                child: SizedBox(
+                  width: rect.width,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _atDeckScale(
+                        context,
+                        titleBuilder?.call(context) ??
+                            _SaverTitle(palette: palette)),
                   ),
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
+        ),
         // The player, over the rain, at the real deck's box.
         ValueListenableBuilder<Rect?>(
           valueListenable: deckRect,
@@ -172,13 +181,14 @@ class SaverLayer extends StatelessWidget {
   }
 }
 
-/// Room above the controls for the wrapped title — three lines of it at the size
-/// below, which covers any real song name. Fixed rather than measured because the
-/// block is anchored by its BOTTOM edge: the text grows up into the rain, so the
-/// box only has to be big enough, and the controls never move whatever it holds.
-const double _titleBox = 96;
-
-/// The song title on the screensaver: the whole thing, centred, wrapping.
+/// The song title on the screensaver: the whole thing, centred, wrapping, in as
+/// many lines as it takes. No line cap and no ellipsis — the block it sits in
+/// takes its size from this text rather than the other way round, so there is
+/// nothing for a long name to be truncated to fit.
+///
+/// Drawn in [Palette.hot], the same colour as the rain's leading glyphs, so the
+/// title is the accent the user picked like everything else on the saver. (Not
+/// `bright`, which reads as plain white for the cooler hues.)
 ///
 /// `title` has already had the extension stripped and its underscores and hyphens
 /// turned into spaces (MusicController._pretty), which is also what gives a name
@@ -194,9 +204,7 @@ class _SaverTitle extends StatelessWidget {
     return Text(
       title,
       textAlign: TextAlign.center,
-      maxLines: 3,
-      overflow: TextOverflow.ellipsis,
-      style: glass(22, palette.bright, height: 1.15),
+      style: glass(22, palette.hot, height: 1.15),
     );
   }
 }

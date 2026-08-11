@@ -32,7 +32,13 @@ void main() {
   // A stand-in for the tube: content with the deck slot in it, the saver over the
   // top. The deck band is deliberately NOT at the origin, so a copy positioned by
   // bad arithmetic instead of by the link would land visibly wrong.
-  Widget harness({double top = 90, double height = 70}) => MaterialApp(
+  Widget harness({
+    double top = 90,
+    double height = 70,
+    String title = 'ONE',
+    double textScale = 1.0,
+  }) =>
+      MaterialApp(
         home: Center(
           child: SizedBox(
             width: 400,
@@ -56,8 +62,15 @@ void main() {
                     deckRect: rect,
                     onWake: () => woke++,
                     onVolume: (d) => volume += d,
+                    textScale: textScale,
                     deckBuilder: (_) => const ColoredBox(
                         key: Key('copy'), color: Color(0xFF204060)),
+                    titleBuilder: (_) => Text(
+                      title,
+                      key: const Key('title'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 22, height: 1.15),
+                    ),
                   ),
                 ),
               ],
@@ -65,6 +78,11 @@ void main() {
           ),
         ),
       );
+
+  /// Where the deck's CONTENT starts — the title block is pinned to this, not to
+  /// the outside of the deck's padding.
+  double contentTop(WidgetTester tester) =>
+      kDeckPadding.deflateRect(tester.getRect(find.byKey(const Key('real')))).top;
 
   testWidgets('the deck reports its box', (tester) async {
     await tester.pumpWidget(harness());
@@ -107,6 +125,60 @@ void main() {
     final copy = tester.getRect(find.byKey(const Key('copy')));
     expect(copy.topLeft, real.topLeft);
     expect(copy.width, real.width);
+  });
+
+  // The title block is sized BY its text, not to a fixed box the text has to fit
+  // in. It hangs from its own bottom edge, so whatever it needs it takes upward
+  // into the rain and the controls below it never move. Three things to hold:
+  // where the bottom sits, that the height follows the text, and that growing
+  // happens in the one direction that costs nothing.
+  testWidgets('the title block hangs from the top of the deck content',
+      (tester) async {
+    await tester.pumpWidget(harness());
+    await tester.pump();
+    await tester.pump(); // the follower attaches once the target has a layer
+    expect(tester.getRect(find.byKey(const Key('title'))).bottom,
+        closeTo(contentTop(tester), 0.01));
+  });
+
+  testWidgets('a long title takes more room, and takes it upward',
+      (tester) async {
+    await tester.pumpWidget(harness(title: 'ONE'));
+    await tester.pump();
+    await tester.pump();
+    final short = tester.getRect(find.byKey(const Key('title')));
+
+    await tester.pumpWidget(harness(
+        title: 'A TITLE LONG ENOUGH TO NEED SEVERAL LINES OF ITS OWN AT THIS '
+            'SIZE, WHICH A FIXED THREE-LINE BOX WOULD HAVE CUT OFF WITH AN '
+            'ELLIPSIS INSTEAD OF SHOWING'));
+    await tester.pump();
+    await tester.pump();
+    final long = tester.getRect(find.byKey(const Key('title')));
+
+    expect(long.height, greaterThan(short.height),
+        reason: 'the block did not grow for a title that needs more lines');
+    expect(long.bottom, closeTo(short.bottom, 0.01),
+        reason: 'it grew downward, which pushes into the controls');
+    expect(long.top, lessThan(short.top));
+  });
+
+  testWidgets('a bigger text scale gets the room it needs', (tester) async {
+    // The density setting scales everything on the glass. The old fixed box meant
+    // the room the title got and the room it wanted were two separate numbers that
+    // only agreed at one setting.
+    await tester.pumpWidget(harness(title: 'SOME TRACK NAME', textScale: 1.0));
+    await tester.pump();
+    await tester.pump();
+    final small = tester.getRect(find.byKey(const Key('title')));
+
+    await tester.pumpWidget(harness(title: 'SOME TRACK NAME', textScale: 1.8));
+    await tester.pump();
+    await tester.pump();
+    final big = tester.getRect(find.byKey(const Key('title')));
+
+    expect(big.height, greaterThan(small.height));
+    expect(big.bottom, closeTo(small.bottom, 0.01));
   });
 
   testWidgets('the rain covers everything — no hole is cut in it',

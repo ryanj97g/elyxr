@@ -77,11 +77,11 @@ class _MatrixRainState extends State<MatrixRain>
           painter: _RainPainter(
             _t,
             _columns,
-            // A hot leading edge that still carries the picked hue — the accent
-            // lifted a little toward white, NOT the phosphor `bright` (which sits
-            // so light that purple/blue read as plain white). Everything else is
-            // the accent itself, so the rain is genuinely the colour you chose.
-            head: Color.lerp(widget.palette.a, const Color(0xFFFFFFFF), 0.28)!,
+            // A hot leading edge that still carries the picked hue (Palette.hot —
+            // the same colour the song title over the rain is drawn in, from one
+            // definition). Everything else is the accent itself, so the rain is
+            // genuinely the colour you chose.
+            head: widget.palette.hot,
             trail: widget.palette.a,
             face: Fonts.glass,
           ),
@@ -103,8 +103,16 @@ class _RainPainter extends CustomPainter {
       : super(repaint: time);
 
   // Half-width katakana, digits, and a few symbols — the classic rain alphabet.
+  //
+  // Drawn in whatever the terminal face is, which for most of these means drawn
+  // by whatever the OS falls back to: of the bundled faces only DotGothic16 has
+  // kana at all (VT323 covers 18 of the 64 characters below). So the rain's look
+  // depends on a system CJK font on every face but that one — which is why every
+  // character here is one DotGothic16 has, so choosing that face makes the rain
+  // self-contained instead of borrowing. `╌` used to be here and is the single
+  // character it lacks; `ー` stands in for it.
   static const _glyphs =
-      'アイウエオカキクケコサシスセソタチツテトナニヌネノﾊﾋﾌﾍﾎマミムメモﾔﾕﾖﾗﾘﾙﾚﾛﾜ0123456789:.=*+<>¦｜╌';
+      'アイウエオカキクケコサシスセソタチツテトナニヌネノﾊﾋﾌﾍﾎマミムメモﾔﾕﾖﾗﾘﾙﾚﾛﾜ0123456789:.=*+<>¦｜ー';
 
   // A denser grid — smaller cells fit several more columns of rain on screen.
   static const double _cell = 11.5;

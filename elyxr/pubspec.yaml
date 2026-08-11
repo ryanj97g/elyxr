@@ -105,9 +105,9 @@ flutter:
     - family: Ordinary Love
       fonts:
         - asset: assets/fonts/OrdinaryLove-Regular.ttf
-    - family: Holo Edge Four
+    - family: DotGothic16
       fonts:
-        - asset: assets/fonts/HoloEdgeFour-Regular.otf
-    - family: Digital Moneter
+        - asset: assets/fonts/DotGothic16-Regular.ttf
+    - family: Handjet
       fonts:
-        - asset: assets/fonts/DigitalMoneter-Regular.otf
+        - asset: assets/fonts/Handjet-Variable.ttf

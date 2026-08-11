@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../util/platform_caps.dart';
 import '../widgets/edge_light.dart';
+import '../widgets/scope.dart';
 import '../widgets/speakers.dart';
 import 'tokens.dart';
 
@@ -265,6 +266,15 @@ class Tube extends StatelessWidget {
                 child: overlay,
               ),
             ),
+          // The oscilloscope, in the strip of glass the content inset leaves empty
+          // between the two cradles.
+          //
+          // Above the screensaver deliberately: it's the case's own instrument, so
+          // it keeps running while the screen is idle instead of being buried under
+          // the rain. The cost of sitting up here is that it takes neither the
+          // scanlines nor the vignette — which is the right trade for a 36px band
+          // at the darkest part of the glass, where both only cost legibility.
+          Positioned.fill(child: ChassisScope(palette: p)),
           // Music-reactive edge lighting, framing everything else. Clipped to the
           // glass so the bloom stays on-screen; invisible until music plays —
           // and only in Nostalgia Mode.

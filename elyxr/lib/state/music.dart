@@ -29,6 +29,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api/lymnal_client.dart';
 import '../util/lymnal_host.dart';
+import 'scope_trace.dart';
 
 /// Audio extensions the player accepts — common formats libmpv decodes directly,
 /// plus tracker modules (.xm/.mod/.s3m/.it) which are rendered to PCM on load
@@ -176,6 +177,15 @@ class MusicController extends ChangeNotifier {
   int _analysisToken = 0; // so a slow fetch/decode can't open over a newer track
   int _lastBarsBucket = -1; // memoise the window so 3 widgets share one FFT per frame
   List<double> _lastBars = const <double>[];
+  // The mono samples behind BOTH readings, cached per window. The spectrum and the
+  // oscilloscope want the same audio at the same instant and differ only in what
+  // they do with it, so the file is read once between them, not once each.
+  int _lastWinBucket = -1;
+  Float64List? _lastWin;
+  int _lastWaveBucket = -1;
+  List<double> _lastWave = const <double>[];
+  // The scope's rolling peak, held across frames (see scope_trace.dart).
+  double _wavePeak = 0;
 
   // A wall-clock play-head for the visualizer. Position events can go sparse or
   // stall — if the bars sampled `_pos` directly they'd freeze mid-song (and the
@@ -391,9 +401,7 @@ class MusicController extends ChangeNotifier {
     final raf = _pcm;
     final n = _pcmFrames;
     if (raf == null || n <= 0) return const <double>[];
-    var start = (_visPos.inMicroseconds * _pcmRate / 1000000.0).floor();
-    if (start < 0) start = 0;
-    if (start >= n) start = n - 1;
+    final start = _playHeadSample(n);
     final bucket = start >> 8; // ~256 samples ≈ 5ms at 48k
     if (bucket == _lastBarsBucket) return _lastBars;
     _lastBarsBucket = bucket;
@@ -401,37 +409,82 @@ class MusicController extends ChangeNotifier {
     return _lastBars;
   }
 
-  /// Read the [_win]-sample window at [startSample] straight from the open WAV,
-  /// down-mix to mono, and turn it into the bar levels. Synchronous — a couple of
-  /// KB read plus one small FFT, cheap enough to run per frame on the UI thread.
-  List<double> _frameBars(RandomAccessFile raf, int startSample) {
+  /// The oscilloscope trace (-1..1) for the current play position — the real
+  /// waveform at the play head, from the same window of samples the bars come
+  /// from. Triggered and gain-normalised in scope_trace.dart, which is where the
+  /// reasoning about both lives. Empty when there's nothing to read, exactly like
+  /// the bars, so a track whose samples are still being fetched rests flat.
+  List<double> visualizerWave() {
+    final raf = _pcm;
+    final n = _pcmFrames;
+    if (raf == null || n <= 0) return const <double>[];
+    final start = _playHeadSample(n);
+    final bucket = start >> 8;
+    if (bucket == _lastWaveBucket) return _lastWave;
+    final mono = _monoWindow(raf, start);
+    if (mono == null) return const <double>[];
+    _lastWaveBucket = bucket;
+    final t = scopeTrace(mono, _wavePeak);
+    _wavePeak = t.peak;
+    _lastWave = t.points;
+    return _lastWave;
+  }
+
+  /// Which sample the play head is sitting on, clamped into the track.
+  int _playHeadSample(int frames) {
+    final s = (_visPos.inMicroseconds * _pcmRate / 1000000.0).floor();
+    if (s < 0) return 0;
+    if (s >= frames) return frames - 1;
+    return s;
+  }
+
+  /// The [_win]-sample window at [startSample], read straight from the open WAV
+  /// and down-mixed to mono in -1..1, zero-padded past the end of the file.
+  ///
+  /// Cached per window and shared by both readings — the spectrum and the scope
+  /// ask for the same audio at the same instant every frame, so this is one read
+  /// serving both rather than each doing its own. Callers must not modify what
+  /// they get back: the FFT works in place, so [_frameBars] copies first.
+  Float64List? _monoWindow(RandomAccessFile raf, int startSample) {
+    final bucket = startSample >> 8;
+    final cached = _lastWin;
+    if (cached != null && bucket == _lastWinBucket) return cached;
     final ch = _pcmChannels;
     final bytesPerFrame = ch * 2;
     try {
       raf.setPositionSync(_pcmDataOffset + startSample * bytesPerFrame);
       final raw = raf.readSync(_win * bytesPerFrame);
-      if (raw.length < bytesPerFrame) return const <double>[];
+      if (raw.length < bytesPerFrame) return null;
       final avail = raw.length ~/ bytesPerFrame;
       final bd = ByteData.sublistView(raw);
-      final re = Float64List(_win);
-      final im = Float64List(_win);
-      for (var i = 0; i < _win; i++) {
-        if (i < avail) {
-          var sum = 0;
-          for (var c = 0; c < ch; c++) {
-            sum += bd.getInt16((i * ch + c) * 2, Endian.little);
-          }
-          re[i] = (sum / ch) / 32768.0 * _hann[i];
-        } else {
-          re[i] = 0.0; // zero-pad the tail at end of file
+      final out = Float64List(_win); // the tail past `avail` stays zero
+      for (var i = 0; i < avail; i++) {
+        var sum = 0;
+        for (var c = 0; c < ch; c++) {
+          sum += bd.getInt16((i * ch + c) * 2, Endian.little);
         }
-        im[i] = 0.0;
+        out[i] = (sum / ch) / 32768.0;
       }
-      _fft(re, im);
-      return _bands(re, im);
+      _lastWinBucket = bucket;
+      _lastWin = out;
+      return out;
     } catch (_) {
-      return const <double>[];
+      return null;
     }
+  }
+
+  /// One window of samples → the bar levels. Synchronous — a small FFT over a few
+  /// KB, cheap enough to run per frame on the UI thread.
+  List<double> _frameBars(RandomAccessFile raf, int startSample) {
+    final mono = _monoWindow(raf, startSample);
+    if (mono == null) return const <double>[];
+    final re = Float64List(_win);
+    final im = Float64List(_win);
+    for (var i = 0; i < _win; i++) {
+      re[i] = mono[i] * _hann[i];
+    }
+    _fft(re, im);
+    return _bands(re, im);
   }
 
   /// Point the visualizer at whatever the player is playing now. The samples come
@@ -565,8 +618,20 @@ class MusicController extends ChangeNotifier {
     _pcmChannels = info.channels;
     _pcmFrames = info.frames;
     _pcmTemps = owned;
+    _resetAnalysisCache();
+  }
+
+  /// Drop every memoised reading, so nothing from the last track can be handed to
+  /// a widget as if it belonged to this one. The scope's rolling peak goes with
+  /// them — a loud track must not hold the next one's trace down.
+  void _resetAnalysisCache() {
     _lastBarsBucket = -1;
     _lastBars = const <double>[];
+    _lastWinBucket = -1;
+    _lastWin = null;
+    _lastWaveBucket = -1;
+    _lastWave = const <double>[];
+    _wavePeak = 0;
   }
 
   /// Close the current analysis handle and delete the temps it owned.
@@ -576,8 +641,7 @@ class MusicController extends ChangeNotifier {
     } catch (_) {}
     _pcm = null;
     _pcmFrames = 0;
-    _lastBarsBucket = -1;
-    _lastBars = const <double>[];
+    _resetAnalysisCache();
     final t = _pcmTemps;
     _pcmTemps = const <String>[];
     _sweep(t);
