@@ -64,13 +64,44 @@ enum MusicRepeat { off, all, one }
 class MusicController extends ChangeNotifier {
   final _rnd = math.Random();
 
-  // No video output is ever created for this player (PlayerConfiguration.vo
-  // defaults to 'null'), so the deck can never sprout a picture — the video
-  // track is switched off per media as well, so it isn't even decoded.
-  final Player _player = Player(
-    configuration: const PlayerConfiguration(title: 'Elyxr'),
-  );
+  Player? _p;
+  bool _playerFailed = false;
   final List<StreamSubscription<dynamic>> _subs = [];
+
+  /// The audio backend, built on FIRST USE rather than in the constructor.
+  ///
+  /// Constructing it is what loads libmpv, and doing that eagerly meant the load
+  /// happened during the first frame — so on a machine where that library is
+  /// missing or broken, the whole app died at launch with no window and nothing to
+  /// read. A file browser has no business failing to open because it couldn't find
+  /// an audio codec. Now the failure costs exactly what it should: no sound, a
+  /// notice, and everything else works.
+  ///
+  /// No video output is ever created (PlayerConfiguration.vo defaults to 'null'),
+  /// so the deck can't sprout a picture; the video track is switched off per media
+  /// as well, so it isn't even decoded.
+  Player? get _player {
+    final existing = _p;
+    if (existing != null) return existing;
+    if (_playerFailed) return null; // don't retry a load that already failed
+    try {
+      final made = Player(
+        configuration: const PlayerConfiguration(title: 'Elyxr'),
+      );
+      _p = made;
+      _wire(made);
+      _pushVolume();
+      return made;
+    } catch (_) {
+      _playerFailed = true;
+      _notice = 'audio unavailable on this device';
+      return null;
+    }
+  }
+
+  /// True when the audio backend couldn't be created at all — the platform is
+  /// missing libmpv. Everything except playback still works.
+  bool get audioUnavailable => _playerFailed;
 
   List<String> _tracks = []; // asset keys under assets/music/
   int _index = 0;
@@ -172,7 +203,13 @@ class MusicController extends ChangeNotifier {
       : _visAnchor;
 
   MusicController() {
-    final s = _player.stream;
+    _load();
+    _restoreVolume();
+  }
+
+  /// Subscribe to a freshly created player. Called once, from [_player].
+  void _wire(Player player) {
+    final s = player.stream;
     _subs.add(s.position.listen((d) {
       _pos = d;
       _anchorVis(d);
@@ -212,8 +249,6 @@ class MusicController extends ChangeNotifier {
     _subs.add(s.completed.listen((done) {
       if (done) _onComplete();
     }));
-    _load();
-    _restoreVolume();
   }
 
   List<String> get tracks => _tracks;
@@ -278,10 +313,11 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // media_kit takes volume as 0..100, not 0..1.
+  // media_kit takes volume as 0..100, not 0..1. Uses the raw field: restoring the
+  // saved level at startup must not be what builds the backend.
   Future<void> _pushVolume() async {
     try {
-      await _player.setVolume(_volume * 100);
+      await _p?.setVolume(_volume * 100);
     } catch (_) {}
   }
 
@@ -590,7 +626,7 @@ class MusicController extends ChangeNotifier {
     _buffering = false;
     _notice = null;
     try {
-      await _player.stop();
+      await _p?.stop();
     } catch (_) {}
     _playing = false;
     _hasSource = false;
@@ -691,10 +727,15 @@ class MusicController extends ChangeNotifier {
     await _closeAnalysis();
     try {
       final path = await _assetFile(_tracks[_index]);
+      final player = _player;
+      if (player == null) {
+        notifyListeners();
+        return; // no audio backend; the notice is already set
+      }
       // A single media, not a playlist: the easter-egg advance is our own (see
       // _onComplete), so mpv must not loop or advance on its own.
       await _applyRepeat();
-      await _player.open(Media(path));
+      await player.open(Media(path));
       await _muteVideo();
       _hasSource = true;
       _anchorVis(Duration.zero);
@@ -765,13 +806,20 @@ class MusicController extends ChangeNotifier {
       return;
     }
     start = start.clamp(0, medias.length - 1);
+    final player = _player;
+    if (player == null) {
+      _opening = false;
+      _trove = false;
+      notifyListeners();
+      return; // no audio backend; the notice is already set
+    }
     try {
       await _applyRepeat();
-      await _player.open(Playlist(medias, index: start));
+      await player.open(Playlist(medias, index: start));
       await _muteVideo();
       if (_shuffle) {
         try {
-          await _player.setShuffle(true);
+          await _p?.setShuffle(true);
         } catch (_) {}
       }
       _hasSource = true;
@@ -839,7 +887,7 @@ class MusicController extends ChangeNotifier {
   /// .m4a that's really an MP4 costs nothing extra.
   Future<void> _muteVideo() async {
     try {
-      await _player.setVideoTrack(VideoTrack.no());
+      await _p?.setVideoTrack(VideoTrack.no());
     } catch (_) {}
   }
 
@@ -848,7 +896,7 @@ class MusicController extends ChangeNotifier {
     if (!_trove) return playIndex(i);
     if (i < 0 || i >= count) return;
     try {
-      await _player.jump(i);
+      await _p?.jump(i);
     } catch (_) {}
   }
 
@@ -858,7 +906,7 @@ class MusicController extends ChangeNotifier {
       return;
     }
     try {
-      await _player.playOrPause();
+      await _player?.playOrPause();
     } catch (_) {}
   }
 
@@ -868,7 +916,7 @@ class MusicController extends ChangeNotifier {
     // reorders and re-emits the playlist, and unshuffling restores the original
     // folder order.
     if (_trove) {
-      _player.setShuffle(_shuffle).catchError((_) {});
+      _p?.setShuffle(_shuffle).catchError((_) {});
     }
     notifyListeners();
   }
@@ -891,7 +939,7 @@ class MusicController extends ChangeNotifier {
             MusicRepeat.one => PlaylistMode.single,
           };
     try {
-      await _player.setPlaylistMode(mode);
+      await _p?.setPlaylistMode(mode);
     } catch (_) {}
   }
 
@@ -909,7 +957,7 @@ class MusicController extends ChangeNotifier {
   Future<void> next() async {
     if (_trove) {
       try {
-        await _player.next();
+        await _p?.next();
       } catch (_) {}
       return;
     }
@@ -921,7 +969,7 @@ class MusicController extends ChangeNotifier {
     if (_pos.inSeconds > 3) return seek(Duration.zero);
     if (_trove) {
       try {
-        await _player.previous();
+        await _p?.previous();
       } catch (_) {}
       return;
     }
@@ -960,7 +1008,7 @@ class MusicController extends ChangeNotifier {
 
   Future<void> seek(Duration to) async {
     try {
-      await _player.seek(to);
+      await _p?.seek(to);
       _pos = to;
       _anchorVis(to);
       notifyListeners();
@@ -977,7 +1025,7 @@ class MusicController extends ChangeNotifier {
       s.cancel();
     }
     _subs.clear();
-    _player.dispose();
+    _p?.dispose();
     super.dispose();
   }
 }
