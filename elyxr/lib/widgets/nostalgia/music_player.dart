@@ -317,14 +317,40 @@ class MusicPlayerPanel extends StatelessWidget {
     );
   }
 
+  /// Shuffle and repeat. On reads as a lit button, not as a slightly different
+  /// colour of the same one.
+  ///
+  /// It used to be `active ? p.a : p.foot`, which is barely a change at all: in
+  /// dark, `foot` sits at lightness 0.62 and the accent at 0.56, so the OFF state
+  /// was the LIGHTER of the two at a similar hue. Colour alone was also the wrong
+  /// tool — it's the first thing to go on a phone screen in sunlight, which is
+  /// where these get used most. So on adds a ring, a fill and a glow around a
+  /// bright glyph, and off is a dim glyph and nothing else: a difference in shape
+  /// as well as in tone, legible at a glance and without relying on hue.
+  ///
+  /// The padding is split so the tap target stays the same 42px either way and
+  /// the glyph doesn't move when it lights up.
   Widget _iconToggle(
           Palette p, IconData icon, bool active, VoidCallback onTap) =>
       GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, color: active ? p.a : p.foot, size: 22),
+          padding: const EdgeInsets.all(6),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: active
+                ? BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: p.aAlpha(0.22),
+                    border: Border.all(color: p.a, width: 1.4),
+                    boxShadow: [
+                      BoxShadow(color: p.aAlpha(0.45), blurRadius: 9),
+                    ],
+                  )
+                : null,
+            child: Icon(icon, color: active ? p.bright : p.soft, size: 22),
+          ),
         ),
       );
 
