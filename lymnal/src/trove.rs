@@ -10,7 +10,6 @@
 
 use std::path::{Component, Path, PathBuf};
 
-use unicode_normalization::UnicodeNormalization;
 
 use crate::error::ApiError;
 
@@ -73,15 +72,24 @@ impl Trove {
         if raw.contains('\\') {
             return Err(ApiError::bad_path(raw));
         }
-        // `..` in the raw string, OR in an NFKC-folded copy — the latter
-        // catches unicode look-alikes (U+2025 TWO DOT LEADER folds to "..").
+        // A literal `..` is a traversal attempt and is refused.
         if raw.contains("..") {
             return Err(ApiError::path_escapes(raw));
         }
-        let folded: String = raw.nfkc().collect();
-        if folded.contains("..") {
-            return Err(ApiError::path_escapes(raw));
-        }
+        // There used to be a second check here on an NFKC-folded copy, meant to
+        // catch unicode look-alikes for "..". It was wrong, and it broke real
+        // files: NFKC is a COMPATIBILITY fold, so it rewrites plenty of ordinary
+        // characters into ASCII — U+2026 HORIZONTAL ELLIPSIS ("…") becomes "...",
+        // which contains "..". Every filename with an ellipsis in it was therefore
+        // reported as pointing outside the trove, which hits long titles hardest
+        // because that's what a downloader truncates with an ellipsis.
+        //
+        // It also defended nothing. The kernel does not NFKC-normalise paths, so a
+        // file called "Экспонат….m4a" is a FILENAME, not a way out of the trove —
+        // opening it can only ever reach that file. Real escapes are caught by the
+        // literal check above, the per-segment check below, and the filesystem
+        // canonicalisation in resolve(), which refuses anything whose true target
+        // lands outside the root.
         // No leading slash (absolute) and no home expansion.
         if raw.starts_with('/') {
             return Err(ApiError::bad_path(raw));
@@ -251,11 +259,23 @@ mod tests {
         assert!(t.normalise("notes\u{0000}.txt").is_err());
     }
 
+    // This used to assert the opposite, on the theory that a character folding to
+    // ".." under NFKC was a traversal attempt in disguise. It isn't: no mainstream
+    // kernel or filesystem NFKC-normalises a path (macOS normalises to NFD, which
+    // never produces an ASCII dot), so "‥" names a directory called "‥" and can
+    // reach nothing else. Meanwhile the fold rejected every real filename with an
+    // ellipsis in it. Escapes are caught by the literal `..` checks and, decisively,
+    // by resolve()/resolve_new() canonicalising and refusing anything that lands
+    // outside the root — so this is a false positive being removed, not a guard.
     #[test]
-    fn refuses_unicode_dot_leader_lookalike() {
+    fn a_dot_leader_is_a_name_not_an_escape() {
         let (_d, t) = trove();
-        // U+2025 TWO DOT LEADER ×2 — NFKC folds to "....".
-        assert!(t.normalise("\u{2025}\u{2025}/etc").is_err());
+        assert_eq!(
+            t.normalise("\u{2025}\u{2025}/etc").unwrap(),
+            "\u{2025}\u{2025}/etc"
+        );
+        // ...while the ASCII original is still refused.
+        assert!(t.normalise("../etc").is_err());
     }
 
     #[test]
@@ -333,5 +353,52 @@ mod tests {
         let r = t.resolve_new("photos/2026/roll.cr3").unwrap();
         assert!(r.abs.ends_with("photos/2026/roll.cr3"));
         assert_eq!(r.rel, "photos/2026/roll.cr3");
+    }
+
+    // Non-ASCII filenames are ordinary filenames. These all used to be refused as
+    // "points outside your elyxr folder" because an NFKC fold turned characters
+    // inside them into dots — an ellipsis being the common one, since that is what
+    // a downloader truncates a long title with.
+    #[test]
+    fn accepts_names_in_other_scripts() {
+        let (_d, t) = trove();
+        for name in [
+            "Кино - Группа крови.m4a",
+            "أم كلثوم - الأطلال.m4a",
+            "Ленинград — Экспонат….m4a",
+            "فيروز – زهرة المدائن….m4a",
+            "中島みゆき - 糸.mp3",
+            "Sigur Rós - Untitled…m4a",
+        ] {
+            assert!(
+                t.normalise(name).is_ok(),
+                "rejected a legitimate filename: {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_lone_ellipsis_is_a_filename_not_an_escape() {
+        let (_d, t) = trove();
+        assert_eq!(t.normalise("music/….m4a").unwrap(), "music/….m4a");
+        assert_eq!(t.normalise("music/‥.m4a").unwrap(), "music/‥.m4a");
+    }
+
+    // The real escapes must still be refused, or removing the fold would have
+    // traded a false positive for a hole.
+    #[test]
+    fn still_refuses_real_traversal() {
+        let (_d, t) = trove();
+        for bad in [
+            "../etc/passwd",
+            "music/../../etc/passwd",
+            "..",
+            "music/..",
+            "/etc/passwd",
+            "~/secrets",
+            "music\\..\\escape",
+        ] {
+            assert!(t.normalise(bad).is_err(), "accepted an escape: {bad}");
+        }
     }
 }

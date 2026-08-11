@@ -249,6 +249,12 @@ class MusicController extends ChangeNotifier {
     _subs.add(s.completed.listen((done) {
       if (done) _onComplete();
     }));
+    // A file the backend can't play. Nothing listened for this before, and mpv
+    // reports a file it failed to open as simply FINISHED — and it owns the
+    // playlist, so it walked straight on to the next track. A folder holding a few
+    // files it dislikes therefore emptied itself in a couple of seconds, trying
+    // each for an instant, which reads as the player skipping songs at random.
+    _subs.add(s.error.listen(_onPlaybackError));
   }
 
   List<String> get tracks => _tracks;
@@ -339,6 +345,38 @@ class MusicController extends ChangeNotifier {
   /// Mute, or return to the level from before muting (clicking the speaker).
   Future<void> toggleMute() =>
       setVolume(_volume > 0 ? 0.0 : (_preMute > 0 ? _preMute : 0.5));
+
+  // Set when the current track failed to open, so the completion that mpv reports
+  // for it can't be mistaken for the track having played.
+  bool _failed = false;
+
+  /// The display name of whatever is loaded now, or null.
+  String? _currentName() {
+    final pl = _plist;
+    if (pl != null && pl.index >= 0 && pl.index < pl.medias.length) {
+      final hit = _byUri[pl.medias[pl.index].uri];
+      if (hit != null) return hit.$2;
+    }
+    if (!_trove && hasTracks) return _tracks[_index];
+    return null;
+  }
+
+  /// Stop on a file that won't play, rather than moving on from it.
+  ///
+  /// Sitting quietly and saying which file it was is more useful than hunting
+  /// through the folder for something that works: the skipping hides the problem,
+  /// and the file that failed is the thing you actually want to know about.
+  void _onPlaybackError(String message) {
+    _failed = true;
+    final name = _currentName();
+    _notice = name == null
+        ? "couldn't play that file"
+        : "couldn't play ${_pretty(name)}";
+    // Halt where we are. Without this mpv has already begun the next track by the
+    // time anyone sees the notice.
+    _p?.pause().catchError((_) {});
+    notifyListeners();
+  }
 
   /// Number of spectrum bars the analysis produces (and the visualizer draws).
   static const int kVisBars = _kVisBars;
@@ -715,6 +753,8 @@ class MusicController extends ChangeNotifier {
   /// Play one track of the built-in soundtrack. Leaves trove mode.
   Future<void> playIndex(int i) async {
     if (_tracks.isEmpty) return;
+    _failed = false;
+    _notice = null;
     _index = i % _tracks.length;
     if (_index < 0) _index += _tracks.length;
     _trove = false;
@@ -757,6 +797,8 @@ class MusicController extends ChangeNotifier {
       LymnalClient client, List<(String, String)> queue, int index) async {
     if (queue.isEmpty) return;
     _troveClient = client;
+    _failed = false;
+    _notice = null;
     _eggShuffle = false; // a real pick ends the easter-egg auto-shuffle
     _nostalgiaStop?.cancel();
     // The tap is authoritative. Drop the old track's analysis handle right here,
@@ -984,6 +1026,12 @@ class MusicController extends ChangeNotifier {
   // otherwise Nostalgia's egg shuffle keeps it endlessly non-linear, never
   // repeating back-to-back.
   void _onComplete() {
+    if (_failed) {
+      // mpv reports a file it couldn't open as complete. That is not a track
+      // ending, so it must not advance the folder.
+      _failed = false;
+      return;
+    }
     if (_trove) {
       final pl = _plist;
       final last = pl == null || pl.index >= pl.medias.length - 1;
