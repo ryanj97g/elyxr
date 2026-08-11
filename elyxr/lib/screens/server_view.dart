@@ -69,9 +69,8 @@ class _ServerControlsState extends State<ServerControls> {
               Text('SERVER',
                   style: chassis(22, p.ink, weight: FontWeight.w700, spacing: 0.2)),
               const Spacer(),
-              GestureDetector(
-                  onTap: () => server.refresh(),
-                  child: Text('↻', style: glass(22, p.ink))),
+              _action(Text('↻', style: glass(22, p.ink)),
+                  () => server.refresh()),
             ],
           ),
         ),
@@ -147,9 +146,10 @@ class _ServerControlsState extends State<ServerControls> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('PAIRING', style: chassis(12, p.bright, spacing: 0.16)),
-        GestureDetector(
-          onTap: () => s.setPairing(!open),
-          child: Text(open ? 'ON — CLOSE' : 'OFF — OPEN', style: chassis(11, p.a, spacing: 0.1)),
+        _action(
+          Text(open ? 'ON — CLOSE' : 'OFF — OPEN',
+              style: chassis(11, p.a, spacing: 0.1)),
+          () => s.setPairing(!open),
         ),
       ]),
       const SizedBox(height: 6),
@@ -172,13 +172,16 @@ class _ServerControlsState extends State<ServerControls> {
         Text('Approve it only if you recognise this device.', style: glass(13, p.foot)),
         const SizedBox(height: 8),
         Row(children: [
-          GestureDetector(onTap: () => s.approve(req.device), child: Text('APPROVE (OWNER)', style: chassis(11, p.a, spacing: 0.1))),
-          const SizedBox(width: 14),
-          GestureDetector(
-              onTap: () => s.approve(req.device, role: 'guest', maxBytes: 10000000000),
-              child: Text('AS GUEST', style: chassis(11, p.mid, spacing: 0.1))),
+          _action(
+              Text('APPROVE (OWNER)', style: chassis(11, p.a, spacing: 0.1)),
+              () => s.approve(req.device)),
+          _action(
+              Text('AS GUEST', style: chassis(11, p.mid, spacing: 0.1)),
+              () => s.approve(req.device,
+                  role: 'guest', maxBytes: 10000000000)),
           const Spacer(),
-          GestureDetector(onTap: () => s.deny(req.device), child: Text('DENY', style: chassis(11, p.mid, spacing: 0.1))),
+          _action(Text('DENY', style: chassis(11, p.mid, spacing: 0.1)),
+              () => s.deny(req.device)),
         ]),
       ]),
     );
@@ -199,7 +202,8 @@ class _ServerControlsState extends State<ServerControls> {
                     style: glass(12, p.foot)),
               ]),
             ),
-            GestureDetector(onTap: () => s.revoke(d.label), child: Text('REVOKE', style: chassis(10, p.mid, spacing: 0.1))),
+            _action(Text('REVOKE', style: chassis(10, p.mid, spacing: 0.1)),
+                () => s.revoke(d.label)),
           ]),
         ),
     ]);
@@ -210,7 +214,8 @@ class _ServerControlsState extends State<ServerControls> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('SPACE', style: chassis(12, p.bright, spacing: 0.16)),
-        GestureDetector(onTap: () => s.recount(), child: Text('RECOUNT', style: chassis(10, p.a, spacing: 0.1))),
+        _action(Text('RECOUNT', style: chassis(10, p.a, spacing: 0.1)),
+            () => s.recount()),
       ]),
       const SizedBox(height: 6),
       if (sp != null) ...[
@@ -229,12 +234,12 @@ class _ServerControlsState extends State<ServerControls> {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(label, style: glass(16, p.mid)),
-        GestureDetector(
-          onTap: () async {
+        _action(
+          Text('${fmtGb(bytes)}G  ✎', style: glass(16, p.bright)),
+          () async {
             final v = await _editGb(context, p, label, bytes);
             if (v != null) apply(v);
           },
-          child: Text('${fmtGb(bytes)}G  ✎', style: glass(16, p.bright)),
         ),
       ]),
     );
@@ -296,3 +301,23 @@ class _ServerControlsState extends State<ServerControls> {
     return '${d ~/ 86400}d ago';
   }
 }
+
+/// A tappable label with a real target around it.
+///
+/// Every action on this screen used to be a bare GestureDetector wrapped straight
+/// round a Text. A GestureDetector with a child defaults to
+/// HitTestBehavior.deferToChild, so the only thing that could be hit was the
+/// glyph box itself — an 11px strip of small caps, with no padding and no slack.
+/// On a scaled display that is close to unclickable, and the pairing toggle in
+/// particular reads as a dead control.
+///
+/// Opaque, so the padding counts as part of the button rather than as a hole in
+/// it.
+Widget _action(Widget label, VoidCallback onTap) => GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: label,
+      ),
+    );
