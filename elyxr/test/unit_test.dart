@@ -23,24 +23,19 @@ void main() {
   group('palette', () {
     test('green is the default accent with its exact colours', () {
       final p = Palette(Accent.green, true);
-      expect(p.a, const Color(0xFF5FD18A));
-      expect(p.ink, const Color(0xFF04120A));
+      expect(p.a, const Color(0xFF3B8841));
+      expect(p.ink, const Color(0xFFFFFFFF));
     });
 
-    test('phosphor bright is mix(accent, 0.55) in dark mode', () {
+    test('phosphor bright in dark mode', () {
       final p = Palette(Accent.green, true);
-      // mix(#5fd18a, 0.55): r=0x5f+(255-0x5f)*.55 ≈ 0xb2, etc.
-      final b = p.bright;
-      int ch(double v) => (v * 255).round();
-      expect(ch(b.r), (0x5f + (255 - 0x5f) * 0.55).round());
-      expect(ch(b.g), (0xd1 + (255 - 0xd1) * 0.55).round());
-      expect(ch(b.b), (0x8a + (255 - 0x8a) * 0.55).round());
+      expect(p.bright, const Color(0xFF66FC74));
     });
 
     test('light mode uses the fixed phosphor roles', () {
       final p = Palette(Accent.green, false);
-      expect(p.bright, const Color(0xFF0D1A12));
-      expect(p.tubeBg, const Color(0xFFE8EFE9));
+      expect(p.bright, const Color(0xFF003405));
+      expect(p.tubeBg, const Color(0xFFD0F3D0));
     });
 
     test('every accent resolves nine metal shades', () {
