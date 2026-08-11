@@ -53,13 +53,20 @@ class SettingsView extends StatelessWidget {
                     style: glass(26, p.bright).copyWith(
                         shadows: [Shadow(color: p.aAlpha(0.7), blurRadius: 9)])),
                 const Spacer(),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('THIS DEVICE', style: glass(13, p.mid)),
-                    Text(session.serverName ?? deviceName(),
-                        style: mono(12, p.bright, weight: FontWeight.w600)),
-                  ],
+                // Flexible with an ellipsis: a long server name used to push this
+                // block past the right edge of the row, and anything outside a
+                // parent's box is painted but never hit-tested.
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('THIS DEVICE', style: glass(13, p.mid)),
+                      Text(session.serverName ?? deviceName(),
+                          style: mono(12, p.bright, weight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
                 ),
               ],
             ),

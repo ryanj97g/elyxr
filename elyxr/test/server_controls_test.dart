@@ -84,6 +84,37 @@ Future<Widget> _screen(ServerController server) async {
 }
 
 void main() {
+  // The bug that made the PAIRING button dead on Windows for builds 313-319.
+  //
+  // The Windows window gives the tube 440 logical pixels of width; Linux gives
+  // 552. At 440 the rows on this screen overflowed horizontally, and a Row with
+  // nothing flexible in it pushes its last child straight past its own right
+  // edge. Flutter's RenderBox.hitTest starts with `if (size.contains(position))`,
+  // so a child sitting outside its parent is painted and never hit — a button you
+  // can see and cannot press. Nothing about the button was wrong; it was outside
+  // the box holding it.
+  testWidgets('nothing overflows at the Windows window width', (tester) async {
+    tester.view.physicalSize = const Size(440, 882);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final server = ServerController();
+    server.connect(_client(ok: {
+      '/v1/admin/status': jsonEncode(_status),
+      '/v1/admin/pending': jsonEncode({'pending': []}),
+      '/v1/admin/devices': jsonEncode({'devices': []}),
+      '/v1/admin/space': jsonEncode({
+        'used_bytes': 1,
+        'max_bytes': 2,
+        'warn_at_bytes': 1,
+        'min_free_bytes': 1
+      }),
+    }));
+    await tester.pumpWidget(await _screen(server));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull,
+        reason: 'a row overflowed, so whatever it pushed out is unpressable');
+  });
+
   final okPaths = {
     '/v1/admin/status': jsonEncode(_status),
     '/v1/admin/pending': jsonEncode({'pending': []}),

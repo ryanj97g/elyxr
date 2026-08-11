@@ -115,9 +115,15 @@ class _ServerControlsState extends State<ServerControls> {
 
   Widget _row(Palette p, String k, String v) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(k, style: glass(16, p.mid)),
-          Text(v, style: glass(16, p.bright)),
+        child: Row(children: [
+          Expanded(child: Text(k, style: glass(16, p.mid))),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(v,
+                style: glass(16, p.bright),
+                textAlign: TextAlign.right,
+                overflow: TextOverflow.ellipsis),
+          ),
         ]),
       );
 
@@ -144,8 +150,9 @@ class _ServerControlsState extends State<ServerControls> {
   Widget _pairing(BuildContext context, Palette p, ServerController s) {
     final open = s.status?.pairingOpen ?? false;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('PAIRING', style: chassis(12, p.bright, spacing: 0.16)),
+      Row(children: [
+        Expanded(
+            child: Text('PAIRING', style: chassis(12, p.bright, spacing: 0.16))),
         _action(
           Text(
               s.busy
@@ -174,7 +181,10 @@ class _ServerControlsState extends State<ServerControls> {
         const SizedBox(height: 2),
         Text('Approve it only if you recognise this device.', style: glass(13, p.foot)),
         const SizedBox(height: 8),
-        Row(children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Row(children: [
           _action(
               Text('APPROVE (OWNER)', style: chassis(11, p.a, spacing: 0.1)),
               () => s.approve(req.device)),
@@ -186,6 +196,7 @@ class _ServerControlsState extends State<ServerControls> {
           _action(Text('DENY', style: chassis(11, p.mid, spacing: 0.1)),
               () => s.deny(req.device)),
         ]),
+        ),
       ]),
     );
   }
@@ -215,8 +226,9 @@ class _ServerControlsState extends State<ServerControls> {
   Widget _space(BuildContext context, Palette p, ServerController s) {
     final sp = s.space;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('SPACE', style: chassis(12, p.bright, spacing: 0.16)),
+      Row(children: [
+        Expanded(
+            child: Text('SPACE', style: chassis(12, p.bright, spacing: 0.16))),
         _action(Text('RECOUNT', style: chassis(10, p.a, spacing: 0.1)),
             () => s.recount()),
       ]),
@@ -235,8 +247,8 @@ class _ServerControlsState extends State<ServerControls> {
       void Function(int) apply) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: glass(16, p.mid)),
+      child: Row(children: [
+        Expanded(child: Text(label, style: glass(16, p.mid))),
         _action(
           Text('${fmtGb(bytes)}G  ✎', style: glass(16, p.bright)),
           () async {
