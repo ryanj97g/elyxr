@@ -104,13 +104,9 @@ class _RainPainter extends CustomPainter {
 
   // Half-width katakana, digits, and a few symbols — the classic rain alphabet.
   //
-  // Drawn in whatever the terminal face is, which for most of these means drawn
-  // by whatever the OS falls back to: of the bundled faces only DotGothic16 has
-  // kana at all (VT323 covers 18 of the 64 characters below). So the rain's look
-  // depends on a system CJK font on every face but that one — which is why every
-  // character here is one DotGothic16 has, so choosing that face makes the rain
-  // self-contained instead of borrowing. `╌` used to be here and is the single
-  // character it lacks; `ー` stands in for it.
+  // Drawn in the terminal face where it has the character and from Fonts.fallback
+  // where it doesn't. Every character here is one DotGothic16 has, so picking that
+  // face draws the whole alphabet in one face rather than in two at once.
   static const _glyphs =
       'アイウエオカキクケコサシスセソタチツテトナニヌネノﾊﾋﾌﾍﾎマミムメモﾔﾕﾖﾗﾘﾙﾚﾛﾜ0123456789:.=*+<>¦｜ー';
 
@@ -148,6 +144,10 @@ class _RainPainter extends CustomPainter {
             color: color,
             fontSize: 11.5,
             fontFamily: face,
+            // Without the chain the rain is kana drawn in a face that mostly has
+            // no kana, so what fell was whatever the OS could supply — or boxes,
+            // on a machine that could supply nothing.
+            fontFamilyFallback: Fonts.fallback,
             height: 1.0,
           ),
         );

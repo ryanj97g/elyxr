@@ -111,3 +111,24 @@ flutter:
     - family: Handjet
       fonts:
         - asset: assets/fonts/Handjet-Variable.ttf
+    # Fallback-only faces: bundled so any script renders from fonts we ship, but
+    # deliberately NOT offered in the TYPEFACE picker (see kTermFaces). Each is
+    # cut down to one weight and to the scripts it is here for.
+    - family: Noto Sans
+      fonts:
+        - asset: assets/fonts/NotoSans-Regular.ttf
+    - family: Noto Sans Arabic
+      fonts:
+        - asset: assets/fonts/NotoSansArabic-Regular.ttf
+    - family: Noto Sans Devanagari
+      fonts:
+        - asset: assets/fonts/NotoSansDevanagari-Regular.ttf
+    - family: Noto Sans Thai
+      fonts:
+        - asset: assets/fonts/NotoSansThai-Regular.ttf
+    - family: Noto Sans JP
+      fonts:
+        - asset: assets/fonts/NotoSansJP-Regular.ttf
+    - family: Noto Sans KR
+      fonts:
+        - asset: assets/fonts/NotoSansKR-Regular.ttf

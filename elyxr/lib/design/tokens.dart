@@ -140,20 +140,26 @@ class Fonts {
   /// The ticker, and version strings. Nothing else.
   static String mono = 'IBM Plex Mono';
 
-  /// Faces tried, in order, for any character the chosen face doesn't have.
+  /// Faces tried, in order, for any character the chosen face doesn't have. All
+  /// bundled, so a filename in any of these scripts renders from fonts we ship
+  /// rather than from whatever the machine happens to have installed.
   ///
-  /// Without a chain like this, a missing glyph escapes to whatever the operating
-  /// system provides — a different typeface on every platform, and on some
-  /// platforms nothing at all, which is a blank or a box in the middle of a
-  /// filename. These are fonts we ship, so a trove of Russian and Arabic names
-  /// renders the same on Windows as on Android instead of depending on what the
-  /// machine happens to have installed.
+  /// Noto leads because its per-script files are designed and metric-matched as
+  /// siblings: a folder holding Russian, Arabic, Thai and Korean names draws every
+  /// one of them in the same typeface. Handjet and DotGothic16 are a backstop.
   ///
-  /// Order is coverage, not preference: Handjet answers Cyrillic and Arabic,
-  /// DotGothic16 answers kana and kanji, and anything Handjet can't draw falls
-  /// through to it. Adding a script means bundling a face that has it and naming
-  /// it here — nothing at the call sites changes.
-  static const List<String> fallback = ['Handjet', 'DotGothic16'];
+  /// Adding a script means bundling a face that has it and naming it here —
+  /// nothing at the call sites changes.
+  static const List<String> fallback = [
+    'Noto Sans', // Latin, Greek, Cyrillic
+    'Noto Sans Arabic',
+    'Noto Sans Devanagari',
+    'Noto Sans Thai',
+    'Noto Sans JP', // kana and CJK ideographs
+    'Noto Sans KR', // Hangul
+    'Handjet',
+    'DotGothic16',
+  ];
 }
 
 /// One selectable terminal face: the font family (must be declared in
@@ -180,21 +186,13 @@ const List<TermFace> kTermFaces = [
   TermFace('Flow Circular', 'FLOW'),
   TermFace('Ordinary Love', 'ORDINARY'),
   // A dot-matrix face that holds up at small sizes, which is most of what the
-  // glass asks of a font. It is also the ONLY face here with kana, which matters
-  // beyond the file list: the Matrix rain draws its glyphs in whatever the
-  // terminal face is, so on every other face the rain is really being drawn by
-  // whatever CJK font the OS falls back to — and there is no promise the OS has
-  // one. Latin + Cyrillic + kana; no Arabic.
+  // glass asks of a font. It's also the only pickable face with kana, so it's the
+  // one that draws the Matrix rain's whole alphabet itself rather than handing
+  // most of it to the fallback chain. Latin + Cyrillic + kana; no Arabic.
   TermFace('DotGothic16', 'DOTGOTHIC'),
-  // The only face here that can draw Arabic — and it carries the GSUB table the
-  // script needs, so letters join up instead of being printed as separate stamps.
-  // Latin + Cyrillic + Arabic; no kana.
-  //
-  // Worth knowing when picking a face for a trove that isn't all English: of the
-  // faces below, VT323 (the default), Chakra Petch, Silkscreen, Orbitron, Julius
-  // Sans One and Ordinary Love are Latin-only, so a Russian or Arabic filename on
-  // those is drawn by an OS fallback — a different typeface mid-list, and not
-  // necessarily the same fallback on Windows as on Android.
+  // The only pickable face that can draw Arabic — and it carries the GSUB table
+  // the script needs, so letters join up instead of being printed as separate
+  // stamps. Latin + Cyrillic + Arabic.
   //
   // Variable, like Orbitron: rendered at its default axis position, which is the
   // instance the specimen shows.
