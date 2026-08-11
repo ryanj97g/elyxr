@@ -21,7 +21,11 @@
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 
+import 'package:provider/provider.dart';
+
+import '../../design/text.dart';
 import '../../design/tokens.dart';
+import '../../state/music.dart';
 import '../deck_slot.dart';
 import 'matrix_rain.dart';
 import 'music_player.dart';
@@ -75,6 +79,40 @@ class SaverLayer extends StatelessWidget {
             ),
           ),
         ),
+        // The title, as its own block sitting directly above the controls. Only
+        // when the real player is being drawn — a test substituting the deck gets
+        // no title either, since both hang off the same link.
+        if (deckBuilder == null)
+          ValueListenableBuilder<Rect?>(
+            valueListenable: deckRect,
+            builder: (context, rect, _) {
+              if (rect == null) return const SizedBox.shrink();
+              return Positioned(
+                left: 0,
+                top: 0,
+                child: CompositedTransformFollower(
+                  link: deckRect.link,
+                  showWhenUnlinked: false,
+                  // Anchored to the deck's TOP and offset upwards by its own
+                  // height, so the block ends where the controls begin. Bottom
+                  // aligned inside that box, so a long title grows upward into the
+                  // rain instead of pushing anything down.
+                  offset: const Offset(0, -_titleBox),
+                  child: SizedBox(
+                    width: rect.width,
+                    height: _titleBox,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: _SaverTitle(palette: palette),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         // The player, over the rain, at the real deck's box.
         ValueListenableBuilder<Rect?>(
           valueListenable: deckRect,
@@ -104,6 +142,35 @@ class SaverLayer extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+/// Room above the controls for the wrapped title — three lines of it at the size
+/// below, which covers any real song name. Fixed rather than measured because the
+/// block is anchored by its BOTTOM edge: the text grows up into the rain, so the
+/// box only has to be big enough, and the controls never move whatever it holds.
+const double _titleBox = 96;
+
+/// The song title on the screensaver: the whole thing, centred, wrapping.
+///
+/// `title` has already had the extension stripped and its underscores and hyphens
+/// turned into spaces (MusicController._pretty), which is also what gives a name
+/// like REPT_-_Magix_Samplitude_Pro_X somewhere sensible to break — the wrapping is
+/// on words because the words exist by the time it gets here.
+class _SaverTitle extends StatelessWidget {
+  final Palette palette;
+  const _SaverTitle({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    final title = context.select<MusicController, String>((m) => m.title);
+    return Text(
+      title,
+      textAlign: TextAlign.center,
+      maxLines: 3,
+      overflow: TextOverflow.ellipsis,
+      style: glass(22, palette.bright, height: 1.15),
     );
   }
 }

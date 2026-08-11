@@ -135,21 +135,16 @@ class MusicPlayerPanel extends StatelessWidget {
             // wait before the sound starts is visible.
             if (m.loadingTrove) ...[_spinner(p), const SizedBox(width: 6)],
             Expanded(
-              child: SizedBox(
+              // On the saver the title isn't here at all — a one-line strip with a
+              // scrolling name is the wrong shape for a sleeping screen, and
+              // squeezing a long title into it can only ellipsise or crawl. The
+              // saver draws the whole title as its own centred, wrapping block
+              // above the controls (see SaverLayer). The box stays so the
+              // visualizer, bar and buttons below don't move.
+              child: _keepSpace(SizedBox(
                 height: 22,
-                // Same box, so the row's height is identical; a still title on the
-                // saver because something crawling across a sleeping tube is the
-                // opposite of restful.
-                child: saver
-                    ? Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(m.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: glass(17, p.bright)),
-                      )
-                    : Marquee(text: m.title, style: glass(17, p.bright)),
-              ),
+                child: Marquee(text: m.title, style: glass(17, p.bright)),
+              )),
             ),
             if (egg || m.isStream) ...[
               const SizedBox(width: 8),
