@@ -101,19 +101,6 @@ class MusicController extends ChangeNotifier {
     }
   }
 
-  /// Give a slow track time to start instead of abandoning it.
-  ///
-  /// media_kit hardcodes mpv's `network-timeout` to 5 seconds for every player it
-  /// builds. A trove track is an HTTP stream, so any file that doesn't start
-  /// inside those 5 seconds is dropped by mpv — and because mpv owns the
-  /// playlist, it walks straight on to the next entry by itself. From the outside
-  /// that is a song being skipped the instant it's chosen, and nothing in here
-  /// can catch it: no error is raised, and the completion that follows looks
-  /// exactly like an ordinary mid-playlist advance.
-  ///
-  /// 30 seconds is long enough for a big file over a slow tailnet hop and still
-  /// short enough that a genuinely dead connection doesn't hang. Best-effort: an
-  /// old libmpv that rejects the property just keeps the default.
   void _relaxNetworkTimeout(Player player) {
     try {
       final native = player.platform;
@@ -200,14 +187,10 @@ class MusicController extends ChangeNotifier {
   int _analysisToken = 0; // so a slow fetch/decode can't open over a newer track
   int _lastBarsBucket = -1; // memoise the window so 3 widgets share one FFT per frame
   List<double> _lastBars = const <double>[];
-  // The mono samples behind BOTH readings, cached per window. The spectrum and the
-  // oscilloscope want the same audio at the same instant and differ only in what
-  // they do with it, so the file is read once between them, not once each.
   int _lastWinBucket = -1;
   Float64List? _lastWin;
   int _lastWaveBucket = -1;
   List<double> _lastWave = const <double>[];
-  // The scope's rolling peak, held across frames (see scope_trace.dart).
   double _wavePeak = 0;
 
   // A wall-clock play-head for the visualizer. Position events can go sparse or
@@ -308,33 +291,19 @@ class MusicController extends ChangeNotifier {
   /// loaded player is a player, so the deck stays put.
   bool get active => _hasSource;
 
-  /// Whether the full deck is unfolded, as opposed to the slim idle bar.
-  ///
-  /// Loaded and not minimized. Distinct from [active] because a paused track
-  /// stays loaded while the deck folds away: the song is kept exactly where it
-  /// is, only the controls are put away.
   bool get deckOpen => _hasSource && !_minimized;
 
-  /// True once a USER pause has sat long enough to fold the deck. Deliberately
-  /// not "not playing": mpv drops `playing` while it opens a file, buffers, or
-  /// steps between tracks, and none of those are the user putting the player
-  /// down.
   bool _minimized = false;
   Timer? _minimizeTimer;
 
-  /// Unfold the deck again — what tapping the idle bar does while a track is
-  /// still loaded. Doesn't resume; the controls simply come back.
   void expandDeck() {
     if (!_hasSource || !_minimized) return;
     _minimized = false;
     notifyListeners();
   }
 
-  /// How long a user-initiated pause waits before the deck folds itself away.
   static const Duration kMinimizeAfterPause = Duration(seconds: 30);
 
-  /// Start (or cancel) the fold-away countdown. Called only from the user's own
-  /// play/pause, never from the player's own comings and goings.
   void _armMinimize(bool paused) {
     _minimizeTimer?.cancel();
     _minimizeTimer = null;
@@ -353,7 +322,6 @@ class MusicController extends ChangeNotifier {
     });
   }
 
-  /// Drop the fold-away state entirely — a new track, or playback stopping.
   void _resetMinimize() {
     _minimizeTimer?.cancel();
     _minimizeTimer = null;
@@ -378,11 +346,6 @@ class MusicController extends ChangeNotifier {
   int get index => _trove ? (_plist?.index ?? 0) : _index;
 
   String get title {
-    // Nothing loaded means nothing to name. This used to fall through to the
-    // first bundled asset, so a player that had never played anything still
-    // announced a tracker filename — including on the screensaver, where it was
-    // the only thing on screen and read as if the app had started playing a file
-    // the user had never heard of.
     if (!_hasSource) return '';
     if (!_trove) return hasTracks ? _pretty(_tracks[_index]) : '';
     return titleAt(index);
@@ -491,11 +454,6 @@ class MusicController extends ChangeNotifier {
     return _lastBars;
   }
 
-  /// The oscilloscope trace (-1..1) for the current play position — the real
-  /// waveform at the play head, from the same window of samples the bars come
-  /// from. Triggered and gain-normalised in scope_trace.dart, which is where the
-  /// reasoning about both lives. Empty when there's nothing to read, exactly like
-  /// the bars, so a track whose samples are still being fetched rests flat.
   List<double> visualizerWave() {
     final raf = _pcm;
     final n = _pcmFrames;
@@ -512,7 +470,6 @@ class MusicController extends ChangeNotifier {
     return _lastWave;
   }
 
-  /// Which sample the play head is sitting on, clamped into the track.
   int _playHeadSample(int frames) {
     final s = (_visPos.inMicroseconds * _pcmRate / 1000000.0).floor();
     if (s < 0) return 0;
@@ -520,13 +477,6 @@ class MusicController extends ChangeNotifier {
     return s;
   }
 
-  /// The [_win]-sample window at [startSample], read straight from the open WAV
-  /// and down-mixed to mono in -1..1, zero-padded past the end of the file.
-  ///
-  /// Cached per window and shared by both readings — the spectrum and the scope
-  /// ask for the same audio at the same instant every frame, so this is one read
-  /// serving both rather than each doing its own. Callers must not modify what
-  /// they get back: the FFT works in place, so [_frameBars] copies first.
   Float64List? _monoWindow(RandomAccessFile raf, int startSample) {
     final bucket = startSample >> 8;
     final cached = _lastWin;
@@ -555,8 +505,6 @@ class MusicController extends ChangeNotifier {
     }
   }
 
-  /// One window of samples → the bar levels. Synchronous — a small FFT over a few
-  /// KB, cheap enough to run per frame on the UI thread.
   List<double> _frameBars(RandomAccessFile raf, int startSample) {
     final mono = _monoWindow(raf, startSample);
     if (mono == null) return const <double>[];
@@ -703,9 +651,6 @@ class MusicController extends ChangeNotifier {
     _resetAnalysisCache();
   }
 
-  /// Drop every memoised reading, so nothing from the last track can be handed to
-  /// a widget as if it belonged to this one. The scope's rolling peak goes with
-  /// them — a loud track must not hold the next one's trace down.
   void _resetAnalysisCache() {
     _lastBarsBucket = -1;
     _lastBars = const <double>[];
@@ -1098,9 +1043,6 @@ class MusicController extends ChangeNotifier {
     }
     try {
       await _player?.playOrPause();
-      // The only place a pause is known to be the user's doing. Everything else
-      // that clears `playing` — opening, buffering, advancing — must not fold the
-      // deck, so the countdown is armed from here and nowhere else.
       _armMinimize(_playing);
     } catch (_) {}
   }

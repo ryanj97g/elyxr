@@ -48,9 +48,6 @@ class SaverLayer extends StatelessWidget {
   /// standing up the whole controller graph behind a real player.
   final WidgetBuilder? deckBuilder;
 
-  /// The song title over the rain. Injectable for the same reason as
-  /// [deckBuilder]: what needs testing is where the block lands and how it grows,
-  /// which has nothing to do with where the text came from.
   final WidgetBuilder? titleBuilder;
 
   /// The text scale the real deck renders at (the density setting).
@@ -103,7 +100,6 @@ class SaverLayer extends StatelessWidget {
             ),
           ),
         ),
-        // The title, as its own block sitting directly above the controls.
         ValueListenableBuilder<Rect?>(
           valueListenable: deckRect,
           builder: (context, rect, _) {
@@ -114,16 +110,6 @@ class SaverLayer extends StatelessWidget {
               child: CompositedTransformFollower(
                 link: deckRect.link,
                 showWhenUnlinked: false,
-                // The block's own BOTTOM edge is pinned to the top of the deck's
-                // content, and it has no height of its own — so it takes exactly
-                // the room the title needs and grows UPWARD into the rain as that
-                // grows. A bigger typeface, a bigger density scale or a longer name
-                // all get however many lines they want, and the controls below
-                // never move, because nothing about them depends on this height.
-                //
-                // This replaced a fixed box with three lines and an ellipsis, which
-                // meant the size the text wanted and the room it got were two
-                // different numbers that only agreed at one font size.
                 targetAnchor: Alignment.topLeft,
                 followerAnchor: Alignment.bottomLeft,
                 offset: Offset(0, kDeckPadding.top),
@@ -181,14 +167,6 @@ class SaverLayer extends StatelessWidget {
   }
 }
 
-/// The song title on the screensaver: the whole thing, centred, wrapping, in as
-/// many lines as it takes. No line cap and no ellipsis — the block it sits in
-/// takes its size from this text rather than the other way round, so there is
-/// nothing for a long name to be truncated to fit.
-///
-/// Drawn in [Palette.hot], the same colour as the rain's leading glyphs, so the
-/// title is the accent the user picked like everything else on the saver. (Not
-/// `bright`, which reads as plain white for the cooler hues.)
 ///
 /// `title` has already had the extension stripped and its underscores and hyphens
 /// turned into spaces (MusicController._pretty), which is also what gives a name

@@ -41,12 +41,6 @@ class DeckSlot extends StatefulWidget {
   final DeckSlotRect notifier;
   final Widget child;
 
-  /// Whether this deck is worth an exception at all.
-  ///
-  /// False for the minimized bar, and the saver then covers it like everything
-  /// else. An empty or folded player has nothing to show through a screensaver —
-  /// carving a hole for it only draws the eye to a strip that reads as nothing,
-  /// or worse, names a track that isn't playing.
   final bool reporting;
 
   const DeckSlot({

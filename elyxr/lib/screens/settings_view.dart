@@ -53,9 +53,6 @@ class SettingsView extends StatelessWidget {
                     style: glass(26, p.bright).copyWith(
                         shadows: [Shadow(color: p.aAlpha(0.7), blurRadius: 9)])),
                 const Spacer(),
-                // Flexible with an ellipsis: a long server name used to push this
-                // block past the right edge of the row, and anything outside a
-                // parent's box is painted but never hit-tested.
                 Flexible(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -103,8 +100,6 @@ class SettingsView extends StatelessWidget {
                   const SizedBox(height: 13),
                   _section(p, '06', 'USE SYSTEM FILE BROWSER', _GateRow(palette: p)),
                 ],
-                // Android only: there's no accelerometer worth reading on a
-                // desktop, and no shake to make with a window that isn't held.
                 if (Caps.isAndroid) ...[
                   const SizedBox(height: 13),
                   _section(p, '06', 'SHAKE FOR TAILSCALE',
@@ -306,13 +301,6 @@ class _NostalgiaRow extends StatelessWidget {
   }
 }
 
-/// Shake the phone to jump into Tailscale. Android only, off by default.
-///
-/// Opt-in on purpose: a gesture that launches another app is disruptive in a way
-/// that one which closes an app isn't, and a phone gets shaken in pockets and
-/// cars. The Tailscale action in the offline notice needs no setting and can't
-/// misfire — this is for the case where the link is broken and the app hasn't
-/// worked that out yet.
 class _ShakeTailscaleRow extends StatelessWidget {
   final Palette palette;
   const _ShakeTailscaleRow({required this.palette});

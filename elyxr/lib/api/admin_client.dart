@@ -142,8 +142,6 @@ class AdminClient {
       try {
         return (jsonDecode(r.body) as Map).cast<String, dynamic>();
       } catch (_) {
-        // Same hole as LymnalClient._ok had: a 2xx body that isn't JSON is
-        // something other than lymnal answering, not a successful call.
         throw const ConnectionError(ConnectionFault.unreachable);
       }
     }

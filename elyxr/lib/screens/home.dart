@@ -41,9 +41,6 @@ class _HomeScreenState extends State<HomeScreen> {
   // Where the music deck is, so the saver can leave a hole for it. Published by
   // the deck itself (see DeckSlot) because only it knows where it ended up.
   final _deckRect = DeckSlotRect();
-  // Android back at the top of the trove: the first press arms the exit and says
-  // so, the second within the window leaves. Without the notice a back press that
-  // did nothing would read as the app ignoring the button.
   bool _exitArmed = false;
   Timer? _exitTimer;
   // The hidden Snake minigame (wordmark ×7 in Nostalgia Mode).
@@ -89,8 +86,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!_idle) _armIdle();
   }
 
-  /// Arm the exit and say so, briefly. The window is short enough that a stray
-  /// press can't leave the app primed to quit minutes later.
   void _armExit() {
     _exitTimer?.cancel();
     setState(() => _exitArmed = true);
@@ -199,9 +194,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     final browse = context.watch<BrowseController>();
-    // Back walks the app backwards before it leaves it: out of Settings, then up
-    // the trove one folder at a time, and only from the root does a second press
-    // exit. On desktop there's no hardware back, so this stays what it was.
     final atRoot = !browse.canGoUp;
     return PopScope(
       canPop: Caps.isAndroid
@@ -238,9 +230,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: CursorTrail(cursor: _cursor, palette: p),
               ),
             ),
-          // "Press back again" — the first back press at the root. Over
-          // everything and ignoring pointers, so it can't take a tap meant for
-          // what's underneath it.
           if (_exitArmed)
             Positioned(
               left: 0,

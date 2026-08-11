@@ -86,15 +86,6 @@ Future<void> main() async {
     }
   }
 
-  // Everything from here on is guarded as one block. The window is ALREADY on
-  // screen by now, and Flutter's window class is registered with no background
-  // brush — so a window with nothing painted in it isn't black, it's
-  // see-through. That is how a startup failure on Windows presented as "the app
-  // doesn't open at all": a real, visible, correctly sized window with an empty
-  // frameless hole where the app should be, and a process alive in the message
-  // loop holding a taskbar slot.
-  //
-  // So there is no path out of main() that doesn't paint something.
   try {
     await _start();
   } catch (e) {
@@ -158,30 +149,15 @@ Future<void> _start() async {
   transfers.load();
 }
 
-/// Open the saved settings, and recover if the store itself is unreadable.
-///
-/// On Windows and Linux, SharedPreferences is a JSON file that the plugin
-/// decodes with no error handling whatsoever — `json.decode` straight onto the
-/// file's contents. So one truncated or garbled write (a power cut, a forced
-/// kill mid-save) throws FormatException out of getInstance() and keeps throwing
-/// on every launch afterwards, because the bad bytes are on disk.
-///
-/// Settings are worth less than starting. An unreadable store is moved aside and
-/// we come back with defaults.
 Future<SharedPreferences> _openPrefs() async {
   try {
     return await SharedPreferences.getInstance();
   } catch (_) {
     await _setAsidePrefsFile();
-    // If it still won't open, let it go: the caller paints the failure on the
-    // glass. A visible reason beats a silent one, and it beats reaching for a
-    // test-only API to fake a store.
     return SharedPreferences.getInstance();
   }
 }
 
-/// Move an unreadable preferences file out of the way, keeping it as `.unreadable`
-/// so what was in it can still be looked at. Same directory the plugin uses.
 Future<void> _setAsidePrefsFile() async {
   try {
     final dir = await getApplicationSupportDirectory();
@@ -192,14 +168,9 @@ Future<void> _setAsidePrefsFile() async {
     if (await kept.exists()) await kept.delete();
     await f.rename(kept.path);
   } catch (_) {
-    // If it can't even be moved, the retry above will fail and we fall back to
-    // in-memory defaults, which still starts.
   }
 }
 
-/// The last resort: startup threw, so say so on the glass instead of leaving an
-/// invisible window. Deliberately plain — it must not depend on anything that
-/// could be the thing that just failed.
 class _StartupFailure extends StatelessWidget {
   final String message;
   const _StartupFailure(this.message);

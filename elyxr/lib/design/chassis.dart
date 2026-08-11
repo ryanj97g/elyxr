@@ -266,12 +266,6 @@ class Tube extends StatelessWidget {
                 child: overlay,
               ),
             ),
-          // The oscilloscope, in the strip of glass the content inset leaves empty
-          // between the two cradles.
-          //
-          // Above the screensaver deliberately: it's the case's own instrument, so
-          // it keeps running while the screen is idle instead of being buried under
-          // the rain.
           Positioned.fill(child: ChassisScope(palette: p)),
           // Music-reactive edge lighting, framing everything else. Clipped to the
           // glass so the bloom stays on-screen; invisible until music plays —

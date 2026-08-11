@@ -53,18 +53,10 @@ class MusicPlayerPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = palette;
     final m = context.watch<MusicController>();
-    // The built-in tracker soundtrack is the 2000's Demo Mode easter egg, and it
-    // takes BOTH switches: Nostalgia for the whimsy at large, Demo Mode for this
-    // specific thing. With either off, the bundled assets don't exist as far as
-    // the player is concerned — not startable, not listable, not named. Without
-    // that, a fresh install opened onto a player announcing a tracker file nobody
-    // had asked for.
     final settings = context.watch<SettingsController>();
     final egg = settings.nostalgia && settings.demoMode2000s;
     final canBuiltIn = egg && m.hasTracks;
 
-    // Minimized: nothing loaded, or a track the user paused and left. The second
-    // case keeps the song exactly where it is — only the controls are put away.
     if (!m.deckOpen) {
       // Idle — a slim one-line bar, not the full deck, so it doesn't eat the
       // tube when nothing's playing. With Nostalgia on it can start/list the
@@ -73,9 +65,6 @@ class MusicPlayerPanel extends StatelessWidget {
       // While a tapped trove track is being fetched, this bar shows a spinner so
       // the tap has visible feedback before the deck appears.
       final loading = m.loadingTrove;
-      // A paused track is still in there, so the whole bar is the way back to the
-      // controls. With nothing loaded there's nothing to go back to and the bar
-      // stays inert.
       final folded = m.active;
       return _wheel(
         m,
@@ -148,13 +137,8 @@ class MusicPlayerPanel extends StatelessWidget {
         // Now playing — marquee title, tracklist button, index.
         Row(
           children: [
-            // Part of the title strip, so it goes with it on the saver — it read
-            // as a stray glyph floating to the left of the visualizer, because the
-            // title it belongs to is drawn somewhere else entirely up there.
             _keepSpace(Text('♪ ', style: glass(16, p.a))),
             // A spinner while the current track is opening or buffering, so any
-            // wait before the sound starts is visible. Hidden on the saver for the
-            // same reason as the note: it belongs to a strip that isn't there.
             if (m.loadingTrove) ...[
               _keepSpace(_spinner(p)),
               const SizedBox(width: 6),
@@ -335,19 +319,6 @@ class MusicPlayerPanel extends StatelessWidget {
     );
   }
 
-  /// Shuffle and repeat. On reads as a lit button, not as a slightly different
-  /// colour of the same one.
-  ///
-  /// It used to be `active ? p.a : p.foot`, which is barely a change at all: in
-  /// dark, `foot` sits at lightness 0.62 and the accent at 0.56, so the OFF state
-  /// was the LIGHTER of the two at a similar hue. Colour alone was also the wrong
-  /// tool — it's the first thing to go on a phone screen in sunlight, which is
-  /// where these get used most. So on adds a ring, a fill and a glow around a
-  /// bright glyph, and off is a dim glyph and nothing else: a difference in shape
-  /// as well as in tone, legible at a glance and without relying on hue.
-  ///
-  /// The padding is split so the tap target stays the same 42px either way and
-  /// the glyph doesn't move when it lights up.
   Widget _iconToggle(
           Palette p, IconData icon, bool active, VoidCallback onTap) =>
       GestureDetector(

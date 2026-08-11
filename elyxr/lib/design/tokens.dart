@@ -57,15 +57,6 @@ final double kCradleRise = kDriverInset + _domeHalfChord;
 /// Where the dome crosses the bottom edge, measured in from a side wall.
 final double kCradleSpan = kDriverInset + _domeHalfChord;
 
-/// How far a cradle reaches in from a side wall at its WIDEST — which is not
-/// [kCradleSpan].
-///
-/// Because the driver's centre sits inside the tube rather than on its corner,
-/// the hole the dome cuts is most of a circle: it crosses the bottom edge
-/// [kCradleSpan] in, but it keeps going and reaches its widest point [kDomeR]
-/// out from the centre, level with it. Anything laid along the bottom band has to
-/// clear THIS, not the bottom crossing — clearing only the crossing puts it under
-/// metal at the driver's own height, where the cradle is at its widest.
 const double kCradleReach = kDriverInset + kDomeR;
 
 /// The centre of one bottom-corner driver, in tube coordinates. The dome the
@@ -105,20 +96,10 @@ Path notchedTubePath(double w, double h, {double inset = 0, double corner = 12})
     ..close();
 }
 
-/// Breathing room between the oscilloscope trace and the metal either side of it.
 const double _kScopeGap = 4;
 
-/// Clearance kept at the very bottom, so the trace stays off the tube's 1px
-/// border and the 3px bezel ring just inside it.
 const double _kScopeEdge = 5;
 
-/// The empty band of glass between the two cradles, along the bottom of the tube.
-///
-/// It exists because the tube's content stops [kCradleRise] short of the bottom
-/// (Tube.contentBottomInset) so that nothing is ever laid out under a dome. That
-/// leaves the middle stretch between the two cradles unused, and the oscilloscope
-/// lives in it. Inset by [kCradleReach] — the cradles' widest point, not where
-/// they meet the bottom edge — so the trace is never clipped mid-stroke by one.
 Rect scopeBand(double w, double h) => Rect.fromLTRB(
       kCradleReach + _kScopeGap,
       h - kCradleRise,
@@ -140,16 +121,6 @@ class Fonts {
   /// The ticker, and version strings. Nothing else.
   static String mono = 'IBM Plex Mono';
 
-  /// Faces tried, in order, for any character the chosen face doesn't have. All
-  /// bundled, so a filename in any of these scripts renders from fonts we ship
-  /// rather than from whatever the machine happens to have installed.
-  ///
-  /// Noto leads because its per-script files are designed and metric-matched as
-  /// siblings: a folder holding Russian, Arabic, Thai and Korean names draws every
-  /// one of them in the same typeface. Handjet and DotGothic16 are a backstop.
-  ///
-  /// Adding a script means bundling a face that has it and naming it here —
-  /// nothing at the call sites changes.
   static const List<String> fallback = [
     'Noto Sans', // Latin, Greek, Cyrillic
     'Noto Sans Arabic',
@@ -185,17 +156,7 @@ const List<TermFace> kTermFaces = [
   TermFace('Redacted Script', 'REDACTED'),
   TermFace('Flow Circular', 'FLOW'),
   TermFace('Ordinary Love', 'ORDINARY'),
-  // A dot-matrix face that holds up at small sizes, which is most of what the
-  // glass asks of a font. It's also the only pickable face with kana, so it's the
-  // one that draws the Matrix rain's whole alphabet itself rather than handing
-  // most of it to the fallback chain. Latin + Cyrillic + kana; no Arabic.
   TermFace('DotGothic16', 'DOTGOTHIC'),
-  // The only pickable face that can draw Arabic — and it carries the GSUB table
-  // the script needs, so letters join up instead of being printed as separate
-  // stamps. Latin + Cyrillic + Arabic.
-  //
-  // Variable, like Orbitron: rendered at its default axis position, which is the
-  // instance the specimen shows.
   TermFace('Handjet', 'HANDJET'),
 ];
 
@@ -488,14 +449,6 @@ class Palette {
   /// Accent at a given alpha fraction (for the faint bands and glows).
   Color aAlpha(double f) => a.withValues(alpha: f);
 
-  /// The accent lifted a little toward white — a hot phosphor that still carries
-  /// the picked hue. This is what the screensaver is drawn in: the rain's leading
-  /// glyphs and the song title over it both read from here, so "everything on the
-  /// saver is the colour you chose" is one definition rather than two that agree
-  /// until someone edits one.
-  ///
-  /// Deliberately NOT [bright], which sits so light that purple and blue come out
-  /// as plain white and the accent stops being visible at all.
   late final Color hot = Color.lerp(a, const Color(0xFFFFFFFF), 0.28)!;
 }
 

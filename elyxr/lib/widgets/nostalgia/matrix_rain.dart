@@ -77,10 +77,6 @@ class _MatrixRainState extends State<MatrixRain>
           painter: _RainPainter(
             _t,
             _columns,
-            // A hot leading edge that still carries the picked hue (Palette.hot —
-            // the same colour the song title over the rain is drawn in, from one
-            // definition). Everything else is the accent itself, so the rain is
-            // genuinely the colour you chose.
             head: widget.palette.hot,
             trail: widget.palette.a,
             face: Fonts.glass,
@@ -103,10 +99,6 @@ class _RainPainter extends CustomPainter {
       : super(repaint: time);
 
   // Half-width katakana, digits, and a few symbols — the classic rain alphabet.
-  //
-  // Drawn in the terminal face where it has the character and from Fonts.fallback
-  // where it doesn't. Every character here is one DotGothic16 has, so picking that
-  // face draws the whole alphabet in one face rather than in two at once.
   static const _glyphs =
       'アイウエオカキクケコサシスセソタチツテトナニヌネノﾊﾋﾌﾍﾎマミムメモﾔﾕﾖﾗﾘﾙﾚﾛﾜ0123456789:.=*+<>¦｜ー';
 
@@ -144,9 +136,6 @@ class _RainPainter extends CustomPainter {
             color: color,
             fontSize: 11.5,
             fontFamily: face,
-            // Without the chain the rain is kana drawn in a face that mostly has
-            // no kana, so what fell was whatever the OS could supply — or boxes,
-            // on a machine that could supply nothing.
             fontFamilyFallback: Fonts.fallback,
             height: 1.0,
           ),

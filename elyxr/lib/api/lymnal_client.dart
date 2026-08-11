@@ -432,12 +432,6 @@ class LymnalClient {
       try {
         return (jsonDecode(r.body) as Map).cast<String, dynamic>();
       } catch (_) {
-        // A 2xx whose body isn't lymnal's JSON means something else answered:
-        // a proxy, a captive portal, a sign-in page standing between us and the
-        // tailnet. Every error path below already allowed for an unreadable
-        // body; this one assumed success implied JSON, so a 200 page of HTML
-        // came out as an unhandled FormatException on character 1 instead of as
-        // a connection state the app knows how to show.
         throw const ConnectionError(ConnectionFault.unreachable);
       }
     }

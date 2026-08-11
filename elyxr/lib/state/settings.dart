@@ -48,11 +48,6 @@ class SettingsController extends ChangeNotifier {
   // opt-in rather than hijacking the player the moment Nostalgia turns on — and
   // so a trove folder you're streaming stays your music source.
   bool _demoMode2000s = false;
-  // Android only: shake the phone to jump into the Tailscale app. Off by default,
-  // because a gesture that launches another app is disruptive in a way that a
-  // gesture that closes one isn't — a phone gets shaken in pockets and cars. The
-  // Tailscale button in the offline notice needs no setting; this is the shortcut
-  // for when the link is broken and the app hasn't noticed yet.
   bool _shakeForTailscale = false;
   // Whether the settings screen is showing. Kept here, not in the home widget's
   // own state, so a rebuild (e.g. while dragging a colour swatch) can never wipe

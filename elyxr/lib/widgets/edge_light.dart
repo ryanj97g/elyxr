@@ -119,10 +119,6 @@ class _EdgeLightPainter extends CustomPainter {
         ..color = col.withValues(alpha: (show * 0.9).clamp(0.0, 1.0))
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 5 + 22 * hit),
     );
-    // The solid band, kept deliberately thin: it lands ON the glass, so on a hard
-    // hit a fat one sits over the first and last characters of whatever is near
-    // the edge. The bloom above carries the size and the drama — this only has to
-    // define the edge, so it costs readability for nothing when it's wide.
     canvas.drawPath(
       path,
       Paint()

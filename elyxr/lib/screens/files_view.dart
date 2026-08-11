@@ -51,9 +51,6 @@ class FilesView extends StatelessWidget {
     );
     final rect = deckRect;
     if (rect == null) return deck;
-    // Only an unfolded deck earns a screensaver exception. Minimized or empty, it
-    // is covered like everything else — there is nothing in it worth showing
-    // through, and a strip that shows nothing is worse than no strip at all.
     final open = context.select<MusicController, bool>((m) => m.deckOpen);
     return DeckSlot(notifier: rect, reporting: open, child: deck);
   }
@@ -865,16 +862,6 @@ class _Row extends StatelessWidget {
 /// A plain single click: select just this entry (its details fill the box
 /// below). If it's an audio file, one click also starts it in the in-app
 /// player — no extra button, no long-press.
-/// What one tap on a row or tile does.
-///
-/// A tap OPENS: a folder navigates into itself, an audio file starts the folder
-/// playing from that track, and anything else goes to its default app. It used to
-/// select, with a double tap to open — which is a mouse idiom, and on a phone
-/// meant every folder took two deliberate taps to enter.
-///
-/// Selecting is click-and-hold now, for rows and tiles alike. Shift-click still
-/// extends a selection on desktop, since that's a modifier rather than a plain
-/// tap.
 void _tapEntry(
     BuildContext context, BrowseController browse, int index, Entry entry) {
   browse.selectOnly(index);
@@ -968,9 +955,6 @@ class _FileGrid extends StatelessWidget {
           final selected = browse.selection.contains(e.name);
           return GestureDetector(
             behavior: HitTestBehavior.opaque,
-            // Single click opens: a folder navigates into itself, an audio file
-            // starts the folder playing from it, anything else opens in the
-            // default app via lymbo. Click-and-hold selects.
             onTap: () => _tapEntry(context, browse, i, e),
             onLongPress: () => browse.toggle(i),
             child: Container(
@@ -1088,11 +1072,6 @@ class _OfflineNotice extends StatelessWidget {
                 ),
               )
             else ...[
-              // The tailnet being down is the one fault with somewhere to go: it's
-              // Tailscale's problem, not the server's, and on a phone there's no
-              // terminal to fix it from. So offer it here, where the app has
-              // already worked out that's the cause — no gesture to know about and
-              // nothing to misfire.
               if (fault == ConnectionFault.noTailnet && Caps.isAndroid)
                 GestureDetector(
                   onTap: LymnalHost.openTailscale,
@@ -1176,4 +1155,3 @@ class _SearchResults extends StatelessWidget {
     );
   }
 }
-

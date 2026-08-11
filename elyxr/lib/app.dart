@@ -55,8 +55,6 @@ class ElyxrApp extends StatelessWidget {
         Provider(create: (_) => SoundController(settings)),
         ChangeNotifierProvider(create: (_) => MusicController()),
       ],
-      // Inside the providers, because it follows the Settings toggle: switched
-      // off, it holds no accelerometer subscription at all.
       child: ShakeToTailscale(
         child: MaterialApp(
           title: 'elyxr',
@@ -109,7 +107,6 @@ class _RootState extends State<_Root> {
       _dragClient = session.client;
       DragOut.useClient(session.client);
     }
-
 
     // Server mode connects to the local lymnal admin surface with the
     // machine-local admin token.

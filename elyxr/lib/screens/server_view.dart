@@ -317,17 +317,6 @@ class _ServerControlsState extends State<ServerControls> {
   }
 }
 
-/// A tappable label with a real target around it.
-///
-/// Every action on this screen used to be a bare GestureDetector wrapped straight
-/// round a Text. A GestureDetector with a child defaults to
-/// HitTestBehavior.deferToChild, so the only thing that could be hit was the
-/// glyph box itself — an 11px strip of small caps, with no padding and no slack.
-/// On a scaled display that is close to unclickable, and the pairing toggle in
-/// particular reads as a dead control.
-///
-/// Opaque, so the padding counts as part of the button rather than as a hole in
-/// it.
 Widget _action(Widget label, VoidCallback onTap) => GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
