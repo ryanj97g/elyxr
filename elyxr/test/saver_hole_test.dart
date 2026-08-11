@@ -1,10 +1,13 @@
-// The screensaver leaves a hole for the music deck. Painting a hole is easy to get
-// looking right and easy to get WRONG in the way that matters: if the saver still
-// absorbs clicks and scrolls over that region, the deck is visible but dead, which
-// is worse than not sparing it at all.
+// The screensaver draws the music player over the rain. Two things about that are
+// worth pinning, because both fail quietly:
 //
-// So these tests are about hit testing, not pixels — does a tap in the hole reach
-// the widget underneath, and does a tap outside it still wake the saver.
+//  - the copy has to land exactly on the real deck's box, which is what a
+//    LayerLink is for — if it ever drifted, the controls would sit off from where
+//    they are normally and you'd only find out by looking;
+//  - the copy has to be reachable, and the rain must not eat its taps.
+//
+// The saver used to clip a hole in the rain instead. That's gone: the rain covers
+// everything and the player is painted on top of it.
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -12,92 +15,110 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:elyxr/design/tokens.dart';
 import 'package:elyxr/widgets/deck_slot.dart';
+import 'package:elyxr/widgets/nostalgia/matrix_rain.dart';
 import 'package:elyxr/widgets/nostalgia/saver_layer.dart';
 
 void main() {
   late DeckSlotRect rect;
   late int woke;
-  late int deckTaps;
   late double volume;
 
   setUp(() {
     rect = DeckSlotRect();
     woke = 0;
-    deckTaps = 0;
     volume = 0;
   });
 
-  // The deck sits in a 200x60 band at the top; the saver covers the whole 400x400
-  // and is told to spare that band.
-  Widget harness() => MaterialApp(
-        home: Directionality(
-          textDirection: TextDirection.ltr,
-          child: Center(
-            child: SizedBox(
-              width: 400,
-              height: 400,
-              child: Stack(
-                children: [
-                  // Standing in for the tube content, with the deck in it.
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    width: 200,
-                    height: 60,
-                    child: DeckSlot(
-                      notifier: rect,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => deckTaps++,
-                        child: const ColoredBox(color: Color(0xFF102030)),
-                      ),
-                    ),
+  // A stand-in for the tube: content with the deck slot in it, the saver over the
+  // top. The deck band is deliberately NOT at the origin, so a copy positioned by
+  // bad arithmetic instead of by the link would land visibly wrong.
+  Widget harness({double top = 90, double height = 70}) => MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 400,
+            height: 500,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  top: top,
+                  width: 400,
+                  height: height,
+                  child: DeckSlot(
+                    notifier: rect,
+                    child: const ColoredBox(
+                        key: Key('real'), color: Color(0xFF102030)),
                   ),
-                  Positioned.fill(
-                    child: SaverLayer(
-                      palette: Palette(Accent.green, true),
-                      deckRect: rect,
-                      onWake: () => woke++,
-                      onVolume: (d) => volume += d,
-                    ),
+                ),
+                Positioned.fill(
+                  child: SaverLayer(
+                    palette: Palette(Accent.green, true),
+                    deckRect: rect,
+                    onWake: () => woke++,
+                    onVolume: (d) => volume += d,
+                    deckBuilder: (_) => const ColoredBox(
+                        key: Key('copy'), color: Color(0xFF204060)),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
       );
 
-  testWidgets('the deck reports where it is', (tester) async {
+  testWidgets('the deck reports its box', (tester) async {
     await tester.pumpWidget(harness());
-    await tester.pump(); // let the post-frame report land
+    await tester.pump();
     expect(rect.value, isNotNull);
-    expect(rect.value!.size, const Size(200, 60));
+    expect(rect.value!.size, const Size(400, 70));
   });
 
-  testWidgets('a tap in the hole reaches the deck and does NOT wake the saver',
+  testWidgets('the copy lands exactly on the real deck, not near it',
+      (tester) async {
+    await tester.pumpWidget(harness(top: 90, height: 70));
+    await tester.pump();
+    await tester.pump(); // the follower attaches once the target has a layer
+    // Measure the copy's CONTENT, not the follower: a follower's own box is its
+    // layout position, and the link's transform applies to what's inside it.
+    final real = tester.getRect(find.byKey(const Key('real')));
+    final copy = tester.getRect(find.byKey(const Key('copy')));
+    expect(copy, kDeckPadding.deflateRect(real),
+        reason: 'the saver copy is offset from the deck it mirrors');
+  });
+
+  testWidgets('it still lands exactly when the deck moves and resizes',
+      (tester) async {
+    // The deck changes height in real use (idle bar vs full player). A copy that
+    // only matched at one size would be the bug that shows up mid-song.
+    await tester.pumpWidget(harness(top: 90, height: 70));
+    await tester.pump();
+    await tester.pump();
+    await tester.pumpWidget(harness(top: 140, height: 120));
+    await tester.pump();
+    await tester.pump();
+    expect(tester.getRect(find.byKey(const Key('copy'))),
+        kDeckPadding.deflateRect(tester.getRect(find.byKey(const Key('real')))));
+  });
+
+  testWidgets('the rain covers everything — no hole is cut in it',
       (tester) async {
     await tester.pumpWidget(harness());
     await tester.pump();
-    // Inside the deck band.
-    await tester.tapAt(tester.getCenter(find.byType(DeckSlot)));
-    await tester.pump();
-    expect(deckTaps, 1, reason: 'the deck never got the tap');
-    expect(woke, 0, reason: 'using the deck dismissed the saver');
+    final rain = tester.getRect(find.byType(MatrixRain));
+    final saver = tester.getRect(find.byType(SaverLayer));
+    expect(rain, saver, reason: 'the rain no longer fills the tube');
   });
 
-  testWidgets('a tap anywhere else wakes the saver', (tester) async {
+  testWidgets('a tap on the rain wakes the saver', (tester) async {
     await tester.pumpWidget(harness());
     await tester.pump();
     final box = tester.getRect(find.byType(SaverLayer));
-    // Well below the deck band.
     await tester.tapAt(Offset(box.center.dx, box.bottom - 20));
     await tester.pump();
     expect(woke, 1);
-    expect(deckTaps, 0);
   });
 
-  testWidgets('the wheel adjusts volume from anywhere over the saver',
+  testWidgets('the wheel adjusts volume without waking the tube',
       (tester) async {
     await tester.pumpWidget(harness());
     await tester.pump();
@@ -105,18 +126,14 @@ void main() {
     final at = Offset(box.center.dx, box.bottom - 20);
     final pointer = TestPointer(1, PointerDeviceKind.mouse);
     tester.binding.handlePointerEvent(pointer.hover(at));
-    tester.binding
-        .handlePointerEvent(pointer.scroll(const Offset(0, -20)));
+    tester.binding.handlePointerEvent(pointer.scroll(const Offset(0, -20)));
     await tester.pump();
     expect(volume, greaterThan(0), reason: 'scrolling up did not raise volume');
-    // And it must not have woken the tube — a scroll is not a dismissal.
-    expect(woke, 0);
+    expect(woke, 0, reason: 'a scroll is not a dismissal');
   });
 
-  testWidgets('with no reported deck the saver simply covers everything',
+  testWidgets('with no reported deck the saver is just the screensaver',
       (tester) async {
-    // The failure direction that matters: an unknown rect must not clip a hole
-    // somewhere arbitrary. Nothing is spared, and the saver still works.
     rect.value = null;
     await tester.pumpWidget(MaterialApp(
       home: SizedBox(
@@ -127,10 +144,12 @@ void main() {
           deckRect: rect,
           onWake: () => woke++,
           onVolume: (d) => volume += d,
+          deckBuilder: (_) => const ColoredBox(color: Color(0xFF204060)),
         ),
       ),
     ));
     await tester.pump();
+    expect(find.byType(CompositedTransformFollower), findsNothing);
     await tester.tapAt(const Offset(20, 20));
     await tester.pump();
     expect(woke, 1);

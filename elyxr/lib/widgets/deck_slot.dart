@@ -18,7 +18,19 @@ import 'package:flutter/material.dart';
 /// everything, never that it clips something wrong.
 class DeckSlotRect extends ValueNotifier<Rect?> {
   DeckSlotRect() : super(null);
+
+  /// Ties the screensaver's copy of the deck to the real one's box. Position comes
+  /// from here rather than from arithmetic on [value]: a LayerLink follows the
+  /// target every frame and needs no coordinate conversion, so the copy cannot end
+  /// up a few pixels out or a frame behind. [value] is only used for its SIZE and
+  /// for deciding where a tap counts as "on the deck".
+  final LayerLink link = LayerLink();
 }
+
+/// The padding around the deck inside its slot. Shared, so the screensaver's copy
+/// sits on exactly the same inner geometry as the real one instead of a hand-copied
+/// guess at it.
+const EdgeInsets kDeckPadding = EdgeInsets.fromLTRB(13, 8, 13, 8);
 
 /// Wraps the deck and keeps [notifier] up to date with its position.
 ///
@@ -55,6 +67,6 @@ class _DeckSlotState extends State<DeckSlot> {
   Widget build(BuildContext context) {
     // After this frame's layout, so the box has a size and a position to read.
     WidgetsBinding.instance.addPostFrameCallback((_) => _report());
-    return widget.child;
+    return CompositedTransformTarget(link: widget.notifier.link, child: widget.child);
   }
 }

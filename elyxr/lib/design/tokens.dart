@@ -30,10 +30,10 @@ Color _c(int argb) => Color(argb);
 // driver must be measured from the same origin or the seam comes back.
 
 /// Radius of the driver's basket — the visible speaker.
-const double kDriverR = 23;
+const double kDriverR = 19;
 
 /// Metal between the basket and the glass, all the way round the dome.
-const double kDriverMetal = 12;
+const double kDriverMetal = 10;
 
 /// Radius of the dome the glass curves around: the basket plus its metal.
 const double kDomeR = kDriverR + kDriverMetal;
@@ -45,7 +45,7 @@ const double kDomeR = kDriverR + kDriverMetal;
 /// on a neck; pulling the centre in makes the dome cross both edges, so the metal
 /// merges into the case over a real width and swallows the corner completely.
 /// Still ≥ [kDriverR], so the basket itself never breaks the tube's edge.
-const double kDriverInset = 24;
+const double kDriverInset = 20;
 
 /// Half the chord the dome cuts on an edge it crosses.
 final double _domeHalfChord =

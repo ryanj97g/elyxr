@@ -94,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (settings.inSettings) {
       tubeChild = const SettingsView();
     } else {
-      tubeChild = FilesView(deckRect: _deckRect, saver: showSaver);
+      tubeChild = FilesView(deckRect: _deckRect);
     }
 
     // Density is a global text scale for everything on the glass — the whole

@@ -19,7 +19,30 @@ import 'marquee.dart';
 
 class MusicPlayerPanel extends StatelessWidget {
   final Palette palette;
-  const MusicPlayerPanel({super.key, required this.palette});
+
+  /// Draw the screensaver's stripped-back copy: the title (still, not scrolling),
+  /// the visualizer, the transport and the progress bar — and nothing else.
+  ///
+  /// This is the SAME layout, with the omitted parts kept as empty space rather
+  /// than removed. That is the point: if the copy rebuilt the column with fewer
+  /// children, everything below a hidden one would shift up and the buttons would
+  /// no longer line up with where they sit normally. One layout, some of it not
+  /// painted, so the two cannot drift apart.
+  final bool saver;
+
+  const MusicPlayerPanel(
+      {super.key, required this.palette, this.saver = false});
+
+  /// Keep [child]'s space but don't paint it, when this is the saver copy.
+  Widget _keepSpace(Widget child) => saver
+      ? Visibility(
+          visible: false,
+          maintainSize: true,
+          maintainAnimation: true,
+          maintainState: true,
+          child: child,
+        )
+      : child;
 
   String _fmt(Duration d) {
     final s = d.inSeconds;
@@ -114,30 +137,41 @@ class MusicPlayerPanel extends StatelessWidget {
             Expanded(
               child: SizedBox(
                 height: 22,
-                child: Marquee(text: m.title, style: glass(17, p.bright)),
+                // Same box, so the row's height is identical; a still title on the
+                // saver because something crawling across a sleeping tube is the
+                // opposite of restful.
+                child: saver
+                    ? Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(m.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: glass(17, p.bright)),
+                      )
+                    : Marquee(text: m.title, style: glass(17, p.bright)),
               ),
             ),
             if (egg || m.isStream) ...[
               const SizedBox(width: 8),
-              GestureDetector(
+              _keepSpace(GestureDetector(
                 onTap: () => _showTracklist(context, m, p),
                 behavior: HitTestBehavior.opaque,
                 child: Padding(
                   padding: const EdgeInsets.all(8),
                   child: Icon(Icons.queue_music, color: p.mid, size: 20),
                 ),
-              ),
+              )),
             ],
             const SizedBox(width: 8),
             // A folder still says TROVE, but now carries its position in it too.
-            Text(
+            _keepSpace(Text(
                 m.isStream
                     ? 'TROVE ${m.index + 1}/${m.count}'
                     : '${m.index + 1}/${m.count}',
-                style: mono(11, p.mid)),
+                style: mono(11, p.mid))),
           ],
         ),
-        if (m.notice != null)
+        if (m.notice != null && !saver)
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Text(m.notice!,
@@ -180,9 +214,9 @@ class MusicPlayerPanel extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(_fmt(m.position), style: mono(10, p.foot)),
-            _volumeControl(p, m),
-            Text(_fmt(m.duration), style: mono(10, p.foot)),
+            _keepSpace(Text(_fmt(m.position), style: mono(10, p.foot))),
+            _keepSpace(_volumeControl(p, m)),
+            _keepSpace(Text(_fmt(m.duration), style: mono(10, p.foot))),
           ],
         ),
         const SizedBox(height: 6),
@@ -194,17 +228,19 @@ class MusicPlayerPanel extends StatelessWidget {
               ? MainAxisAlignment.spaceEvenly
               : MainAxisAlignment.center,
           children: [
-            if (playlist) _iconToggle(p, Icons.shuffle, m.shuffle, m.toggleShuffle),
+            if (playlist)
+              _keepSpace(
+                  _iconToggle(p, Icons.shuffle, m.shuffle, m.toggleShuffle)),
             if (playlist) _btn(p, Icons.skip_previous, m.prev),
             _btn(p, m.playing ? Icons.pause : Icons.play_arrow, m.toggle,
                 big: true),
             if (playlist) _btn(p, Icons.skip_next, m.next),
             if (playlist)
-              _iconToggle(
+              _keepSpace(_iconToggle(
                   p,
                   m.repeat == MusicRepeat.one ? Icons.repeat_one : Icons.repeat,
                   m.repeat != MusicRepeat.off,
-                  m.cycleRepeat),
+                  m.cycleRepeat)),
           ],
         ),
       ],

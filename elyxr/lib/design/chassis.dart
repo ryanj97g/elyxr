@@ -147,6 +147,10 @@ class Tube extends StatelessWidget {
       return Stack(
         clipBehavior: Clip.none,
         children: [
+          // The cradles eat the glass's bottom corners, so the CONTENT has to stop
+          // above them — otherwise the last rows, the item count and the queue
+          // strip end up underneath metal, which is exactly what happened when the
+          // cradles first landed. Bottom inset only; the sides are untouched.
           Positioned.fill(child: _glass(p)),
           for (final left in const [true, false]) _driver(p, w, h, left: left),
         ],
@@ -169,6 +173,10 @@ class Tube extends StatelessWidget {
       child: CornerSpeaker(palette: p, reactive: true, intense: nostalgia),
     );
   }
+
+  /// How far the bottom of the tube's content must stay clear of the cradles.
+  /// Read by the content itself, so nothing has to guess.
+  static double get contentBottomInset => kCradleRise;
 
   Widget _glass(Palette p) {
     return ClipPath(
@@ -195,11 +203,18 @@ class Tube extends StatelessWidget {
               ),
             ),
           ),
-          // The terminal content.
+          // The terminal content, held clear of the speaker cradles at the bottom
+          // corners. Without this inset the last file rows, the item count and the
+          // queue strip are laid out underneath metal and simply can't be read —
+          // the cradles are cut out of the glass, so anything under them is gone,
+          // not dimmed.
           Positioned.fill(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: child,
+              child: Padding(
+                padding: EdgeInsets.only(bottom: contentBottomInset),
+                child: child,
+              ),
             ),
           ),
           // Accent glow + vignette, drawn over content, non-interactive. The

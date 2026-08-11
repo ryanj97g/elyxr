@@ -34,25 +34,19 @@ class FilesView extends StatelessWidget {
   /// Where the deck ends up, published for the screensaver to cut a hole at.
   final DeckSlotRect? deckRect;
 
-  /// The screensaver is up. The deck stays visible through it — dimmed, since it
-  /// is the only lit thing on a sleeping tube and full brightness would make it
-  /// look like the saver had failed rather than deliberately spared it.
-  final bool saver;
+  const FilesView({super.key, this.deckRect});
 
-  const FilesView({super.key, this.deckRect, this.saver = false});
-
-  /// The deck, reporting its position so the screensaver can spare it. Wrapped in
-  /// its own method because it now has two jobs beyond being a widget: it is the
-  /// hole the saver clips around, and it dims while the saver is up.
+  /// The deck, reporting its box so the screensaver can draw its own copy of the
+  /// player in exactly the same place. Not dimmed and not clipped around: the saver
+  /// covers this one with rain and paints the stripped-back copy over the top.
   Widget _deck(Palette p) {
-    Widget deck = Container(
-      padding: const EdgeInsets.fromLTRB(13, 8, 13, 8),
+    final deck = Container(
+      padding: kDeckPadding,
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: p.dim)),
       ),
       child: MusicPlayerPanel(palette: p),
     );
-    if (saver) deck = Opacity(opacity: 0.75, child: deck);
     final rect = deckRect;
     return rect == null ? deck : DeckSlot(notifier: rect, child: deck);
   }

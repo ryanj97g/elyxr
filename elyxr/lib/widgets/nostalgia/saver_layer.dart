@@ -1,34 +1,48 @@
-// The screensaver, with the music deck left showing through it.
+// The screensaver, with the music player on top of it.
 //
-// Covers everything the saver always covered, minus the deck's rectangle (see
-// DeckSlot): the deck is the one thing you might still want to read and reach
-// while the tube is asleep. It isn't lifted above the saver — it stays exactly
-// where it is in the layout and the saver clips itself around it.
+// The rain covers the whole tube — no hole cut in it. A rectangular window carved
+// out of falling glyphs reads as a rendering fault, and it also meant the rain
+// stopped behind the player instead of continuing behind it. So the player is
+// drawn OVER the rain, as its content only: the title, the visualizer, the
+// transport and the progress bar, with no panel, no border and no dimming. What
+// isn't the player is the screensaver, and it keeps falling.
 //
-// The wheel works anywhere over this layer, not just over the deck, so the volume
-// is adjustable without waking the tube. Scrolling never dismissed the saver
-// (HomeScreen only wakes on a pointer DOWN), so that behaviour needed no change —
-// only somewhere to catch the scroll.
+// Position comes from a LayerLink tied to the real deck (see DeckSlot), not from
+// arithmetic: a CompositedTransformFollower tracks its target's box every frame, so
+// the copy lands exactly on the real one with no coordinate conversion to get
+// wrong and no chance of being a frame behind. The copy is the same widget with
+// parts of itself not painted, so the controls can't sit anywhere other than where
+// they normally do.
+//
+// The wheel works anywhere over the rain, so volume is adjustable without waking
+// the tube. Scrolling never dismissed the saver (HomeScreen only wakes on a
+// pointer DOWN) — this just gives the scroll somewhere to land.
 
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 
 import '../../design/tokens.dart';
 import '../deck_slot.dart';
 import 'matrix_rain.dart';
+import 'music_player.dart';
 
 class SaverLayer extends StatelessWidget {
   final Palette palette;
   final DeckSlotRect deckRect;
 
-  /// A tap anywhere on the saver dismisses it. Absorbed here so the same click
-  /// doesn't also land on a file underneath.
+  /// A tap on the rain dismisses it. Absorbed here so the same click doesn't also
+  /// land on a file underneath. Taps on the player are exempt — see HomeScreen,
+  /// which skips waking for a pointer down inside the deck's rect.
   final VoidCallback onWake;
 
   /// Turn the wheel while the saver is up. Fed from here rather than from the deck
   /// so it works over the whole screen.
   final ValueChanged<double> onVolume;
+
+  /// The player drawn over the rain. Defaults to the real deck in saver form;
+  /// overridden only by tests, so that where this lands can be checked without
+  /// standing up the whole controller graph behind a real player.
+  final WidgetBuilder? deckBuilder;
 
   const SaverLayer({
     super.key,
@@ -36,25 +50,18 @@ class SaverLayer extends StatelessWidget {
     required this.deckRect,
     required this.onWake,
     required this.onVolume,
+    this.deckBuilder,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<Rect?>(
-      valueListenable: deckRect,
-      builder: (context, rect, _) {
-        // _Punched is OUTERMOST deliberately. The tap and wheel handlers below it
-        // are opaque, so if they sat on top they would swallow everything aimed at
-        // the deck regardless of any clipping — clipping changes what's painted,
-        // not what's hit. With the clip outside them, the hole isn't hit-testable
-        // at all, so a tap or a scroll over the deck falls straight through to the
-        // real deck underneath and the saver never sees it.
-        return _Punched(
-          hole: rect,
+    return Stack(
+      children: [
+        Positioned.fill(
           child: Listener(
-            // opaque, so a scroll over the saver's empty space counts too — the
-            // matrix is mostly gaps, and deferToChild would only catch a scroll
-            // directly over a painted glyph.
+            // opaque, so a scroll over the rain's empty space counts too — it's
+            // mostly gaps, and deferToChild would only catch a scroll landing
+            // directly on a painted glyph.
             behavior: HitTestBehavior.opaque,
             onPointerSignal: (sig) {
               if (sig is PointerScrollEvent) {
@@ -67,71 +74,36 @@ class SaverLayer extends StatelessWidget {
               child: MatrixRain(palette: palette),
             ),
           ),
-        );
-      },
+        ),
+        // The player, over the rain, at the real deck's box.
+        ValueListenableBuilder<Rect?>(
+          valueListenable: deckRect,
+          builder: (context, rect, _) {
+            if (rect == null) return const SizedBox.shrink();
+            return Positioned(
+              // The follower supplies the position; this only has to be somewhere
+              // legal in the Stack for it to attach.
+              left: 0,
+              top: 0,
+              child: CompositedTransformFollower(
+                link: deckRect.link,
+                showWhenUnlinked: false,
+                child: SizedBox(
+                  width: rect.width,
+                  height: rect.height,
+                  // The same padding the real deck sits in, from the same constant,
+                  // so the inner geometry matches rather than approximating it.
+                  child: Padding(
+                    padding: kDeckPadding,
+                    child: deckBuilder?.call(context) ??
+                        MusicPlayerPanel(palette: palette, saver: true),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
-  }
-}
-
-/// Clips [child] to everything except [hole] — a global rect, converted here into
-/// this widget's own space. A null hole clips nothing, so the saver falls back to
-/// covering the lot rather than to clipping somewhere wrong.
-class _Punched extends SingleChildRenderObjectWidget {
-  final Rect? hole;
-  const _Punched({required this.hole, required Widget child})
-      : super(child: child);
-
-  @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderPunched(hole: hole);
-
-  @override
-  void updateRenderObject(BuildContext context, _RenderPunched renderObject) {
-    renderObject.hole = hole;
-  }
-}
-
-class _RenderPunched extends RenderProxyBox {
-  _RenderPunched({Rect? hole}) : _hole = hole;
-
-  Rect? get hole => _hole;
-  Rect? _hole;
-  set hole(Rect? v) {
-    if (_hole == v) return;
-    _hole = v;
-    markNeedsPaint();
-  }
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    final h = _hole;
-    if (h == null || child == null) {
-      super.paint(context, offset);
-      return;
-    }
-    // The reported rect is global; this render box knows its own transform, so it
-    // can put the rect into local space itself. Nothing upstream has to care what
-    // coordinate space anything is in.
-    final local = globalToLocal(h.topLeft) & h.size;
-    // Both the bounds and the path are in the child's own space — pushClipPath
-    // applies [offset] itself, so adding it here would shift the hole twice.
-    final path = Path()
-      ..fillType = PathFillType.evenOdd
-      ..addRect(Offset.zero & size)
-      ..addRect(local);
-    context.pushClipPath(needsCompositing, offset, Offset.zero & size, path,
-        (ctx, off) => super.paint(ctx, off));
-  }
-
-  // The hole is where the deck shows through, so it must not swallow clicks meant
-  // for the deck — a tap in there falls past the saver to the player beneath.
-  @override
-  bool hitTest(BoxHitTestResult result, {required Offset position}) {
-    final h = _hole;
-    if (h != null) {
-      final local = globalToLocal(h.topLeft) & h.size;
-      if (local.contains(position)) return false;
-    }
-    return super.hitTest(result, position: position);
   }
 }
