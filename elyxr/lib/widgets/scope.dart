@@ -145,14 +145,13 @@ void paintScope(Canvas canvas, Size size, Palette p, List<double> wave) {
     stops: const [0.0, 0.78, 1.0],
   ).createShader(Rect.fromLTRB(cx, band.top, band.right, band.bottom));
 
-  // A blurred pass for the phosphor bloom, then the trace itself over it — the
-  // same two-pass treatment the edge light uses, so both read as the same glass.
-  final bloom = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 3
-    ..strokeCap = StrokeCap.round
-    ..shader = shader
-    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  // One clean stroke, no bloom.
+  //
+  // There used to be a blurred pass under this, the same two-pass treatment the
+  // edge light uses. It read as a haze around the trace and spread past the band
+  // in both directions — a 3px blur is not confined to 3px, so it reached the
+  // tube's bottom edge and up into the content above. The line on its own is
+  // sharper and stays where it is put.
   final line = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.4
@@ -167,7 +166,6 @@ void paintScope(Canvas canvas, Size size, Palette p, List<double> wave) {
       canvas.translate(2 * cx, 0);
       canvas.scale(-1, 1);
     }
-    canvas.drawPath(path, bloom);
     canvas.drawPath(path, line);
     canvas.restore();
   }
