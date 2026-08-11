@@ -215,6 +215,15 @@ jobs:
         with:
           tag_name: android-latest
           name: elyxr Android (latest)
+          # The tag is fixed, so the commit GitHub shows against it is the one it
+          # pointed at when created — not what's in these files.
+          body: |
+            Build ${{ env.ELYXR_BUILD }}
+
+            The commit shown against the tag above is NOT what this APK contains:
+            the tag never moves, the assets are replaced every push. Go by the
+            build number above, by the elyxr-<build>.apk filename, or by Settings
+            in the app after installing.
           make_latest: false
           files: |
             elyxr/build/app/outputs/flutter-apk/elyxr.apk

@@ -77,10 +77,21 @@ jobs:
         run: |
           choco install innosetup --no-progress -y
           $build = (git rev-list --count HEAD).Trim()
+          $commit = (git rev-parse --short HEAD).Trim()
+          # Shared with the release step, which names the file and says in the
+          # release body which commit is actually inside it.
+          "ELYXR_BUILD=$build"   | Out-File -FilePath $env:GITHUB_ENV -Append
+          "ELYXR_COMMIT=$commit" | Out-File -FilePath $env:GITHUB_ENV -Append
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $iscc "/DAppVer=$build" packaging\windows\elyxr.iss
           # ISCC writes to the script's OutputDir (.), i.e. packaging\windows\.
           Copy-Item -Force packaging\windows\elyxr-setup.exe .\elyxr-setup.exe
+          # A build-numbered copy as well. The stable name is what the self-updater
+          # fetches, but it's replaced in place every run — so a browser or CDN
+          # holding that URL can serve an older installer that looks current, and
+          # the release PAGE shows the tag's frozen target commit rather than
+          # what's in the file. The filename is the one thing that can't lie.
+          Copy-Item -Force .\elyxr-setup.exe ".\elyxr-setup-$build.exe"
 
       - name: Upload the builds
         uses: actions/upload-artifact@v4
@@ -100,5 +111,15 @@ jobs:
         with:
           tag_name: windows-latest
           name: elyxr Windows (latest)
-          files: elyxr-setup.exe
+          # The tag is fixed, so GitHub keeps showing the commit it pointed at when
+          # it was first created. Say what's really in here.
+          body: |
+            Build ${{ env.ELYXR_BUILD }} — commit ${{ env.ELYXR_COMMIT }}
+
+            The commit shown against the tag above is NOT what this installer
+            contains: the tag never moves, the assets are replaced every push.
+            Go by the line above, or by Settings in the app after installing.
+          files: |
+            elyxr-setup.exe
+            elyxr-setup-${{ env.ELYXR_BUILD }}.exe
           make_latest: true
