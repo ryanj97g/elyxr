@@ -147,9 +147,12 @@ class _ServerControlsState extends State<ServerControls> {
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('PAIRING', style: chassis(12, p.bright, spacing: 0.16)),
         _action(
-          Text(open ? 'ON — CLOSE' : 'OFF — OPEN',
-              style: chassis(11, p.a, spacing: 0.1)),
-          () => s.setPairing(!open),
+          Text(
+              s.busy
+                  ? 'WORKING…'
+                  : (open ? 'ON — CLOSE' : 'OFF — OPEN'),
+              style: chassis(11, s.busy ? p.mid : p.a, spacing: 0.1)),
+          s.busy ? () {} : () => s.setPairing(!open),
         ),
       ]),
       const SizedBox(height: 6),

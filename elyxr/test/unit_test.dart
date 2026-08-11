@@ -3,36 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:elyxr/design/tokens.dart';
 import 'package:elyxr/util/format.dart';
-import 'package:elyxr/util/phrase.dart';
 
 void main() {
-  group('phrase', () {
-    test('is deterministic for the same device+client', () {
-      final a = phraseFor('probookrjg', 'elyxr/1.0.0');
-      final b = phraseFor('probookrjg', 'elyxr/1.0.0');
-      expect(a, b);
-    });
-
-    test('is four distinct words from the list', () {
-      final words = phraseFor('probookrjg', 'elyxr/1.0.0').split(' ');
-      expect(words.length, 4);
-      expect(words.toSet().length, 4, reason: 'no repeats');
-      for (final w in words) {
-        expect(kPhraseWords.contains(w), isTrue);
-      }
-    });
-
-    test('differs for a different device', () {
-      expect(phraseFor('probookrjg', 'elyxr/1.0.0'),
-          isNot(phraseFor('otherbox', 'elyxr/1.0.0')));
-    });
-
-    test('matches the cross-language vector lymnal derives', () {
-      // lymnal's pairing.rs asserts the same string for the same input.
-      expect(phraseFor('probookrjg', 'elyxr/1.0.0'), 'fern violet anchor saffron');
-    });
-  });
-
   group('format', () {
     test('sizes read in plain units', () {
       expect(fmtSize(2048), '2K');

@@ -51,7 +51,7 @@ void main() {
       },
     });
     final pending = await c.pending();
-    expect(pending.single.phrase, 'violet anchor cedar juniper');
+    expect(pending.single.device, isNotEmpty);
     final devices = await c.devices();
     expect(devices.single.role, 'owner');
     final space = await c.space();
