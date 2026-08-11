@@ -70,6 +70,12 @@ class SessionController extends ChangeNotifier {
   SessionController(this._prefs, this._tokens, {ClientFactory? factory})
       : _factory = factory ?? _defaultFactory;
 
+  // Whether boot() has finished. Until it has we haven't read the saved token yet,
+  // so "no token" doesn't mean "never paired" — it means "don't know". Without
+  // this the app would show the first-run screen for a moment on every launch.
+  bool _booted = false;
+  bool get booted => _booted;
+
   String? _token;
   String? _serverAddress; // host:port
   String? _serverName;
@@ -82,7 +88,10 @@ class SessionController extends ChangeNotifier {
   String? get serverAddress => _serverAddress;
   Health? get health => _health;
   LymnalClient? get client => _client;
-  bool get isFirstRun => _token == null;
+  /// Never paired. False until [booted], because before that we simply haven't
+  /// read the token yet and guessing "first run" would flash that screen at
+  /// someone who has been paired for months.
+  bool get isFirstRun => _booted && _token == null;
   /// The bearer token, for handing to the trove mount (never shown on screen).
   String? get bearerToken => _token;
 
@@ -103,7 +112,21 @@ class SessionController extends ChangeNotifier {
       Caps.hasLocalLymnal ? _localProxy : _baseUrl(_serverAddress!);
 
   /// Load the saved pairing and confirm the server answers. Call once at start.
+  /// Load the saved pairing and confirm the server answers.
+  ///
+  /// Deliberately NOT awaited before the first frame — see main(). This talks to
+  /// the network, and a machine that can't reach its server must still get a
+  /// window. Every outcome here is a LinkStatus the UI already draws.
   Future<void> boot() async {
+    try {
+      await _boot();
+    } finally {
+      _booted = true;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _boot() async {
     await _importPendingBind();
     _token = await _tokens.read();
     _serverAddress = _prefs.getString('serverAddress');

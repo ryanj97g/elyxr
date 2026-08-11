@@ -89,9 +89,6 @@ Future<void> main() async {
     maxConcurrent: () => settings.atOnce,
   );
 
-  await session.boot();
-  await transfers.load();
-
   // Reclaim any working copies a previous run left in the temp folder (opened
   // files whose cleanup didn't get to run — a crash or force-quit). Fire and
   // forget; it never blocks startup.
@@ -101,6 +98,12 @@ Future<void> main() async {
   // player on demand); the Nostalgia sound effects create a one-shot player per
   // clip, so there's nothing else to start up here.
 
+  // DRAW FIRST, then connect. boot() talks to the network, and it used to be
+  // awaited right here — so on a machine that couldn't reach its server (a
+  // firewall blocking the connection, a tailnet that's down) the window simply
+  // never appeared and the app looked dead. Nothing about the first frame needs
+  // the link: the session starts at LinkStatus.connecting and the UI already
+  // draws every outcome, including none.
   runApp(ShakeToClose(
     child: ElyxrApp(
       settings: settings,
@@ -108,6 +111,11 @@ Future<void> main() async {
       transfers: transfers,
     ),
   ));
+
+  // Unawaited on purpose. Both report themselves through their controllers, so
+  // the UI follows along as they finish; neither can hold up the window.
+  session.boot();
+  transfers.load();
 }
 
 Future<Directory> _supportDir() async {
