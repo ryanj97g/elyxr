@@ -38,8 +38,10 @@ class SettingsController extends ChangeNotifier {
   // The chosen terminal (glass) font family — one of kTermFaces' families.
   String _termFont = 'VT323';
   // Nostalgia Mode: the master switch for all the retro whimsy (the matrix
-  // screensaver, cursor trail, minigame, sounds…). Off by default — the plain
-  // experience is the premium instrument; this opts into the fun.
+  // screensaver, cursor trail, minigame, sounds…). Off on a fresh install — the
+  // plain experience is the premium instrument; this opts into the fun. Remembered
+  // once chosen, because having to switch it back on at every launch made a
+  // preference behave like a party trick.
   bool _nostalgia = false;
   // "2000's DEMO MODE": when on (with Nostalgia on), the built-in easter-egg
   // keygen soundtrack is the auto-playing music source. Off by default, so it's
@@ -88,9 +90,7 @@ class SettingsController extends ChangeNotifier {
     // If the saved face no longer exists (e.g. a font that was removed), fall
     // back to the default rather than render in a missing family.
     if (!termFaces.any((f) => f.family == _termFont)) _termFont = 'VT323';
-    // Nostalgia Mode always starts off — it's a session toy, never a saved
-    // preference. (Deliberately not read back from prefs.)
-    _nostalgia = false;
+    _nostalgia = _prefs.getBool('nostalgia') ?? false;
     _demoMode2000s = _prefs.getBool('demoMode2000s') ?? false;
     // Apply the chosen terminal face before the first frame builds. It governs
     // everything on the glass — the body text and the ticker/readouts alike —
@@ -131,11 +131,12 @@ class SettingsController extends ChangeNotifier {
         Fonts.glass = v;
         Fonts.mono = v;
       }, () => _prefs.setString('termFont', v));
-  // Toggled in-session only; never written to prefs, so it's off on every launch.
+  // Remembered across launches. Turning it on doesn't start the easter-egg
+  // soundtrack by itself — only the toggles in Settings do that — so restoring it
+  // brings the whimsy back without music beginning the moment the app opens.
   set nostalgia(bool v) {
     if (_nostalgia == v) return;
-    _nostalgia = v;
-    notifyListeners();
+    _set('nostalgia', () => _nostalgia = v, () => _prefs.setBool('nostalgia', v));
   }
 
   /// Re-scan the on-disk custom-fonts folder (uncommitted drops included) and

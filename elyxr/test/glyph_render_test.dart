@@ -3,11 +3,15 @@
 // part — so this loads each file and pumps it, rather than trusting that a valid
 // SVG is a supported one.
 //
-// It also pins the two features this set leans on: <mask> (every icon knocks its
-// glyph out of a solid body with one) and <text> (24 of them label themselves with
-// an extension). If either is unsupported the icons come out blank or wordless,
-// which is exactly the sort of thing that would otherwise be discovered by
-// squinting at a phone.
+// It also pins <mask>, which every icon leans on to knock its glyph out of a solid
+// body — an unsupported mask would render them as plain filled shapes.
+//
+// The <text> check below is kept deliberately even though no icon uses text any
+// more. An earlier set labelled itself by spelling the extension out, and that came
+// out effectively invisible: the labels were inside a mask, in a font the renderer
+// wouldn't resolve, contributing 36 opaque pixels out of 384. The check is here so
+// that if anyone reaches for <text> again, whether the renderer really draws it is
+// a measured fact rather than an assumption.
 
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -76,10 +80,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  // 24 of these icons say what they are by spelling it (".JS", ".MD"). Older
-  // flutter_svg ignored <text> outright, which would have rendered those as
-  // identical blank bodies — and "it rendered without an error" would not have
-  // caught it. So count the pixels: text has to actually paint.
+  // Whether the renderer draws <text> at all. No icon relies on it now, but the
+  // question is worth keeping answered: "it rendered without an error" was exactly
+  // what made a set of unreadable labelled icons look fine, so this counts pixels
+  // instead of trusting that nothing threw.
   test('<text> really paints, so the labelled icons are not blank', () async {
     const textOnly = '''
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
