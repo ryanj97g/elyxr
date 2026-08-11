@@ -95,13 +95,13 @@ lymnal bind seal               # on the server; approve the waiting device
 
 elyxr is a live window into the trove, not a copy of it:
 
-- **Click a file** to select it; its details show below. Click an **audio file**
-  and it plays in the built-in player, with the rest of that **folder queued up as
-  a playlist**.
-- **Double-click a file** to open it: just that file downloads, right then, and
-  opens in your default program. Edits you save come back to the trove on their
-  own; even if the server is briefly unreachable, the change waits on this device
-  and lands the moment it's back.
+- **Click a file** and it opens: just that file downloads, right then, and opens in
+  your default program. Edits you save come back to the trove on their own; even if
+  the server is briefly unreachable, the change waits on this device and lands the
+  moment it's back.
+- **Click a folder** to go into it. The breadcrumbs and **▲ UP** walk back out.
+- **Click an audio file** and it plays in the built-in player, with the rest of
+  that folder queued up as a playlist.
 - **Click and hold** to select several files at once; the actions (RENAME,
   DOWNLOAD, MOVE, DELETE) live permanently in the bar and light up when you have a
   selection.
@@ -110,7 +110,14 @@ elyxr is a live window into the trove, not a copy of it:
 - **Delete a file** and it's gone everywhere (the app asks first, since the trove is
   shared).
 
+The music player tucks itself into a single bar 30 seconds after you pause it,
+keeping the track loaded. Tap the bar to bring it back.
+
 No syncing by hand; using the files *is* the sync.
+
+**On Android:** the back button goes up one folder, and two presses at the top
+level leave the app. You can also turn on **shake for Tailscale**, which opens the
+Tailscale app when you shake the phone.
 
 ---
 
@@ -132,19 +139,31 @@ how it looks and feels on this device:
   one's brightness).
 - **Tube**: dark glow, or light paper.
 - **Density**: how large the text sits.
-- **Typeface**: the terminal font, VT323 and a dozen more. Drop your own
-  `.ttf`/`.otf` into `elyxr/assets/fonts/custom/` and tap **SCAN** (desktop) to use
-  them right away.
+- **Typeface**: the terminal font, VT323 and ten more. Drop your own `.ttf`/`.otf`
+  into `elyxr/assets/fonts/custom/` and tap **SCAN** (desktop) to use them right
+  away.
+
+Filenames in other scripts — Cyrillic, Arabic, Japanese, Korean, Thai, Devanagari
+— render properly whichever font you pick, so a mixed playlist doesn't come out
+half in boxes.
 
 And a few practical ones, same place: where downloads land, how many transfer at
 once, whether deleting asks first, and *(Linux)* whether the trove also shows up as
 a folder in your file manager.
 
-**Nostalgia Mode** (a toggle above the settings sections) turns on the fun: a
-matrix screensaver, a cursor trail, a transfer log, sound effects, a hidden Snake
-game (tap the wordmark ×7), and **2000's DEMO MODE**: which, when *you* switch it
-on, plays a built-in keygen soundtrack. It's off by default, so it never hijacks
-your own music.
+---
+
+## The fun stuff
+
+**Nostalgia Mode** is one toggle above the settings sections. It turns on a matrix
+screensaver, a cursor trail, a transfer log, retro sound effects, a hidden Snake
+game (tap the wordmark ×7), an unmarked nonsense button, and music-reactive edge
+lighting around the tube.
+
+Under it, **2000's DEMO MODE** plays a built-in keygen soundtrack. It's off by
+default, and neither toggle will ever interrupt music you started yourself.
+
+Full details in [NOSTALGIA.md](NOSTALGIA.md).
 
 ---
 
@@ -176,3 +195,4 @@ lymnal trove set <path>       # change which folder is served
 - **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)**: when something's off.
 - **[SPECS.md](SPECS.md)**: how it works (architecture, protocol, the HTTP API).
 - **[DESIGN.md](DESIGN.md)**: the look and interaction model.
+- **[NOSTALGIA.md](NOSTALGIA.md)**: the optional fun layer.

@@ -1,16 +1,18 @@
 # Elyxr: visual design
 
-The appearance and interaction specification. System behaviour; network, sync,
-updates; is in [SPECS.md](SPECS.md).
+The appearance and interaction specification. System behaviour — network, sync,
+updates — is in [SPECS.md](SPECS.md). The optional Nostalgia layer is in
+[NOSTALGIA.md](NOSTALGIA.md).
 
 Exact colours and sizes are defined in code, not duplicated here:
 
-- `elyxr/lib/design/oklch.dart`; the colour engine.
-- `elyxr/lib/design/tokens.dart`; accents, palette, densities, faces.
-- `elyxr/lib/design/text.dart`; the three type roles and their scales.
+- `elyxr/lib/design/oklch.dart` — the colour engine.
+- `elyxr/lib/design/tokens.dart` — accents, palette, densities, faces, chassis
+  geometry.
+- `elyxr/lib/design/text.dart` — the three type roles and their scales.
 
-This document defines the design rules, the invariants they must hold to, and
-the interaction model.
+This document defines the design rules, the invariants they hold to, and the
+interaction model.
 
 ---
 
@@ -22,18 +24,12 @@ tube recessed into it.
 Everything behind the glass is terminal. Everything on the metal is a physical
 control. This division governs placement and typography throughout.
 
-On desktop the window is a fixed 440 × 944 logical px, portrait, not resizable.
-On a phone the app renders at the device's own full resolution; the whole
-screen, e.g. **1440 × 3088 px**: with no fixed box and no down-scaling: the
-chassis fills the device directly. The phone owns its dimensions; never force a
-fixed phone size.
-
-On Android this is true fullscreen: the system bars are hidden (immersive) **and**
-the window draws edge-to-edge *under the camera cutout* (`setDecorFitsSystemWindows`
-false + `layoutInDisplayCutoutMode`). Both are required; without the cutout flag
-Android letterboxes the notch strip solid black regardless of anything on the Dart
-side, so the chassis top would not reach the first pixel. No SafeArea, no padding,
-no glow ring on mobile.
+On Android the app is true fullscreen: the system bars are hidden and the window
+draws under the camera cutout (`setDecorFitsSystemWindows` false plus
+`layoutInDisplayCutoutMode`). Both are required. Without the cutout flag Android
+letterboxes the notch strip solid black regardless of anything on the Dart side,
+and the chassis would not reach the first pixel. No SafeArea, no padding, no glow
+ring on mobile.
 
 ---
 
@@ -41,7 +37,7 @@ no glow ring on mobile.
 
 ```
 ┌─ chassis ──────────────────────┐
-│  top rail                      │   screw · ELYXR · hold-bar · vent · v0.9 · screw
+│  top rail                      │   screw · ELYXR · hold-bar · vent · version · screw
 │  ┌─ tube ────────────────────┐ │
 │  │  console block            │ │   ticker, then host/link/free + capacity
 │  │  music player             │ │   permanent: title, spectrum, seek, transport
@@ -49,29 +45,76 @@ no glow ring on mobile.
 │  │  breadcrumbs              │ │   /ELYXR / MUSIC / ALBUMS      ▲ UP
 │  │  file list  or  grid      │ │   fills remaining space
 │  │  transfer footer          │ │   the queue strip appears while transfers run
+│  │  ◟  oscilloscope  ◞       │ │   the band between the two speaker cradles
 │  └───────────────────────────┘ │
 │  bottom rail                   │   TEXT/GRID rocker · corner speakers · status LED
 └────────────────────────────────┘
 ```
 
 The **music player** and the **action bar** are permanent fixtures of the files
-view, not pop-ups. The action bar holds the file actions at all times; greyed and
-inert with nothing selected, lit when there's a selection; so nothing ever slides
-in over the list. There is no separate FIND field.
+view, not pop-ups. The action bar holds the file actions at all times: greyed and
+inert with nothing selected, lit when there is a selection. Nothing slides in over
+the list. There is no separate FIND field.
 
 The chassis is a near-vertical metal gradient with a machined bevel: a bright
-highlight hairline along the top edge and a recessed dark hairline along the
-bottom. The tube is recessed behind a bezel ring and a soft inner vignette.
+highlight hairline along the top edge, a recessed dark hairline along the bottom.
+The tube is recessed behind a bezel ring and a soft inner vignette.
 
-Both rails are drag handles for moving the window. The tube is not; it scrolls
-and receives clicks.
+Both rails are drag handles for moving the window. Dragging the metal moves it; a
+double-click on the metal does nothing, so the window can never maximize and rapid
+clicks still reach the wordmark and the nonsense button. The tube is not a drag
+handle — it scrolls and receives clicks.
 
 ---
 
-## Color
+## The tube
 
-Colour is a system, not a table. Every colour on screen; the glowing tube, the
-paper terminal in light mode, and the metal; is derived from a single hue by a
+### Overlays
+
+Three elements render over the glass and remain distinct:
+
+- **Scanlines**: phosphor-tinted hairlines every 4px. Static texture; it does not
+  move. Rasterised to a cached layer, so scaling the chassis resamples one texture
+  rather than redrawing hairlines each frame.
+- **Sweep**: a single thin scanner line crossing top to bottom, one pass every
+  ~11 seconds, near-translucent with a faint glow. A moving line, not a lit band
+  drawn across the texture.
+- **Vignette + bloom**: a soft accent bloom at the centre easing to a gentle dark
+  ring at the edges. A falloff, not a black frame; corners remain legible.
+
+### Corner speakers
+
+Two woofers sit in the bottom corners, in cradles cut out of the glass. The driver
+and the cradle are measured from the same origin, so the cone and the glass edge
+cannot drift apart.
+
+The cones move to the live audio at all times, not only in Nostalgia Mode.
+
+### Oscilloscope
+
+The strip of glass between the two cradles carries a scope trace. Its band is
+derived from the cradles' widest reach, not their bottom-edge crossing, so the
+trace can never slide under the metal.
+
+With nothing playing it is a single faint centre line at the accent. With audio it
+draws the waveform at the play head: 128 points averaged from a 512-sample window,
+peak-normalised with a fast attack and a slow release so quiet passages stay
+visible without a silent one filling with noise.
+
+The trace is **mirrored about the midpoint between the two speakers**: the
+waveform is drawn from the centre outward to the right, then reflected to the
+left. Both halves fade to nothing at their outer ends.
+
+The window start is chosen by a trigger rather than the buffer start: it arms
+below a small negative threshold, then fires on the next upward zero crossing.
+That holds the waveform still instead of letting it skate sideways frame to frame.
+
+---
+
+## Colour
+
+Colour is a system, not a table. Every colour on screen — the glowing tube, the
+paper terminal in light mode, and the metal — is derived from a single hue by a
 perceptual (OKLCH) engine. A whole screen resolves to one phosphor colour and
 holds it. Adding an accent is one row of four numbers in `tokens.dart`.
 
@@ -79,7 +122,7 @@ holds it. Adding an accent is one row of four numbers in `tokens.dart`.
 
 - A screen renders in a single colour. Two competing colours indicate a defect.
 - The accent hue drives the phosphor and the metal alike. The metal carries only
-  a whisper of the hue; a tinted grey, never a coloured chassis.
+  a whisper of the hue: a tinted grey, never a coloured chassis.
 - Hue is preserved under saturation. Requesting more chroma than sRGB can show
   clamps the chroma; it never lets the hue drift.
 
@@ -147,20 +190,18 @@ the default.
 ### Palette recipe
 
 From a hue `h` and the accent's `maxCeil`, each role is a fixed lightness at a
-chroma that is a fraction of the budget, rendered through `trueArgb`. `wc`/`mc`
-are 1 for a colour accent, 0 for mono.
+chroma that is a fraction of the budget, rendered through `trueArgb`.
 
 - **Accent swatch** `a` = `trueArgb(baseL, h, accentChroma(...))` (mono:
   `oklchArgb(monoL, 0, 0)`).
-- **Ink** on the accent: dark (`L 0.24`) when the accent is light (`>0.70`), else
-  white.
+- **Ink** on the accent: dark when the accent is light, white otherwise.
 - **Metal**: hue at a whisper of chroma (`0.008–0.016`), identical in both modes:
   `m1 L.240 · m2 .160 · m3 .130` (gradient), `mb .300` (border), `mh .400`
   (highlight), `mt .550` / `ml .860` (text), `mv1 .100` / `mv2 .210` (recess,
   vent).
 - **Phosphor, dark** (glowing tube): `bright L.88 @ 0.9·budget · soft .34@.55 ·
   mid .66@1.0 · dim .44@.85 · foot .52@.70 · glow .60@1.0 · tube-bg L.085`.
-  `bright`'s chroma scales with the saturation drag (capped ×1.5).
+  `bright`'s chroma scales with the saturation drag.
 - **Phosphor, light** (paper terminal): `bright L.28 · soft .42@.80 · mid .50@.80
   · dim .80@.40 · foot .62@.60 · glow .55@1.0 · tube-bg L.940`.
 
@@ -171,22 +212,9 @@ The accent swatch responds to a vertical drag, live across the app.
 - A colour accent drags saturation and glow together; `sat` feeds both
   `accentChroma` and the bright-glow scale. Range `0.25 – 3.2`: near-grey at the
   bottom, the hue's in-gamut peak at the top.
-- `mono` drags lightness (`monoL`, `0.12 – 0.99`), graphite to white.
+- `mono` drags lightness (`0.12 – 0.99`), graphite to white.
 
 Selecting a different accent resets its intensity to neutral.
-
-### Tube overlays
-
-Three separate elements render over the glass and remain distinct:
-
-- **Scanlines**: phosphor-tinted hairlines every 4px. Static texture; it does not
-  move. Rasterised to a cached layer so scaling the fixed chassis resamples one
-  texture rather than redrawing hairlines each frame.
-- **Sweep**: a single thin scanner line crossing top to bottom, one pass every
-  ~11 seconds, near-translucent with a faint glow. A moving line, not a lit band
-  drawn across the texture.
-- **Vignette + bloom**: a soft accent bloom at the centre easing to a gentle dark
-  ring at the edges. A falloff, not a black frame; corners remain legible.
 
 ---
 
@@ -197,19 +225,30 @@ Three roles, one face each. The terminal face is user-selectable.
 | Role | Applies to | Face |
 |---|---|---|
 | `chassis()` | Chassis labels, section markers, rail buttons | **Chakra Petch**, fixed |
-| `glass()` | Everything on the glass; rows, readouts, settings | the terminal face |
+| `glass()` | Everything on the glass: rows, readouts, settings | the terminal face |
 | `mono()` | The ticker and glass readouts | the terminal face |
 
 - The terminal face is selectable in Settings › TYPEFACE, from VT323 (default)
   through the bundled faces. It governs `glass()` and `mono()` together: the whole
   screen renders in one face. A face is added by placing a TTF in `assets/fonts/`,
   declaring it in `pubspec.yaml`, and adding a row to `kTermFaces`.
-- The metal face (`chassis()`) is fixed. The `v0.9` badge on the rail is metal
-  and uses the chassis face, so it is unaffected by the terminal-face selection.
+- The metal face (`chassis()`) is fixed. The version badge on the rail is metal
+  and uses the chassis face, so the terminal-face selection does not affect it.
 - The ticker uses the terminal face, as part of the screen. A monospace terminal
   face yields a monospace ticker.
 
 `text.dart` provides one scale knob per role.
+
+### Fallback chain
+
+Every glass and chassis style carries an ordered fallback list: Noto Sans (Latin,
+Greek, Cyrillic), then Arabic, Devanagari, Thai, Japanese and Korean, then Handjet
+and DotGothic16.
+
+Two rules follow from it. A filename in a script the chosen terminal face doesn't
+cover renders in a fallback rather than as boxes. And a folder holding several
+scripts renders each in the first face that covers it, in one consistent order,
+rather than in a patchwork that changes per file.
 
 ---
 
@@ -224,8 +263,8 @@ wordmark stays lit while Settings is open.
 
 There is no settings button, tooltip, or hint. This entry point is intentionally
 unmarked. The only cue is a periodic faint **gleam**: a shadowless bright gradient
-swept across the letters every ~4.5s while idle. It is layered *over* a
-permanently-mounted embossed wordmark (never swapped in), so the mark never blinks
+swept across the letters every ~4.5s while idle. It is layered over a
+permanently-mounted embossed wordmark, never swapped in, so the mark never blinks
 or shifts by a pixel as the sweep passes. It respects reduce-motion and pauses in
 Settings.
 
@@ -248,36 +287,59 @@ face live.
 
 ### Density
 
-TIGHT / MID / ROOMY sets a global text scale for the glass (≈0.9 / 1.0 / 1.15).
+TIGHT / MID / ROOMY sets a global text scale for the glass (0.9 / 1.0 / 1.15).
 The whole terminal scales together; the metal rails keep their fixed size. Row
-padding also tracks density.
+padding also tracks density, and even TIGHT keeps a file row near the ~44px a
+finger needs.
 
 ### TEXT / GRID
 
 A rocker on the bottom rail. TEXT is the dense phosphor list (default); GRID is
-small file-explorer tiles (an icon over a two-line name over the size; many per
-row, not big squares). Hidden while Settings **or the screensaver** is showing, as
-it controls only the file list. Persists.
+small file-explorer tiles: an icon over a two-line name over the size, many per
+row, not big squares. Hidden while Settings or the screensaver is showing, as it
+controls only the file list. Persists.
 
 ### File rows
 
-- **Single click** selects (files and folders alike). Clicking an audio file also
-  starts it in the player and makes its folder the playlist.
-- **Double-click** opens a folder or opens a file in the default program.
-- **Click-and-hold** multi-selects (toggles a row into the selection);
-  **shift-click** selects a range from the anchor.
+- **A single click selects and acts in the same motion.** A folder is entered. A
+  non-audio file opens in the default program. An audio file starts playing, and
+  its whole folder — loaded in full, not only the pages scrolled into view —
+  becomes the playlist.
+- **Click-and-hold** multi-selects, toggling a row into the selection.
+  **Shift-click** selects a range from the anchor.
 - **Rename** is an action-bar button, active only for a single selection.
-- Dragging a file sideways out of the window downloads it to the drop location; a
+- Dragging a file sideways out of the window downloads it to the drop location. A
   vertical drag scrolls.
 
-### The music player & the lightshow
+### Android hardware back
 
-The deck sits permanently above the action bar. Scroll the wheel **anywhere over
-it** to change volume (the whole panel is the hit target, not just the controls; a
-wheel signal never scrubs the seek bar). Tapping a track shows a loading spinner
-until playback starts. The spectrum is the real FFT of the audio at the play head; 
-the same live levels drive the corner speaker cones at all times and, in Nostalgia
-Mode, the tube's edge glow.
+Back resolves in one of three ways, in order:
+
+1. In Settings, it closes Settings.
+2. Below the root, it goes up one folder.
+3. At the root, it arms instead of exiting and shows `PRESS BACK AGAIN TO EXIT` on
+   the glass for two seconds. Only a second press inside that window leaves.
+
+### The music player
+
+The deck sits permanently above the action bar. Scroll the wheel anywhere over it
+to change volume — the whole panel is the hit target, not just the controls, and a
+wheel signal never scrubs the seek bar. Tapping a track shows a loading spinner
+until playback starts. Long titles scroll; short ones sit still.
+
+The spectrum is the real FFT of the audio at the play head. The same live levels
+drive the corner speaker cones and the oscilloscope.
+
+The deck has two heights. The full deck while something is playing, and a slim
+one-line bar otherwise, so it doesn't take up the tube when there is nothing to
+show.
+
+- With nothing loaded the bar rests. It shows a spinner while a tapped track is
+  being fetched, so the tap has feedback before the deck appears.
+- The full deck unfolds when a track loads.
+- Pausing it **yourself** folds it back to the bar after 30 seconds, keeping the
+  track loaded. A track ending on its own does not fold it.
+- Tapping the folded bar expands it. So does resuming play.
 
 ### Ticker
 
@@ -303,30 +365,38 @@ Replaces the files view inside the same tube, with the same scanlines and sweep,
 in the same terminal vocabulary.
 
 - **Header**: a phosphor `▸ SETTINGS` with an accent caret and a dim underline;
-  the device name in mono at the right.
+  the device name in mono at the right, truncated rather than allowed to push the
+  header wider than the tube.
 - **Sections**: each a bracketed `[NN]` accent marker, a glass title, and a
   trailing rule:
-  1. ACCENT; the eight swatches
-  2. DENSITY; three row-stack diagrams at their real spacings
-  3. TYPEFACE; the face rail, with a **SCAN** button that re-registers `.ttf`/`.otf`
+  1. ACCENT — the eight swatches
+  2. DENSITY — three row-stack diagrams at their real spacings
+  3. TYPEFACE — the face rail, with a **SCAN** button that registers `.ttf`/`.otf`
      files dropped into `assets/fonts/custom/` on disk (desktop only)
-  4. TUBE; dark / light
-  5. THIS DEVICE; mode, downloads, mount path, concurrent transfers, update, forget
-  6. USE SYSTEM FILE BROWSER; the optional gate mount (Linux client only)
+  4. TUBE — dark / light
+  5. THIS DEVICE — mode, downloads, mount path, concurrent transfers, update,
+     forget
+  6. USE SYSTEM FILE BROWSER — the optional gate mount (Linux client only), or on
+     Android, SHAKE FOR TAILSCALE — shake the phone to open the Tailscale app,
+     off by default
 - **Footer**: versions on the left, `HOLD ELYXR TO EXIT` on the right.
 
-Above the numbered sections sit the **NOSTALGIA MODE** master toggle and, revealed
-beneath it when Nostalgia is on, its **2000's DEMO MODE** sub-toggle (whether the
-built-in keygen soundtrack auto-plays; off by default). In **server mode**, the
-server controls (pairing, devices, space, recent problems) appear here too. The
-**music player is not in Settings**: it's a permanent fixture of the files view.
+Above the numbered sections sit the **NOSTALGIA MODE** toggle and its
+**2000's DEMO MODE** sub-toggle (see [NOSTALGIA.md](NOSTALGIA.md)). In **server
+mode** the server controls — pairing, devices, space, recent problems — appear
+here too. The **music player is not in Settings**: it is a fixture of the files
+view.
+
+Every control row shrinks its label to fit rather than overflowing its row. A
+control pushed outside the row that holds it is still painted but receives no
+clicks, so overflow reads as a dead button.
 
 ---
 
 ## State
 
-Persisted with `shared_preferences`. The bearer token is not stored here; it
-lives in the keyring, never in the clear, never on screen.
+Persisted with `shared_preferences`. The bearer token is not stored here; it lives
+in the keyring, never in the clear, never on screen.
 
 ```
 view       files | settings                          transient
@@ -338,16 +408,20 @@ sort       NAME | SIZE | DATE
 accent     red|amber|green|cyan|blue|purple|pink|mono persist
 accentSat  double, the colour drag intensity          persist
 monoL      double, the mono/white lightness           persist
-termFont   the terminal face family                    persist
-density    TIGHT | MID | ROOMY                         persist
-dark       bool (tube: glow vs paper)                  persist
-appMode    client | server                             persist
+termFont   the terminal face family                   persist
+density    TIGHT | MID | ROOMY                        persist
+dark       bool (tube: glow vs paper)                 persist
+appMode    client | server                            persist
 trove      bool; is the gate mount on                 persist
-downloadDir / mountPath / atOnce / confirmDelete       persist
-demoMode2000s  bool; auto-play the demo soundtrack     persist
-nostalgia  bool; session toy, off on every launch      transient
-holding    bool                                         transient
+downloadDir / mountPath / atOnce / confirmDelete      persist
+nostalgia  bool                                       persist
+demoMode2000s  bool                                   persist
+shakeForTailscale  bool (Android)                     persist
+holding    bool                                       transient
 ```
+
+If the stored settings file is ever unreadable, it is set aside and the app starts
+on defaults rather than failing to open a window.
 
 ---
 
@@ -362,5 +436,11 @@ messages:
 
 - **Timeout**: "Can't reach <server>. It may be asleep or off." Retries every few
   seconds and resumes waiting work once it answers.
-- **No tailnet**: "Tailscale isn't connected on this device."
+- **No tailnet**: "Tailscale isn't connected on this device." On Android an
+  `OPEN TAILSCALE` button appears with it.
 - **401**: "This device is no longer approved." Offers to request access again.
+
+The server controls follow the same rule. Any failure of a pairing or limits
+action puts a message on screen, including one with no code of its own: a missing
+local service, an unreachable local service, or an unexpected fault. A control that
+appears to do nothing is a defect.
