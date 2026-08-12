@@ -199,6 +199,23 @@ void main() {
           reason: 'sanity: almost nothing was drawn, so symmetry proves nothing');
     });
 
+    test('both traces run the full band, so neither tail is cut', () async {
+      // Two complete traces crossing, rather than two halves meeting: each runs
+      // from its own outer edge to the far one, and nothing fades. So the band's
+      // outer columns carry as much ink as the middle does. Halving the traces or
+      // fading their ends puts these columns near zero.
+      final r = await render(lopsided);
+      final inner = r.columnInk(band.center.dx.round(), band);
+      for (final x in [
+        band.left.ceil() + 1,
+        band.right.floor() - 1,
+      ]) {
+        expect(r.columnInk(x, band), greaterThan(inner * 0.25),
+            reason: 'column $x is nearly empty — a trace is being cut short or '
+                'faded out before the cradle');
+      }
+    });
+
     test('it stays down in its band and off the terminal', () async {
       // The bloom is allowed to feather a few pixels past the band — that's the
       // point of a bloom. What must never happen is the scope painting up into

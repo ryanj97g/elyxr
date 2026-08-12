@@ -79,7 +79,6 @@ void paintScope(Canvas canvas, Size size, Palette p, List<double> wave) {
   if (band.width < 24 || band.height < 8) return; // no room to draw in
   final mid = band.center.dy;
   final cx = band.center.dx;
-  final half = band.width / 2;
   final amp = band.height / 2 - 2;
 
   canvas.drawLine(
@@ -91,10 +90,15 @@ void paintScope(Canvas canvas, Size size, Palette p, List<double> wave) {
   );
   if (wave.length < 2) return;
 
+  // Each trace spans the whole band, not half of it, and runs inward from its own
+  // outer edge: sample 0 at the edge, the tail at the far side. Drawn twice, the
+  // second mirrored, so the pair is symmetric about the midpoint between the
+  // speakers while neither line is cut short — they cross in the middle. The
+  // cradles are the cutoff, so there is no fade.
   final path = Path();
-  final step = half / (wave.length - 1);
+  final step = band.width / (wave.length - 1);
   for (var i = 0; i < wave.length; i++) {
-    final x = cx + i * step;
+    final x = band.right - i * step;
     final y = mid - wave[i] * amp;
     if (i == 0) {
       path.moveTo(x, y);
@@ -103,19 +107,12 @@ void paintScope(Canvas canvas, Size size, Palette p, List<double> wave) {
     }
   }
 
-  final shader = LinearGradient(
-    begin: Alignment.centerLeft,
-    end: Alignment.centerRight,
-    colors: [p.a, p.a, p.a.withValues(alpha: 0)],
-    stops: const [0.0, 0.78, 1.0],
-  ).createShader(Rect.fromLTRB(cx, band.top, band.right, band.bottom));
-
   final line = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.4
     ..strokeCap = StrokeCap.round
     ..strokeJoin = StrokeJoin.round
-    ..shader = shader;
+    ..color = p.a;
 
   for (final flip in const [false, true]) {
     canvas.save();

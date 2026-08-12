@@ -157,8 +157,10 @@ draws the waveform at the play head: 128 points averaged from a 512-sample windo
 peak-normalised with a fast attack and a slow release so quiet passages stay
 visible without a silent one filling with noise.
 
-The trace is mirrored about the midpoint between the two speakers. Both halves fade
-to nothing at their outer ends.
+There are two traces, and each is complete. One runs inward from the left cradle,
+the other from the right, so the pair is mirrored about the midpoint between the
+speakers while neither line is cut short. They cross in the middle. Nothing fades:
+the cradles are the cutoff.
 
 The window start is chosen by a trigger rather than the buffer start: it arms below
 a small negative threshold, then fires on the next upward zero crossing. That holds
