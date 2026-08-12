@@ -470,7 +470,14 @@ const double kAppHeight = 944;
 /// window is bigger than the chassis by this much — the chassis stays full
 /// size and this extra ring is pure transparent space for the glow to bleed
 /// into. It does NOT shrink the app; it enlarges the window.
-const double kGlowMargin = 56;
+///
+/// Sized so the whole window fits a 1080p screen's work area: 944 + 42*2 =
+/// 1028, which is exactly the usable height under a standard panel. A wider
+/// ring makes the window taller than the screen allows, and the Linux runner
+/// then scales the window down to fit — taking the chassis with it, so the
+/// app renders smaller than it does on Windows. The ring is the part that
+/// gives, not the app.
+const double kGlowMargin = 42;
 
 /// The real OS window: the chassis plus the transparent glow ring on all sides.
 /// The native runner is sized to exactly this, so the chassis inside renders at

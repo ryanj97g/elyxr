@@ -185,12 +185,18 @@ static void my_application_activate(GApplication* application) {
   }
 
   // The window is the chassis (440x944, the Galaxy S22 Ultra screen proportion)
-  // plus a 56px transparent glow ring on every side (552x1056,
+  // plus a 42px transparent glow ring on every side (524x1028,
   // kWindowWidth/Height in Dart) — the room the max-saturation glow bleeds into
   // so it isn't sliced at the edge. The chassis inside renders at full size;
   // only if the screen is too short do we open smaller (keeping the shape) and
   // let the Flutter side scale to fit.
-  gint win_w = 552, win_h = 1056;
+  //
+  // The work area is what's left after the panel/taskbar — that's what makes it
+  // the work area — so it is used as-is. Subtracting a second panel's worth on
+  // top of it cost the app real size for nothing: on a 1080p screen it capped
+  // the window at 968 and the Flutter side then scaled the chassis to 91.7%,
+  // which is why Linux rendered visibly smaller than Windows.
+  gint win_w = 524, win_h = 1028;
   GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
   GdkMonitor* monitor = gdk_display_get_primary_monitor(display);
   if (monitor == nullptr && gdk_display_get_n_monitors(display) > 0) {
@@ -199,10 +205,9 @@ static void my_application_activate(GApplication* application) {
   if (monitor != nullptr) {
     GdkRectangle area;
     gdk_monitor_get_workarea(monitor, &area);
-    gint max_h = area.height - 60;  // leave room for the panel/taskbar
-    if (max_h > 0 && win_h > max_h) {
-      win_h = max_h;
-      win_w = (gint)(win_h * (552.0 / 1056.0) + 0.5);
+    if (area.height > 0 && win_h > area.height) {
+      win_h = area.height;
+      win_w = (gint)(win_h * (524.0 / 1028.0) + 0.5);
     }
   }
   gtk_window_set_default_size(window, win_w, win_h);
