@@ -42,6 +42,15 @@ jobs:
         with:
           targets: aarch64-linux-android
 
+      # Before the APK is built or published, so a failing test can't be
+      # sideloaded onto a phone. Infos are not fatal; warnings and errors are.
+      - name: Test the app
+        working-directory: elyxr
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test
+
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
 

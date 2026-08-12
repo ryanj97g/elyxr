@@ -34,6 +34,18 @@ jobs:
         with:
           channel: stable
 
+      # Before anything is built or published. The suite includes checks that only
+      # fail at a narrow window width, which is the Windows case, so running it
+      # here is the point rather than a formality. Infos are not fatal; warnings
+      # and errors are.
+      - name: Test the app
+        working-directory: elyxr
+        shell: pwsh
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter test
+
       - name: Build lymnal
         run: cargo build --release -p lymnal
 

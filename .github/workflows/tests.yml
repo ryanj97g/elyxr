@@ -1,0 +1,53 @@
+name: tests
+
+# The whole test suite, on every push. The two build jobs each run the Dart tests
+# themselves before they publish anything, so a failing test can't ship an
+# installer; this job is the wider net — it also runs the Rust suite, which needs
+# a Linux host for the FUSE crate the gate links against.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  dart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Resolve dependencies
+        working-directory: elyxr
+        run: flutter pub get
+
+      # Infos are not fatal: the suite is the gate, and a style hint shouldn't be
+      # able to stop a release. Warnings and errors still fail the job.
+      - name: Analyze
+        working-directory: elyxr
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        working-directory: elyxr
+        run: flutter test
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # The gate is a FUSE filesystem, so its crate needs the FUSE headers to
+      # compile at all — including for `cargo test`.
+      - name: Install FUSE headers
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libfuse3-dev
+
+      - name: Test
+        run: cargo test --workspace
