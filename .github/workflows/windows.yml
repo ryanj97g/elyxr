@@ -135,3 +135,34 @@ jobs:
             elyxr-setup.exe
             elyxr-setup-${{ env.ELYXR_BUILD }}.exe
           make_latest: true
+
+      # One release per OS, holding exactly two files: the stable name the
+      # self-updater fetches, and one build-numbered copy. The number still
+      # advances every build, so a file can never misreport which build it is —
+      # it just replaces the previous number instead of joining it. Left
+      # unpruned, this release grew by ~80 MB a build and never shrank.
+      #
+      # The guard matters: if the numbered upload failed, the file we mean to keep
+      # is absent, and deleting "everything except it" would empty the release. So
+      # bail out rather than prune blind.
+      - name: Keep only the newest numbered installer
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $api  = "https://api.github.com/repos/$env:GITHUB_REPOSITORY"
+          $head = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = "application/vnd.github+json" }
+          $keep = "elyxr-setup-$env:ELYXR_BUILD.exe"
+          $rel  = Invoke-RestMethod -Headers $head -Uri "$api/releases/tags/windows-latest"
+          if (-not ($rel.assets.name -contains $keep)) {
+            Write-Host "::warning::$keep is not on the release; skipping the prune"
+            exit 0
+          }
+          foreach ($a in $rel.assets) {
+            if ($a.name -match '^elyxr-setup-\d+\.exe$' -and $a.name -ne $keep) {
+              Invoke-RestMethod -Headers $head -Method Delete -Uri "$api/releases/assets/$($a.id)"
+              Write-Host "pruned $($a.name)"
+            }
+          }
+          Write-Host "kept $keep"

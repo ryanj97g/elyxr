@@ -244,3 +244,36 @@ jobs:
           files: |
             elyxr/build/app/outputs/flutter-apk/elyxr.apk
             elyxr/build/app/outputs/flutter-apk/elyxr-${{ env.ELYXR_BUILD }}.apk
+
+      # One release per OS, holding exactly two files: the stable name the
+      # in-app updater fetches, and one build-numbered copy. The number still
+      # advances every build, so a file can never misreport which build it is —
+      # it just replaces the previous number instead of joining it. Left
+      # unpruned, this release grew by ~120 MB a build and never shrank.
+      #
+      # The guard matters: if the numbered upload failed, the file we mean to keep
+      # is absent, and deleting "everything except it" would empty the release. So
+      # bail out rather than prune blind.
+      - name: Keep only the newest numbered APK
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          api="https://api.github.com/repos/${{ github.repository }}"
+          keep="elyxr-${ELYXR_BUILD}.apk"
+          rel=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+                        -H "Accept: application/vnd.github+json" \
+                        "$api/releases/tags/android-latest")
+          if ! echo "$rel" | jq -e --arg k "$keep" '[.assets[].name] | index($k)' >/dev/null; then
+            echo "::warning::$keep is not on the release; skipping the prune"
+            exit 0
+          fi
+          echo "$rel" | jq -r --arg k "$keep" \
+            '.assets[] | select(.name | test("^elyxr-[0-9]+\\.apk$")) | select(.name != $k) | "\(.id) \(.name)"' \
+          | while read -r id name; do
+              curl -sS -X DELETE -H "Authorization: Bearer $GH_TOKEN" \
+                   -H "Accept: application/vnd.github+json" \
+                   "$api/releases/assets/$id"
+              echo "pruned $name"
+            done
+          echo "kept $keep"
