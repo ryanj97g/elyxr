@@ -66,34 +66,67 @@ class MusicPlayerPanel extends StatelessWidget {
       // the tap has visible feedback before the deck appears.
       final loading = m.loadingTrove;
       final folded = m.active;
+
+      // Folded with a track loaded: the visualizer, the name, and one target —
+      // a tap anywhere unfolds it. No transport buttons, because a button here
+      // would be a piece of the bar that does NOT unfold it.
+      if (folded) {
+        return _wheel(
+          m,
+          GestureDetector(
+            onTap: m.expandDeck,
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 62,
+                    height: 22,
+                    child: _Visualizer(palette: p, music: m),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      loading
+                          ? 'LOADING…'
+                          : (m.notice ?? (m.title.isEmpty ? '—' : m.title)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: glass(
+                          15, m.notice != null ? p.a : (m.playing ? p.soft : p.foot)),
+                    ),
+                  ),
+                  if (loading) ...[const SizedBox(width: 8), _spinner(p)],
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      // Nothing loaded at all. There is no deck to unfold, so this bar keeps its
+      // transport: with the soundtrack available it can start it, otherwise it
+      // just rests and trove playback starts from a file row.
       return _wheel(
         m,
-        GestureDetector(
-          onTap: folded ? m.expandDeck : null,
-          behavior: HitTestBehavior.opaque,
-          child: Row(
+        Row(
           children: [
             loading
                 ? _spinner(p)
                 : GestureDetector(
-                    onTap: (folded || canBuiltIn) ? () => m.toggle() : null,
+                    onTap: canBuiltIn ? () => m.toggle() : null,
                     behavior: HitTestBehavior.opaque,
                     child: Padding(
                       padding: const EdgeInsets.all(8),
                       child: Icon(Icons.play_arrow,
-                          size: 26,
-                          color: (folded || canBuiltIn) ? p.a : p.foot),
+                          size: 26, color: canBuiltIn ? p.a : p.foot),
                     ),
                   ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                  loading
-                      ? 'LOADING…'
-                      : (m.notice ??
-                          (folded || canBuiltIn
-                              ? (m.title.isEmpty ? '—' : m.title)
-                              : '—')),
+                  loading ? 'LOADING…' : (m.notice ?? '—'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   // A file that can't be decoded says so here. Otherwise a tap on
@@ -115,7 +148,6 @@ class MusicPlayerPanel extends StatelessWidget {
               ),
             ],
           ],
-          ),
         ),
       );
     }
@@ -137,7 +169,19 @@ class MusicPlayerPanel extends StatelessWidget {
         // Now playing — marquee title, tracklist button, index.
         Row(
           children: [
-            _keepSpace(Text('♪ ', style: glass(16, p.a))),
+            // The note folds the deck. It is the only thing that does, so a tap
+            // anywhere else on the open deck still belongs to the control under
+            // it. Sized to the title's line height so adding the target moved
+            // nothing.
+            _keepSpace(GestureDetector(
+              onTap: m.minimizeDeck,
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                width: 30,
+                height: 22,
+                child: Center(child: Text('♪', style: glass(16, p.a))),
+              ),
+            )),
             // A spinner while the current track is opening or buffering, so any
             if (m.loadingTrove) ...[
               _keepSpace(_spinner(p)),

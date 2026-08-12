@@ -243,6 +243,7 @@ class MusicController extends ChangeNotifier {
       } else {
         _visClock.stop();
       }
+      _watchIdle(p);
       notifyListeners();
     }));
     _subs.add(s.buffering.listen((b) {
@@ -302,21 +303,33 @@ class MusicController extends ChangeNotifier {
     notifyListeners();
   }
 
-  static const Duration kMinimizeAfterPause = Duration(seconds: 30);
+  static const Duration kMinimizeAfterIdle = Duration(seconds: 10);
 
-  void _armMinimize(bool paused) {
+  /// Fold the deck to its bar, keeping the track loaded.
+  void minimizeDeck() {
+    if (!_hasSource || _minimized) return;
+    _minimized = true;
+    notifyListeners();
+  }
+
+  /// Fold after [kMinimizeAfterIdle] with nothing playing — a pause, a track
+  /// ending, a failure, any of them.
+  ///
+  /// Driven by the player's own playing state rather than by the transport
+  /// button, because the button cannot know it: the state arrives on a stream,
+  /// so immediately after asking the player to pause, the old value is often
+  /// still in place. Reading it there raced, and whether the deck ever folded
+  /// depended on which won.
+  ///
+  /// Playing cancels the countdown but never unfolds the deck. Folding is the
+  /// user's choice and a track starting is not grounds to overrule it.
+  void _watchIdle(bool playing) {
     _minimizeTimer?.cancel();
     _minimizeTimer = null;
-    if (!paused) {
-      if (_minimized) {
-        _minimized = false;
-        notifyListeners();
-      }
-      return;
-    }
-    _minimizeTimer = Timer(kMinimizeAfterPause, () {
+    if (playing) return;
+    _minimizeTimer = Timer(kMinimizeAfterIdle, () {
       _minimizeTimer = null;
-      if (!_hasSource || _playing) return;
+      if (!_hasSource || _playing || _minimized) return;
       _minimized = true;
       notifyListeners();
     });
@@ -1043,7 +1056,6 @@ class MusicController extends ChangeNotifier {
     }
     try {
       await _player?.playOrPause();
-      _armMinimize(_playing);
     } catch (_) {}
   }
 
