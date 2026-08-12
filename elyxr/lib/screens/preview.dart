@@ -79,6 +79,11 @@ class _PreviewState extends State<_Preview> {
 
   Future<void> _fetch() async {
     await _disposeVideo();
+    // Tearing down the previous video is awaited, so the preview can be closed
+    // before we get any further. Both branches below reach for this screen —
+    // _fetchVideo does it too, one call down — so the guard belongs here, above
+    // the split, rather than in each of them.
+    if (!mounted) return;
     if (_isVideo) {
       await _fetchVideo();
       return;

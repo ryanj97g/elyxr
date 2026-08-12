@@ -287,7 +287,7 @@ class LocalTroveClient extends LymnalClient {
     // Open the handle once and keep it, so chunks can be written at their exact
     // offset (append mode would ignore the offset and only ever tack on the end).
     final raf = await staging.open(mode: FileMode.write);
-    final id = 'local_${DateTime.now().microsecondsSinceEpoch}_${_uploadSeq}';
+    final id = 'local_${DateTime.now().microsecondsSinceEpoch}_$_uploadSeq';
     _uploads[id] = _LocalUpload(
       targetAbs: targetAbs,
       staging: staging,

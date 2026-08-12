@@ -219,15 +219,19 @@ class _MovePickerState extends State<_MovePicker> {
     try {
       final f = await widget.listFolders(_cwd);
       f.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-      if (mounted) setState(() {
-        _folders = f;
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _folders = f;
+          _loading = false;
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() {
-        _error = 'Could not read this folder';
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'Could not read this folder';
+          _loading = false;
+        });
+      }
     }
   }
 

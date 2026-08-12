@@ -3,7 +3,6 @@
 // persistence. Desktop only in practice: it feeds on hover events, of which
 // touch has none, so it simply draws nothing there.
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 

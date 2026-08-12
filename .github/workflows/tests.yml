@@ -26,11 +26,13 @@ jobs:
         working-directory: elyxr
         run: flutter pub get
 
-      # Infos are not fatal: the suite is the gate, and a style hint shouldn't be
-      # able to stop a release. Warnings and errors still fail the job.
+      # Strict here, because the codebase is clean and this job publishes nothing:
+      # anything new the analyzer notices, down to a style hint, fails this job and
+      # is visible. The two publishing workflows deliberately stay lenient, so a
+      # future SDK adding a lint rule can never be what stops an installer.
       - name: Analyze
         working-directory: elyxr
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze
 
       - name: Test
         working-directory: elyxr

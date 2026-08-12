@@ -6,7 +6,6 @@
 // every previous attempt at this shape was tuned by eye and mismatched.
 
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 
