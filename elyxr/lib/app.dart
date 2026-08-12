@@ -113,9 +113,20 @@ class _RootState extends State<_Root> {
     if (settings.appMode == AppMode.server && !_serverTried) {
       _serverTried = true;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // A device that was last a client still has link.json, and lymnal reads
+        // it at startup and comes up as a client proxy — which serves no admin
+        // surface. Hand it the server role first; when that restarts it, wait
+        // for the new process to publish its address and token before reading.
+        final restarted = await session.applyRole(server: true);
         final dir = expandTilde('~/.local/share/lymnal');
-        final token = await AdminClient.readToken(dir);
-        final addr = await AdminClient.readAddress(dir) ?? session.serverAddress;
+        String? token;
+        String? addr;
+        for (var i = 0; i < (restarted ? 20 : 1); i++) {
+          token = await AdminClient.readToken(dir);
+          addr = await AdminClient.readAddress(dir) ?? session.serverAddress;
+          if (token != null && addr != null) break;
+          await Future.delayed(const Duration(milliseconds: 700));
+        }
         if (token != null && addr != null) {
           server.connect(AdminClient(baseUrl: 'http://$addr', adminToken: token));
         }
@@ -133,6 +144,11 @@ class _RootState extends State<_Root> {
       _serverTried = false;
       server.connect(null);
       session.useRemote();
+      // Switching back hands lymnal the client role again: link.json is written
+      // from the saved pairing and the service restarts as the local proxy,
+      // rather than being left serving as a server this device no longer is.
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => session.applyRole(server: false));
     }
 
     // The trove mount (client only): the folder is live while the TROVE switch

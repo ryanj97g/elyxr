@@ -254,6 +254,53 @@ class SessionController extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Put the local lymnal into the role this device is in right now, and say
+  /// whether that changed anything.
+  ///
+  /// lymnal picks its role once, at startup: link.json present means it runs as
+  /// a client proxy, and the proxy serves no admin surface at all. So server
+  /// mode has to take link.json away first, or the Server controls have nothing
+  /// to talk to and every one of them fails against an address nothing is
+  /// listening on. Client mode puts link.json back from the saved pairing.
+  ///
+  /// The saved pairing (token and server address) is left alone either way, so
+  /// switching to server mode and back does not unpair the device.
+  Future<bool> applyRole({required bool server}) async {
+    if (!server) {
+      await _syncLink();
+      return true;
+    }
+    if (Caps.isAndroid) {
+      final dataDir = await LymnalHost.dataDir();
+      if (dataDir == null) return false;
+      final f = File('$dataDir/lymnal/link.json');
+      if (!await f.exists()) return false;
+      await f.delete();
+      await LymnalHost.stop();
+      await LymnalHost.start();
+      return true;
+    }
+    final home = _homeDir();
+    if (home == null) return false;
+    try {
+      final f = File('$home/.config/lymnal/link.json');
+      if (!await f.exists()) return false; // already a server — leave it alone
+      await f.delete();
+      // address and admin.token are published by lymnal at startup, and the
+      // copies on disk are from its last run as a server. Clear them so the
+      // restarted service is what republishes them, rather than server mode
+      // reading back values that no longer describe anything running.
+      for (final name in const ['address', 'admin.token']) {
+        final stale = File('$home/.local/share/lymnal/$name');
+        if (await stale.exists()) await stale.delete();
+      }
+      await _restartLymnal(running: true);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// The user's home directory, matching lymnal's own resolution so link.json
   /// lands where lymnal looks for it: `%USERPROFILE%` first on Windows, `$HOME`
   /// first elsewhere.
