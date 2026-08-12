@@ -559,8 +559,15 @@ class _DensityPicker extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(d.label,
-                        style: chassis(10, d == settings.density ? p.bright : p.mid, spacing: 0.1)),
+                    // Scales down rather than running past its third of the row,
+                    // which a wide terminal face made it do.
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(d.label,
+                          style: chassis(
+                              10, d == settings.density ? p.bright : p.mid,
+                              spacing: 0.1)),
+                    ),
                   ],
                 ),
               ),

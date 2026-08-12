@@ -286,10 +286,14 @@ extension AccentLabel on Accent {
 }
 
 extension DensityLabel on Density {
+  /// The label names how the SCREEN reads, not how big the type is: smaller text
+  /// fits more rows, so the screen has more room. That inverts the enum names on
+  /// purpose — Density.tight is shown as ROOMY. The names are persisted, so they
+  /// stay put and only the words shown change.
   String get label => switch (this) {
-        Density.tight => 'TIGHT',
+        Density.tight => 'ROOMY',
         Density.mid => 'MID',
-        Density.roomy => 'ROOMY',
+        Density.roomy => 'TIGHT',
       };
 
   double get pad => switch (this) {

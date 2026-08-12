@@ -175,12 +175,32 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(s.name, style: glass(18, p.bright)),
-                            Text(s.address, style: glass(13, p.foot)),
+                            // A long device name gives way; the address never
+                            // does. This is the number someone reads off one
+                            // screen to type into another.
+                            Text(s.name,
+                                style: glass(18, p.bright),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                            Text(s.address,
+                                style: glass(13, p.foot),
+                                maxLines: 1,
+                                softWrap: false),
                           ],
                         ),
                       ),
-                      Text('REQUEST ACCESS ▸', style: chassis(10, p.a, spacing: 0.1)),
+                      const SizedBox(width: 8),
+                      // Shrinks to fit rather than pushing the address out of
+                      // the row. A control outside the row that holds it is
+                      // painted but takes no taps.
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text('REQUEST ACCESS ▸',
+                              style: chassis(10, p.a, spacing: 0.1)),
+                        ),
+                      ),
                     ],
                   ),
                 ),

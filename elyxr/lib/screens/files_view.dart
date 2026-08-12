@@ -144,7 +144,9 @@ class _Console extends StatelessWidget {
               Expanded(
                 child: Column(
                   children: [
-                    _stat('HOST', session.serverName ?? '—'),
+                    // serverName is the server's address with the port stripped,
+                    // so this row IS the IP. Never truncate it.
+                    _stat('HOST', session.serverName ?? '—', whole: true),
                     _stat('LINK', session.status == LinkStatus.ok ? 'UP' : 'DOWN'),
                     _stat('FREE', h != null ? '${fmtGb(h.driveFreeBytes)}G' : '—'),
                   ],
@@ -184,24 +186,43 @@ class _Console extends StatelessWidget {
     );
   }
 
-  Widget _stat(String label, String value) {
+  /// A label on the left, its value right-aligned.
+  ///
+  /// [whole] flips which of the two gives way when the row is too narrow. Off,
+  /// the value is ellipsised and the label is always fully readable — right for
+  /// a name or a size, where a cut-off tail costs nothing. On, the value keeps
+  /// every character and the LABEL is the one that shrinks: an address ending in
+  /// "…" is not an address, and the whole reason it is on screen is so it can be
+  /// read off and typed into another device.
+  Widget _stat(String label, String value, {bool whole = false}) {
     final p = palette;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Text(label, style: glass(15, p.mid)),
+          if (whole)
+            Flexible(
+              child: Text(label,
+                  style: glass(15, p.mid),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            )
+          else
+            Text(label, style: glass(15, p.mid)),
           const SizedBox(width: 8),
-          // Expanded (not Flexible) so the value fills the rest and right-aligns
-          // with a guaranteed gap — the label and value can't collide at any
-          // text scale.
-          Expanded(
-            child: Text(value,
-                style: glass(15, p.bright),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.right),
-          ),
+          if (whole)
+            Text(value, style: glass(15, p.bright), maxLines: 1, softWrap: false)
+          else
+            // Expanded (not Flexible) so the value fills the rest and
+            // right-aligns with a guaranteed gap — the label and value can't
+            // collide at any text scale.
+            Expanded(
+              child: Text(value,
+                  style: glass(15, p.bright),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right),
+            ),
         ],
       ),
     );
@@ -599,6 +620,14 @@ class _Breadcrumbs extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
       child: Row(
         children: [
+          // The trail is where you can go BACK to, so it stops short of the
+          // folder you are already in — tapping that crumb did nothing anyway.
+          // The current folder's name is the list header instead, which has the
+          // width and the type size to actually show it.
+          //
+          // No Spacer here. One next to this Flexible split the leftover width
+          // between the two of them, so the trail only ever got half the room it
+          // could have had, and a deep path was clipped for no reason.
           Flexible(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -606,17 +635,13 @@ class _Breadcrumbs extends StatelessWidget {
               child: Row(
                 children: [
                   _crumb('/ELYXR', p.glow, () => browse.goToCrumb(-1)),
-                  for (var i = 0; i < parts.length; i++)
-                    _crumb(
-                      ' / ${parts[i].toUpperCase()}',
-                      i == parts.length - 1 ? p.bright : p.glow,
-                      () => browse.goToCrumb(i),
-                    ),
+                  for (var i = 0; i < parts.length - 1; i++)
+                    _crumb(' / ${parts[i].toUpperCase()}', p.glow,
+                        () => browse.goToCrumb(i)),
                 ],
               ),
             ),
           ),
-          const Spacer(),
           // These were 10px type with no padding at all — the smallest targets in
           // the app, sitting next to a Spacer's worth of unused room.
           _tap(
@@ -712,7 +737,7 @@ class _FileListState extends State<_FileList> {
         padding: const EdgeInsets.fromLTRB(7, 2, 7, 0),
         itemCount: rows.length + 2,
         itemBuilder: (context, i) {
-          if (i == 0) return _header(p);
+          if (i == 0) return _header(p, browse.crumbs);
           if (i == rows.length + 1) return _footer(p, rows.length);
           final index = i - 1;
           return _Row(
@@ -729,18 +754,30 @@ class _FileListState extends State<_FileList> {
     return content;
   }
 
-  Widget _header(Palette p) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
-        child: Row(
-          children: [
-            const SizedBox(width: 16),
-            const SizedBox(width: 7),
-            Expanded(child: Text('NAME', style: chassis(9.5, p.foot, spacing: 0.12))),
-            Text('SIZE', style: chassis(9.5, p.foot, spacing: 0.12)),
-          ],
-        ),
-      );
+  /// The header names the folder you are looking inside of, in the slot the
+  /// static NAME label used to hold. At the top there is no folder above the
+  /// trove, so it names the trove.
+  Widget _header(Palette p, List<String> crumbs) {
+    final here = crumbs.isEmpty ? 'ELYXR' : crumbs.last.toUpperCase();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
+      child: Row(
+        children: [
+          const SizedBox(width: 16),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(here,
+                style: chassis(9.5, p.foot, spacing: 0.12),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 8),
+          Text('SIZE', style: chassis(9.5, p.foot, spacing: 0.12)),
+        ],
+      ),
+    );
+  }
 
   Widget _footer(Palette p, int n) => Padding(
         padding: const EdgeInsets.all(6),
