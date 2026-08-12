@@ -121,15 +121,23 @@ class Tube extends StatelessWidget {
   /// An optional top layer over the whole glass (the Matrix screensaver). When
   /// present it sits above everything, clipped to the tube.
   final Widget? overlay;
-  /// The music-reactive edge lighting is Nostalgia Mode only.
+  /// Drives how hard the corner cones react.
   final bool nostalgia;
+
+  /// The music-reactive edge lighting around the inside of the glass.
+  final bool lightshow;
+
+  /// The scope trace in the strip between the two speaker cradles.
+  final bool oscilloscope;
 
   const Tube(
       {super.key,
       required this.palette,
       required this.child,
       this.overlay,
-      this.nostalgia = false});
+      this.nostalgia = false,
+      this.lightshow = false,
+      this.oscilloscope = false});
 
   @override
   Widget build(BuildContext context) {
@@ -266,11 +274,10 @@ class Tube extends StatelessWidget {
                 child: overlay,
               ),
             ),
-          Positioned.fill(child: ChassisScope(palette: p)),
+          if (oscilloscope) Positioned.fill(child: ChassisScope(palette: p)),
           // Music-reactive edge lighting, framing everything else. Clipped to the
-          // glass so the bloom stays on-screen; invisible until music plays —
-          // and only in Nostalgia Mode.
-          if (nostalgia)
+          // glass so the bloom stays on-screen; invisible until music plays.
+          if (lightshow)
             Positioned.fill(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),

@@ -155,13 +155,18 @@ a folder in your file manager.
 
 ## The fun stuff
 
-**Nostalgia Mode** is one toggle above the settings sections. It turns on a matrix
-screensaver, a cursor trail, a transfer log, retro sound effects, a hidden Snake
-game (tap the wordmark ×7), an unmarked nonsense button, and music-reactive edge
-lighting around the tube.
+**Nostalgia Mode** is one toggle above the settings sections. It turns on a cursor
+trail, a transfer log, retro sound effects, a hidden Snake game (tap the wordmark
+×7), and an unmarked nonsense button.
 
-Under it, **2000's DEMO MODE** plays a built-in keygen soundtrack. It's off by
-default, and neither toggle will ever interrupt music you started yourself.
+It also reveals **DEMO MODE**, which reveals four more toggles: a matrix
+**screensaver**, a music-reactive **lightshow** around the edge of the tube, an
+**oscilloscope** in the strip between the speakers, and a keygen **soundtrack**.
+Pick any combination — the screensaver without the lightshow, the oscilloscope
+without either.
+
+Everything here is off by default, and nothing in it will ever interrupt music you
+started yourself.
 
 Full details in [NOSTALGIA.md](NOSTALGIA.md).
 

@@ -48,6 +48,13 @@ class SettingsController extends ChangeNotifier {
   // opt-in rather than hijacking the player the moment Nostalgia turns on — and
   // so a trove folder you're streaming stays your music source.
   bool _demoMode2000s = false;
+  // Demo Mode's four contents. Each is only live while Nostalgia and Demo Mode
+  // are both on; on by default so switching Demo Mode on gives the whole thing,
+  // and turning one off is the deliberate act.
+  bool _screensaver = true;
+  bool _lightshow = true;
+  bool _oscilloscope = true;
+  bool _soundtrack = true;
   bool _shakeForTailscale = false;
   // Whether the settings screen is showing. Kept here, not in the home widget's
   // own state, so a rebuild (e.g. while dragging a colour swatch) can never wipe
@@ -73,6 +80,21 @@ class SettingsController extends ChangeNotifier {
   bool get shakeForTailscale => _shakeForTailscale;
   bool get inSettings => _inSettings;
 
+  /// The four sub-toggles as stored, whether or not they're reachable.
+  bool get screensaver => _screensaver;
+  bool get lightshow => _lightshow;
+  bool get oscilloscope => _oscilloscope;
+  bool get soundtrack => _soundtrack;
+
+  /// Demo Mode is only a thing while Nostalgia is on; the four toggles are only
+  /// visible while Demo Mode is on. Read these rather than re-deriving the gate,
+  /// so every surface agrees on what is live.
+  bool get demoActive => _nostalgia && _demoMode2000s;
+  bool get showScreensaver => demoActive && _screensaver;
+  bool get showLightshow => demoActive && _lightshow;
+  bool get showOscilloscope => demoActive && _oscilloscope;
+  bool get playSoundtrack => demoActive && _soundtrack;
+
   void _load() {
     _accent = _enumByName(Accent.values, _prefs.getString('accent'), Accent.green);
     _density =
@@ -94,6 +116,10 @@ class SettingsController extends ChangeNotifier {
     if (!termFaces.any((f) => f.family == _termFont)) _termFont = 'VT323';
     _nostalgia = _prefs.getBool('nostalgia') ?? false;
     _demoMode2000s = _prefs.getBool('demoMode2000s') ?? false;
+    _screensaver = _prefs.getBool('screensaver') ?? true;
+    _lightshow = _prefs.getBool('lightshow') ?? true;
+    _oscilloscope = _prefs.getBool('oscilloscope') ?? true;
+    _soundtrack = _prefs.getBool('soundtrack') ?? true;
     _shakeForTailscale = _prefs.getBool('shakeForTailscale') ?? false;
     // Apply the chosen terminal face before the first frame builds. It governs
     // everything on the glass — the body text and the ticker/readouts alike —
@@ -162,6 +188,14 @@ class SettingsController extends ChangeNotifier {
   }
   set demoMode2000s(bool v) => _set('demoMode2000s',
       () => _demoMode2000s = v, () => _prefs.setBool('demoMode2000s', v));
+  set screensaver(bool v) => _set('screensaver',
+      () => _screensaver = v, () => _prefs.setBool('screensaver', v));
+  set lightshow(bool v) => _set('lightshow',
+      () => _lightshow = v, () => _prefs.setBool('lightshow', v));
+  set oscilloscope(bool v) => _set('oscilloscope',
+      () => _oscilloscope = v, () => _prefs.setBool('oscilloscope', v));
+  set soundtrack(bool v) => _set('soundtrack',
+      () => _soundtrack = v, () => _prefs.setBool('soundtrack', v));
   set density(Density v) => _set('density', () => _density = v, () => _prefs.setString('density', v.name));
   set dark(bool v) => _set('dark', () => _dark = v, () => _prefs.setBool('dark', v));
   set mode(ViewMode v) => _set('mode', () => _mode = v, () => _prefs.setString('mode', v.name));

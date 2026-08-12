@@ -45,7 +45,7 @@ ring on mobile.
 │  │  breadcrumbs              │ │   /ELYXR / MUSIC / ALBUMS      ▲ UP
 │  │  file list  or  grid      │ │   fills remaining space
 │  │  transfer footer          │ │   the queue strip appears while transfers run
-│  │  ◟  oscilloscope  ◞       │ │   the band between the two speaker cradles
+│  │  ◟  scope strip  ◞        │ │   the band between the two speaker cradles
 │  └───────────────────────────┘ │
 │  bottom rail                   │   TEXT/GRID rocker · corner speakers · status LED
 └────────────────────────────────┘
@@ -90,24 +90,12 @@ cannot drift apart.
 
 The cones move to the live audio at all times, not only in Nostalgia Mode.
 
-### Oscilloscope
+### The strip between the cradles
 
-The strip of glass between the two cradles carries a scope trace. Its band is
-derived from the cradles' widest reach, not their bottom-edge crossing, so the
-trace can never slide under the metal.
-
-With nothing playing it is a single faint centre line at the accent. With audio it
-draws the waveform at the play head: 128 points averaged from a 512-sample window,
-peak-normalised with a fast attack and a slow release so quiet passages stay
-visible without a silent one filling with noise.
-
-The trace is **mirrored about the midpoint between the two speakers**: the
-waveform is drawn from the centre outward to the right, then reflected to the
-left. Both halves fade to nothing at their outer ends.
-
-The window start is chosen by a trigger rather than the buffer start: it arms
-below a small negative threshold, then fires on the next upward zero crossing.
-That holds the waveform still instead of letting it skate sideways frame to frame.
+The band of glass between the two cradles holds the oscilloscope, which is part of
+the optional layer — see [NOSTALGIA.md](NOSTALGIA.md). Its band is derived from the
+cradles' widest reach, not their bottom-edge crossing, so nothing drawn there can
+slide under the metal. With the oscilloscope off, the strip is empty glass.
 
 ---
 
@@ -328,7 +316,7 @@ wheel signal never scrubs the seek bar. Tapping a track shows a loading spinner
 until playback starts. Long titles scroll; short ones sit still.
 
 The spectrum is the real FFT of the audio at the play head. The same live levels
-drive the corner speaker cones and the oscilloscope.
+drive the corner speaker cones, and the oscilloscope when it is on.
 
 The deck has two heights. The full deck while something is playing, and a slim
 one-line bar otherwise, so it doesn't take up the tube when there is nothing to
@@ -381,8 +369,9 @@ in the same terminal vocabulary.
      off by default
 - **Footer**: versions on the left, `HOLD ELYXR TO EXIT` on the right.
 
-Above the numbered sections sit the **NOSTALGIA MODE** toggle and its
-**2000's DEMO MODE** sub-toggle (see [NOSTALGIA.md](NOSTALGIA.md)). In **server
+Above the numbered sections sits the **NOSTALGIA MODE** toggle, which reveals
+**DEMO MODE**, which in turn reveals **SCREENSAVER**, **LIGHTSHOW**,
+**OSCILLOSCOPE** and **SOUNDTRACK** (see [NOSTALGIA.md](NOSTALGIA.md)). In **server
 mode** the server controls — pairing, devices, space, recent problems — appear
 here too. The **music player is not in Settings**: it is a fixture of the files
 view.
@@ -416,6 +405,7 @@ trove      bool; is the gate mount on                 persist
 downloadDir / mountPath / atOnce / confirmDelete      persist
 nostalgia  bool                                       persist
 demoMode2000s  bool                                   persist
+screensaver / lightshow / oscilloscope / soundtrack   persist
 shakeForTailscale  bool (Android)                     persist
 holding    bool                                       transient
 ```

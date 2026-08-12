@@ -4,13 +4,39 @@ The optional layer. None of it touches your files, your transfers, or the trove.
 Core behaviour is in [SPECS.md](SPECS.md); the core look is in
 [DESIGN.md](DESIGN.md).
 
-One toggle, at the top of Settings above the numbered sections. It persists. The
-page never lists what it does; long-pressing the `NOSTALGIA MODE` label shows the
-list.
+## The shape of it
 
-Switching it on plays a laugh. Switching it off stops the built-in soundtrack
-after a three-second grace period, so a quick toggle back on doesn't cut the
-music; a trove stream is left playing either way.
+Three levels, at the top of Settings above the numbered sections. Every toggle
+persists.
+
+```
+NOSTALGIA MODE                    off by default
+  DEMO MODE                       revealed by Nostalgia; off by default
+    SCREENSAVER                   revealed by Demo Mode; on
+    LIGHTSHOW                     revealed by Demo Mode; on
+    OSCILLOSCOPE                  revealed by Demo Mode; on
+    SOUNDTRACK                    revealed by Demo Mode; on
+```
+
+**Nostalgia Mode** brings the cursor trail, the transfer log, Snake, the nonsense
+button and the sound effects. Those five come as a set and have no individual
+controls. Switching it on plays a laugh.
+
+**Demo Mode** holds the four things below it. They are what Demo Mode *is*, so
+with Demo Mode off there is no screensaver, no lightshow, no oscilloscope and no
+soundtrack, and Nostalgia Mode is the five features above.
+
+The four are on by default, so switching Demo Mode on gives you the whole thing at
+once and turning one off is a deliberate act. Nothing forces a pairing: the
+screensaver without the lightshow, or the oscilloscope without either, is a valid
+combination.
+
+Switching Nostalgia Mode off stops the soundtrack after a three-second grace
+period, so a quick toggle back on doesn't cut the music. A trove stream is left
+playing either way.
+
+The settings page never lists what any of this does. Long-pressing the
+`NOSTALGIA MODE` label shows the list.
 
 ---
 
@@ -20,35 +46,12 @@ music; a trove stream is left playing either way.
 - It never hijacks the player. If something is already playing, nothing
   auto-starts and nothing stops it.
 - It never invents data. The transfer log reads real transfer state.
-- Everything is one toggle, and that toggle persists.
+- Every toggle persists.
 - Nothing on the settings page narrates the features.
 
 ---
 
-## Matrix screensaver
-
-After 30 seconds without interaction the tube falls to black and glyphs rain down
-in the accent colour, easing in over about 1.2 seconds.
-
-Half-width katakana, digits and a few symbols on an 11.5px grid. Eighty columns
-are precomputed once from a fixed seed, so the rain is the same every session and
-stable frame to frame: each column has its own speed (6–22 cells per second),
-start offset, and tail length (8–23 cells). The leading glyph is the bright
-phosphor; the tail fades behind it. Glyphs flip occasionally as a column falls.
-
-The rain covers the whole tube. No hole is cut in it.
-
-The music player is drawn over the rain as content only — the title, the
-oscilloscope, the transport, the progress bar — with no panel, no border and no
-dimming. Its position is tied to the real player rather than calculated, so the
-copy lands on the original exactly. The title block hangs above it and grows
-upward, so a long title or a large text scale takes the room it needs.
-
-- A click anywhere on the rain dismisses it.
-- A click on the player is exempt. Using the transport doesn't dismiss the rain.
-- The wheel anywhere over the rain sets volume.
-- Moving the pointer or scrolling restarts the idle countdown but never dismisses
-  the rain once it is up.
+# Nostalgia Mode features
 
 ## Cursor trail
 
@@ -95,7 +98,41 @@ missing file or an absent audio device is swallowed and never reaches the app.
 
 The laugh on switching Nostalgia Mode on plays regardless of the effects.
 
-## Edge light
+---
+
+# Demo Mode features
+
+Each has its own toggle, revealed while Nostalgia Mode and Demo Mode are both on.
+
+## Screensaver
+
+After 30 seconds without interaction the tube falls to black and glyphs rain down
+in the accent colour, easing in over about 1.2 seconds.
+
+Half-width katakana, digits and a few symbols on an 11.5px grid. Eighty columns
+are precomputed once from a fixed seed, so the rain is the same every session and
+stable frame to frame: each column has its own speed (6–22 cells per second),
+start offset, and tail length (8–23 cells). The leading glyph is the bright
+phosphor; the tail fades behind it. Glyphs flip occasionally as a column falls.
+
+The rain covers the whole tube. No hole is cut in it.
+
+The music player is drawn over the rain as content only — the title, the scope
+trace, the transport, the progress bar — with no panel, no border and no dimming.
+Its position is tied to the real player rather than calculated, so the copy lands
+on the original exactly. The title block hangs above it and grows upward, so a long
+title or a large text scale takes the room it needs.
+
+- A click anywhere on the rain dismisses it.
+- A click on the player is exempt. Using the transport doesn't dismiss the rain.
+- The wheel anywhere over the rain sets volume.
+- Moving the pointer or scrolling restarts the idle countdown but never dismisses
+  the rain once it is up.
+
+With the screensaver off, the tube never falls to the rain and the idle countdown
+does not run.
+
+## Lightshow
 
 The inside edge of the tube strobes on the beat.
 
@@ -109,21 +146,37 @@ keeps the edge present between beats.
 
 When nothing is playing it fades to nothing and stops repainting.
 
----
+## Oscilloscope
 
-## 2000's DEMO MODE
+The strip of glass between the two speaker cradles carries a scope trace. Its band
+is derived from the cradles' widest reach, not their bottom-edge crossing, so the
+trace can never slide under the metal.
 
-A sub-toggle, revealed under Nostalgia Mode while Nostalgia Mode is on. Off by
-default. It persists.
+With nothing playing it is a single faint centre line at the accent. With audio it
+draws the waveform at the play head: 128 points averaged from a 512-sample window,
+peak-normalised with a fast attack and a slow release so quiet passages stay
+visible without a silent one filling with noise.
 
-It makes the built-in soundtrack the auto-playing source:
+The trace is mirrored about the midpoint between the two speakers. Both halves fade
+to nothing at their outer ends.
 
-- Switching Nostalgia Mode on with demo mode already on starts the soundtrack
-  once the opening laugh has finished, and only if nothing is playing.
-- Switching demo mode on starts the soundtrack immediately, unless something is
-  playing.
-- Switching demo mode off stops the soundtrack and leaves a trove stream alone.
+The window start is chosen by a trigger rather than the buffer start: it arms below
+a small negative threshold, then fires on the next upward zero crossing. That holds
+the waveform still instead of letting it skate sideways frame to frame.
 
-While it is on, the soundtrack advances to a random different track every time
-one ends. This is separate from the player's own shuffle control and never
-changes it or the player's default order.
+With the oscilloscope off, the strip between the cradles is empty glass. The corner
+speaker cones are not part of this toggle — they move to the audio at all times.
+
+## Soundtrack
+
+The built-in keygen soundtrack becomes the auto-playing music source:
+
+- Switching Nostalgia Mode on, with Demo Mode and Soundtrack already on, starts the
+  soundtrack once the opening laugh has finished, and only if nothing is playing.
+- Switching Demo Mode on starts it immediately, unless something is playing.
+- Switching Soundtrack on starts it immediately, unless something is playing.
+  Switching it off stops it and leaves a trove stream alone.
+
+While it plays, the soundtrack advances to a random different track every time one
+ends. This is separate from the player's own shuffle control and never changes it
+or the player's default order.

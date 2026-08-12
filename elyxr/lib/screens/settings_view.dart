@@ -186,6 +186,28 @@ class _NostalgiaRow extends StatelessWidget {
         ),
       );
 
+  Widget _subToggle(
+          Palette p, String label, bool on, double indent, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: EdgeInsets.only(left: indent, top: 3, bottom: 2),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: glass(15, on ? p.soft : p.mid)),
+              ),
+              const SizedBox(width: 8),
+              _toggle(p, on),
+            ],
+          ),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final s = context.watch<SettingsController>();
@@ -213,11 +235,9 @@ class _NostalgiaRow extends StatelessWidget {
               // once it's done — but ONLY if 2000's DEMO MODE is on and nothing
               // was already playing. Without demo mode, Nostalgia's visuals come
               // up with no music hijack; a live trove stream is always left be.
-              if (s.demoMode2000s && !music.active) {
+              if (s.demoMode2000s && s.soundtrack && !music.active) {
                 laughDone.then((_) {
-                  if (s.nostalgia && s.demoMode2000s && !music.active) {
-                    music.startBuiltIn();
-                  }
+                  if (s.playSoundtrack && !music.active) music.startBuiltIn();
                 });
               }
             } else {
@@ -239,9 +259,9 @@ class _NostalgiaRow extends StatelessWidget {
                 // waitDuration effectively disables the hover trigger, so only
                 // triggerMode.longPress shows it).
                 Tooltip(
-                  message: 'Matrix screensaver\nCursor trail\nTransfer log\n'
+                  message: 'Cursor trail\nTransfer log\n'
                       'Snake (wordmark ×7)\nNonsense button\nSound effects\n'
-                      "2000's DEMO MODE (toggle below)",
+                      'DEMO MODE (toggle below)',
                   triggerMode: TooltipTriggerMode.longPress,
                   waitDuration: const Duration(days: 3650),
                   showDuration: const Duration(seconds: 6),
@@ -263,38 +283,39 @@ class _NostalgiaRow extends StatelessWidget {
             ),
           ),
         ),
-        // The sub-control: 2000's DEMO MODE — whether the built-in keygen
-        // soundtrack is the auto-playing music source. Off by default so it's
-        // opt-in and never hijacks a trove stream. No feature list here — that's
-        // in the label's long-press popup.
+        // DEMO MODE holds the four pieces below it. Off by default, so nothing
+        // auto-starts and no visual turns itself on the moment Nostalgia does.
         if (on)
-          GestureDetector(
-            onTap: () {
-              final now = !s.demoMode2000s;
-              s.demoMode2000s = now;
-              final music = context.read<MusicController>();
-              if (now) {
-                // On: start the demo soundtrack now, unless something's already
-                // playing (never yank a trove stream).
-                if (!music.active) music.startBuiltIn();
-              } else {
-                // Off: stop the demo soundtrack, but leave a trove stream be.
-                music.stopBuiltIn();
-              }
-            },
-            behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 29, top: 3, bottom: 2),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text("2000's DEMO MODE", style: glass(15, p.mid)),
-                  ),
-                  _toggle(p, s.demoMode2000s),
-                ],
-              ),
-            ),
-          ),
+          _subToggle(p, 'DEMO MODE', s.demoMode2000s, 29, () {
+            final now = !s.demoMode2000s;
+            s.demoMode2000s = now;
+            final music = context.read<MusicController>();
+            if (now) {
+              if (s.soundtrack && !music.active) music.startBuiltIn();
+            } else {
+              music.stopBuiltIn();
+            }
+          }),
+        // Demo Mode's contents, one toggle each, so no one is stuck taking a
+        // screensaver to get an oscilloscope.
+        if (on && s.demoMode2000s) ...[
+          _subToggle(p, 'SCREENSAVER', s.screensaver, 46,
+              () => s.screensaver = !s.screensaver),
+          _subToggle(p, 'LIGHTSHOW', s.lightshow, 46,
+              () => s.lightshow = !s.lightshow),
+          _subToggle(p, 'OSCILLOSCOPE', s.oscilloscope, 46,
+              () => s.oscilloscope = !s.oscilloscope),
+          _subToggle(p, 'SOUNDTRACK', s.soundtrack, 46, () {
+            final now = !s.soundtrack;
+            s.soundtrack = now;
+            final music = context.read<MusicController>();
+            if (now) {
+              if (!music.active) music.startBuiltIn();
+            } else {
+              music.stopBuiltIn();
+            }
+          }),
+        ],
         Container(height: 1, color: p.dim),
       ],
     );

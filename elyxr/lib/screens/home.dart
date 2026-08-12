@@ -67,7 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _armIdle() {
     _idleTimer?.cancel();
     if (!mounted) return;
-    if (context.read<SettingsController>().nostalgia) {
+    if (context.read<SettingsController>().showScreensaver) {
       _idleTimer = Timer(_idleAfter, () {
         if (mounted) setState(() => _idle = true);
       });
@@ -99,7 +99,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final settings = context.watch<SettingsController>();
     final session = context.watch<SessionController>();
     final p = settings.palette;
-    final showSaver = settings.nostalgia && _idle;
+    final showSaver = settings.showScreensaver && _idle;
 
     // The trove is the main view on every device now — a client browses it over
     // the network, a server reads it straight off local disk. The server's own
@@ -159,6 +159,8 @@ class _HomeScreenState extends State<HomeScreen> {
         tube: Tube(
           palette: p,
           nostalgia: settings.nostalgia,
+          lightshow: settings.showLightshow,
+          oscilloscope: settings.showOscilloscope,
           // The minigame wins over the screensaver; both live in the overlay.
           overlay: _game
               ? SnakeGame(
