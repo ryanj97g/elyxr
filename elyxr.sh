@@ -615,10 +615,17 @@ UNITEOF
         # Hold the restart until any in-flight uploads finish, so an update never
         # cuts one off (the running service keeps upload state in memory).
         "$BIN_DIR/lymnal" drain || true
+        # Clear any leftover start-limit/failed state first. An update can bounce
+        # the service more than once, and StartLimitBurst caps how many starts are
+        # allowed in a window; once that's tripped systemd refuses this restart and
+        # the update finishes with the service dead. reset-failed clears the count.
+        systemctl --user reset-failed lymnal.service 2>/dev/null || true
         sh_ systemctl --user restart lymnal.service
       fi
     elif [ "$CLIENT" = 1 ]; then
-      # A client whose service somehow isn't running: bring it up.
+      # A client whose service somehow isn't running: bring it up, clearing any
+      # start-limit/failed state first so the start can't be refused.
+      systemctl --user reset-failed lymnal.service 2>/dev/null || true
       sh_ systemctl --user start lymnal.service || true
     fi
   fi
