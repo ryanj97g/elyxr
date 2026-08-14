@@ -1,9 +1,12 @@
 name: lymnal-android
 
-# Cross-compiles lymnal for Android (arm64) with the NDK. This is step one of
-# running lymnal on the phone: prove the daemon builds for the target. Anything
-# desktop-only in lymnal (the tray, etc.) shows up here as a build failure to be
-# gated off for Android.
+# lymnal's Rust CI. Two jobs on a Linux runner:
+#   - build: cross-compiles lymnal for Android (arm64) with the NDK — step one of
+#     running lymnal on the phone; anything desktop-only (the tray, etc.) shows up
+#     here as a build failure to gate off for Android.
+#   - test: runs the workspace test suite (`cargo test`). This is the only place
+#     the Rust tests run — the app-build workflows (android, windows) cover the
+#     Dart analyze/test, so there is no separate test workflow.
 
 on:
   push:
@@ -36,3 +39,19 @@ jobs:
           name: lymnal-android-arm64
           path: target/aarch64-linux-android/release/lymnal
           if-no-files-found: warn
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # lymnal builds rusqlite (bundled) and blake3 from source, so it needs a C
+      # toolchain and pkg-config present.
+      - name: Install build deps
+        run: sudo apt-get update && sudo apt-get install -y pkg-config
+
+      - name: Test
+        run: cargo test --workspace
