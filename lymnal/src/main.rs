@@ -125,6 +125,21 @@ async fn run_proxy(link: agent::Link) -> anyhow::Result<()> {
         }
     });
 
+    // The daily lymbo sweep: once a day, clear already-synced files so the cache
+    // returns to near-empty rather than hoarding past work. Held (unsynced) work
+    // is always kept. Checked hourly; the interval's immediate first tick runs a
+    // catch-up shortly after startup, so a machine that was asleep at the turn of
+    // the day still clears on its next wake.
+    let sweeper = proxy.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(3600));
+        loop {
+            tick.tick().await;
+            let p = sweeper.clone();
+            let _ = tokio::task::spawn_blocking(move || p.sweep_if_due()).await;
+        }
+    });
+
     let app = lymnal::proxy::router(proxy);
     let addr = "127.0.0.1:7749";
     // Retry the bind rather than exit — right after a restart the port can still

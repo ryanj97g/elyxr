@@ -14,7 +14,7 @@
 //! whichever is larger. Held work may cross that reserve — it is the only copy —
 //! and that crossing is exactly what makes a new write fail instead (§ failsafe).
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -144,6 +144,51 @@ impl Lymbo {
         self.remove_locked(&mut inner, key);
     }
 
+    /// Delete every file in the lymbo dir whose key is **not** in `keep`, and drop
+    /// its index entry. This is an *addition* to the ordinary LRU, not a
+    /// replacement: the LRU only evicts under disk pressure, which on a roomy disk
+    /// lets already-synced files sit for days, and it only knows the files stored
+    /// this session — so it can't clear a backlog left on disk by earlier runs.
+    /// The periodic sweep uses this to return lymbo to near-empty.
+    ///
+    /// It walks the on-disk dir (not just the in-memory index) so files from past
+    /// sessions are caught too. `keep` is the set of held (unsynced) keys — the
+    /// only-copy work — which is never touched. This is safe because an in-progress
+    /// upload assembles in memory, not on disk, so every file here is a committed
+    /// upload; anything not in `keep` is already on the trove. Returns the count
+    /// deleted. The `.lymnal` bookkeeping subdir is skipped (it isn't a plain file
+    /// at the top level).
+    pub fn sweep_disk_except(&self, keep: &HashSet<String>) -> usize {
+        let mut inner = self.inner.lock().unwrap();
+        let rd = match std::fs::read_dir(&self.dir) {
+            Ok(rd) => rd,
+            Err(_) => return 0,
+        };
+        let mut dropped = 0;
+        for de in rd.flatten() {
+            let is_file = de.file_type().map(|t| t.is_file()).unwrap_or(false);
+            if !is_file {
+                continue; // skips the .lymnal aux subdir
+            }
+            let fname = match de.file_name().to_str() {
+                Some(s) => s.to_string(),
+                None => continue,
+            };
+            // Inverse of local_path's flattening. Keys use '/'; on-disk names use
+            // "%2f".
+            let key = fname.replace("%2f", "/");
+            if keep.contains(&key) {
+                continue;
+            }
+            if std::fs::remove_file(de.path()).is_ok() {
+                inner.entries.remove(&key);
+                inner.order.retain(|k| k != &key);
+                dropped += 1;
+            }
+        }
+        dropped
+    }
+
     // --- room-making --------------------------------------------------------
 
     /// Free bytes left on the disk holding lymbo, plus the space the incoming
@@ -236,6 +281,25 @@ mod tests {
         // Clearing held on a unpins it; it drops off the held list.
         l.set_held("a", false);
         assert_eq!(l.held_keys(), vec!["b".to_string()]);
+    }
+
+    #[test]
+    fn disk_sweep_drops_unheld_and_orphans_but_keeps_held() {
+        let d = tempfile::tempdir().unwrap();
+        let l = Lymbo::open(d.path()).unwrap();
+        l.store("held", &[0u8; 10], true).unwrap();
+        l.store("synced", &[0u8; 10], false).unwrap();
+        // A file left on disk by an earlier session — not in the in-memory index.
+        std::fs::write(l.local_path("orphan"), [0u8; 10]).unwrap();
+
+        let mut keep = HashSet::new();
+        keep.insert("held".to_string());
+        // Both the synced entry and the untracked orphan go; held survives.
+        assert_eq!(l.sweep_disk_except(&keep), 2);
+        assert!(l.read("held").is_some());
+        assert!(l.read("synced").is_none());
+        assert!(std::fs::metadata(l.local_path("orphan")).is_err());
+        assert_eq!(l.held_keys(), vec!["held".to_string()]);
     }
 
     #[test]

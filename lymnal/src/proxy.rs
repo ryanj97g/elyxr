@@ -17,7 +17,7 @@
 //!                            bearer token, so the app never holds a token and
 //!                            never talks to the remote directly.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -116,6 +116,43 @@ impl Proxy {
     /// Block until the pusher is kicked (used by the background drain loop).
     pub async fn wait_for_kick(&self) {
         self.pusher.notified().await;
+    }
+
+    /// Once a day, clear the already-synced files out of lymbo so the cache
+    /// returns to near-empty instead of holding a backlog of past downloads/
+    /// uploads. Unsynced (held) work — the only copy — is always kept: the keep
+    /// set is the persisted outbound queue plus anything still marked held. The
+    /// last-sweep time lives beside the held queue, so it survives restarts and
+    /// catches up after the machine's been asleep (the caller checks hourly, and
+    /// the first check after boot runs a catch-up). Returns Some(count) when it
+    /// swept, None when a day hasn't passed yet. Blocking (disk I/O).
+    pub fn sweep_if_due(&self) -> Option<usize> {
+        const DAY_SECS: u64 = 24 * 60 * 60;
+        let marker = self.lymbo.aux_path("last_sweep");
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let last = std::fs::read_to_string(&marker)
+            .ok()
+            .and_then(|s| s.trim().parse::<u64>().ok())
+            .unwrap_or(0);
+        if now.saturating_sub(last) < DAY_SECS {
+            return None;
+        }
+        // The only-copy work to spare: the persisted push queue (authoritative
+        // across restarts) plus anything the live index still marks held.
+        let mut keep: HashSet<String> = self.held.lock().unwrap().keys().cloned().collect();
+        keep.extend(self.lymbo.held_keys());
+        let dropped = self.lymbo.sweep_disk_except(&keep);
+        if let Some(parent) = marker.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&marker, now.to_string());
+        if dropped > 0 {
+            tracing::info!(dropped, "lymbo: daily sweep cleared synced files");
+        }
+        Some(dropped)
     }
 
     /// Write the held queue to disk (best effort). Called whenever it changes so
