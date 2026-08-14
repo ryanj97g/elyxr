@@ -25,10 +25,8 @@ class SettingsController extends ChangeNotifier {
   Density _density = Density.mid;
   bool _dark = true;
   ViewMode _mode = ViewMode.text;
-  bool _trove = false; // "Use System File Browser" — the optional gate mount, off by default
   AppMode _appMode = AppMode.client;
   String _downloadDir = '~/Downloads';
-  String _mountPath = '~/Desktop/trove'; // where the trove mounts — a normal folder on the Desktop
   bool _confirmDelete = true; // show the "removes it for everyone" delete guard
   int _atOnce = 3;
   // The two accent drag axes: saturation for a colour phosphor (pushes chroma
@@ -66,10 +64,8 @@ class SettingsController extends ChangeNotifier {
   Density get density => _density;
   bool get dark => _dark;
   ViewMode get mode => _mode;
-  bool get trove => _trove;
   AppMode get appMode => _appMode;
   String get downloadDir => _downloadDir;
-  String get mountPath => _mountPath;
   bool get confirmDelete => _confirmDelete;
   int get atOnce => _atOnce;
   double get accentSat => _accentSat;
@@ -101,11 +97,9 @@ class SettingsController extends ChangeNotifier {
         _enumByName(Density.values, _prefs.getString('density'), Density.mid);
     _dark = _prefs.getBool('dark') ?? true;
     _mode = _enumByName(ViewMode.values, _prefs.getString('mode'), ViewMode.text);
-    _trove = _prefs.getBool('trove') ?? false;
     _appMode =
         _enumByName(AppMode.values, _prefs.getString('appMode'), AppMode.client);
     _downloadDir = _prefs.getString('downloadDir') ?? '~/Downloads';
-    _mountPath = _prefs.getString('mountPath') ?? '~/Desktop/trove';
     _confirmDelete = _prefs.getBool('confirmDelete') ?? true;
     _atOnce = _prefs.getInt('atOnce') ?? 3;
     _accentSat = _prefs.getDouble('accentSat') ?? 1.0;
@@ -199,10 +193,8 @@ class SettingsController extends ChangeNotifier {
   set density(Density v) => _set('density', () => _density = v, () => _prefs.setString('density', v.name));
   set dark(bool v) => _set('dark', () => _dark = v, () => _prefs.setBool('dark', v));
   set mode(ViewMode v) => _set('mode', () => _mode = v, () => _prefs.setString('mode', v.name));
-  set trove(bool v) => _set('trove', () => _trove = v, () => _prefs.setBool('trove', v));
   set appMode(AppMode v) => _set('appMode', () => _appMode = v, () => _prefs.setString('appMode', v.name));
   set downloadDir(String v) => _set('downloadDir', () => _downloadDir = v, () => _prefs.setString('downloadDir', v));
-  set mountPath(String v) => _set('mountPath', () => _mountPath = v, () => _prefs.setString('mountPath', v));
   set confirmDelete(bool v) => _set('confirmDelete', () => _confirmDelete = v, () => _prefs.setBool('confirmDelete', v));
   set atOnce(int v) => _set('atOnce', () => _atOnce = v, () => _prefs.setInt('atOnce', v));
 

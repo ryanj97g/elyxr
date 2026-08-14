@@ -22,7 +22,7 @@ class Caps {
   static bool get hasWindowManager => isDesktop;
 
   /// Can shell out to system executables with Process.run/start — service
-  /// control, the updater, the gate mount, ffmpeg/openmpt, open-in-default-app.
+  /// control, the updater, ffmpeg/openmpt, open-in-default-app.
   /// Not available on Android.
   static bool get canExec => isDesktop;
 

@@ -3,7 +3,6 @@
 // sections and an inverted accent header.
 
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -94,12 +93,6 @@ class SettingsView extends StatelessWidget {
                 _section(p, '04', 'TUBE', _TubePicker(palette: p)),
                 const SizedBox(height: 13),
                 _section(p, '05', 'THIS DEVICE', _DeviceRows(palette: p)),
-                // A client can surface the trove as a real folder (the optional
-                // gate mount) — Linux only, off by default. Kept last.
-                if (settings.appMode == AppMode.client && Platform.isLinux) ...[
-                  const SizedBox(height: 13),
-                  _section(p, '06', 'USE SYSTEM FILE BROWSER', _GateRow(palette: p)),
-                ],
                 if (Caps.isAndroid) ...[
                   const SizedBox(height: 13),
                   _section(p, '06', 'SHAKE FOR TAILSCALE',
@@ -162,9 +155,18 @@ class SettingsView extends StatelessWidget {
 /// The Nostalgia Mode master switch (and, once it's on, the sound sub-switch).
 /// It gates every retro feature — the screensaver, cursor trail, minigame,
 /// sounds. Pinned at the top of settings.
-class _NostalgiaRow extends StatelessWidget {
+class _NostalgiaRow extends StatefulWidget {
   final Palette palette;
   const _NostalgiaRow({required this.palette});
+
+  @override
+  State<_NostalgiaRow> createState() => _NostalgiaRowState();
+}
+
+class _NostalgiaRowState extends State<_NostalgiaRow> {
+  // The diamond folds the sub-toggle list away; purely a view state, not a
+  // setting, so it lives here and resets when Settings is reopened.
+  bool _collapsed = false;
 
   Widget _toggle(Palette p, bool on) => Container(
         width: 34,
@@ -199,7 +201,7 @@ class _NostalgiaRow extends StatelessWidget {
                 child: Text(label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: glass(15, on ? p.soft : p.mid)),
+                    style: glass(15, on ? p.mid : p.soft)),
               ),
               const SizedBox(width: 8),
               _toggle(p, on),
@@ -211,81 +213,108 @@ class _NostalgiaRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = context.watch<SettingsController>();
-    final p = palette;
+    final p = widget.palette;
     final on = s.nostalgia;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        GestureDetector(
-          onTap: () {
-            final now = !on;
-            s.nostalgia = now;
-            final sound = context.read<SoundController>();
-            sound.toggle(now);
-            final music = context.read<MusicController>();
-            if (now) {
-              // Switching on: the laugh plays (always, stacking). The built-in
-              // easter-egg soundtrack only auto-starts if nothing is already
-              // playing — if the player is live (a track the user picked, or a
-              // trove stream), Nostalgia leaves it alone rather than yanking it
-              // back to track 0. Cancel any pending auto-stop from a recent off.
-              music.cancelBuiltInStop();
-              final laughDone = sound.laugh();
-              // Opening laugh: let it land clean, then bring the soundtrack in
-              // once it's done — but ONLY if 2000's DEMO MODE is on and nothing
-              // was already playing. Without demo mode, Nostalgia's visuals come
-              // up with no music hijack; a live trove stream is always left be.
-              if (s.demoMode2000s && s.soundtrack && !music.active) {
-                laughDone.then((_) {
-                  if (s.playSoundtrack && !music.active) music.startBuiltIn();
-                });
-              }
-            } else {
-              // Switching off: after a 3s grace period, stop the easter-egg
-              // soundtrack (but leave a user's trove stream playing).
-              music.scheduleBuiltInStop();
-            }
-          },
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Text('◈', style: glass(20, on ? p.a : p.foot)),
-                const SizedBox(width: 9),
-                // What it does lives in a long-press popup on the label itself —
-                // no spelled-out list on the page, no narration of the off state.
-                // Long-press to reveal; hover never triggers it (the huge
-                // waitDuration effectively disables the hover trigger, so only
-                // triggerMode.longPress shows it).
-                Tooltip(
-                  message: 'Cursor trail\nTransfer log\n'
-                      'Snake (wordmark ×7)\nNonsense button\nSound effects\n'
-                      'DEMO MODE (toggle below)',
-                  triggerMode: TooltipTriggerMode.longPress,
-                  waitDuration: const Duration(days: 3650),
-                  showDuration: const Duration(seconds: 6),
-                  decoration: BoxDecoration(
-                    color: p.tubeBg,
-                    border: Border.all(color: p.a.withValues(alpha: 0.5)),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  textStyle: glass(14, p.soft),
-                  // Uses glass() (the swappable terminal face), not chassis(),
-                  // so it re-skins with the chosen font like everything else on
-                  // the glass — it was the one label stuck on the fixed face.
-                  child: Text('NOSTALGIA MODE',
-                      style: glass(16, on ? p.bright : p.mid, spacing: 0.16)),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              // The diamond folds the sub-toggle list open or shut — it is a view
+              // control, not a second way to arm Nostalgia. It only has anything
+              // to fold while the mode is on, so off it's inert decoration.
+              GestureDetector(
+                onTap: on
+                    ? () => setState(() => _collapsed = !_collapsed)
+                    : null,
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: Text(on && _collapsed ? '◇' : '◈',
+                      style: glass(20, on ? p.a : p.foot)),
                 ),
-                const Spacer(),
-                _toggle(p, on),
-              ],
-            ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    final now = !on;
+                    s.nostalgia = now;
+                    final sound = context.read<SoundController>();
+                    sound.toggle(now);
+                    final music = context.read<MusicController>();
+                    if (now) {
+                      // Switching on: the laugh plays (always, stacking). The
+                      // built-in easter-egg soundtrack only auto-starts if nothing
+                      // is already playing — if the player is live (a track the
+                      // user picked, or a trove stream), Nostalgia leaves it alone
+                      // rather than yanking it back to track 0. Cancel any pending
+                      // auto-stop from a recent off.
+                      music.cancelBuiltInStop();
+                      final laughDone = sound.laugh();
+                      // Opening laugh: let it land clean, then bring the
+                      // soundtrack in once it's done — but ONLY if 2000's DEMO
+                      // MODE is on and nothing was already playing. Without demo
+                      // mode, Nostalgia's visuals come up with no music hijack; a
+                      // live trove stream is always left be.
+                      if (s.demoMode2000s && s.soundtrack && !music.active) {
+                        laughDone.then((_) {
+                          if (s.playSoundtrack && !music.active) {
+                            music.startBuiltIn();
+                          }
+                        });
+                      }
+                    } else {
+                      // Switching off: after a 3s grace period, stop the
+                      // easter-egg soundtrack (but leave a user's trove stream
+                      // playing).
+                      music.scheduleBuiltInStop();
+                    }
+                  },
+                  behavior: HitTestBehavior.opaque,
+                  child: Row(
+                    children: [
+                      // What it does lives in a long-press popup on the label
+                      // itself — no spelled-out list on the page, no narration of
+                      // the off state. Long-press to reveal; hover never triggers
+                      // it (the huge waitDuration effectively disables the hover
+                      // trigger, so only triggerMode.longPress shows it).
+                      Tooltip(
+                        message: 'Cursor trail\nTransfer log\n'
+                            'Snake (wordmark ×7)\nNonsense button\nSound effects\n'
+                            'DEMO MODE (toggle below)',
+                        triggerMode: TooltipTriggerMode.longPress,
+                        waitDuration: const Duration(days: 3650),
+                        showDuration: const Duration(seconds: 6),
+                        decoration: BoxDecoration(
+                          color: p.tubeBg,
+                          border: Border.all(color: p.a.withValues(alpha: 0.5)),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        textStyle: glass(14, p.soft),
+                        // Uses glass() (the swappable terminal face), not
+                        // chassis(), so it re-skins with the chosen font like
+                        // everything else on the glass — it was the one label
+                        // stuck on the fixed face.
+                        child: Text('NOSTALGIA MODE',
+                            style:
+                                glass(16, on ? p.bright : p.mid, spacing: 0.16)),
+                      ),
+                      const Spacer(),
+                      _toggle(p, on),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         // DEMO MODE holds the four pieces below it. Off by default, so nothing
         // auto-starts and no visual turns itself on the moment Nostalgia does.
-        if (on)
+        // The whole list folds away behind the diamond.
+        if (on && !_collapsed)
           _subToggle(p, 'DEMO MODE', s.demoMode2000s, 29, () {
             final now = !s.demoMode2000s;
             s.demoMode2000s = now;
@@ -298,7 +327,7 @@ class _NostalgiaRow extends StatelessWidget {
           }),
         // Demo Mode's contents, one toggle each, so no one is stuck taking a
         // screensaver to get an oscilloscope.
-        if (on && s.demoMode2000s) ...[
+        if (on && !_collapsed && s.demoMode2000s) ...[
           _subToggle(p, 'SCREENSAVER', s.screensaver, 46,
               () => s.screensaver = !s.screensaver),
           _subToggle(p, 'LIGHTSHOW', s.lightshow, 46,
@@ -341,57 +370,6 @@ class _ShakeTailscaleRow extends StatelessWidget {
               on
                   ? 'On — a hard shake opens the Tailscale app. Takes a few sharp shakes, so a pocket or a car ride will not set it off.'
                   : 'Off — turn this on to open Tailscale by shaking the phone, for when the connection drops and elyxr has not noticed yet.',
-              style: glass(15, p.mid),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Container(
-            width: 34,
-            height: 18,
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-            decoration: BoxDecoration(
-              color: p.mv1,
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Container(
-              width: 13,
-              height: 13,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: on ? p.a : p.mb,
-                boxShadow: on ? [BoxShadow(color: p.a, blurRadius: 6)] : null,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The "Use System File Browser" switch: turns the optional gate mount on and
-/// off. Off means the trove lives in elyxr; on also surfaces it as a folder in
-/// the file manager.
-class _GateRow extends StatelessWidget {
-  final Palette palette;
-  const _GateRow({required this.palette});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = context.watch<SettingsController>();
-    final p = palette;
-    final on = s.trove;
-    return GestureDetector(
-      onTap: () => s.trove = !on,
-      behavior: HitTestBehavior.opaque,
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              on
-                  ? 'On — the trove also appears as a folder in your file manager, on the Desktop.'
-                  : 'Off — the trove lives in elyxr. Turn this on to also open it as a folder in your file manager.',
               style: glass(15, p.mid),
             ),
           ),
@@ -847,20 +825,6 @@ class _DeviceRows extends StatelessWidget {
                 style: glass(20, p.bright),
                 softWrap: false,
                 overflow: TextOverflow.ellipsis)),
-        // The mount path only matters where the gate can run (a Linux client);
-        // in server mode there's no mount, so it isn't shown.
-        if (settings.appMode == AppMode.client && Platform.isLinux)
-          row(
-            'MOUNT AT',
-            GestureDetector(
-              onTap: () async {
-                final v = await _editMountPath(context, p, settings.mountPath);
-                if (v != null && v.trim().isNotEmpty) settings.mountPath = v.trim();
-              },
-              behavior: HitTestBehavior.opaque,
-              child: Text('${settings.mountPath}  ✎', style: glass(20, p.a)),
-            ),
-          ),
         row('AT ONCE', Text('${settings.atOnce} transfers', style: glass(20, p.bright))),
         // Update this device by hand — the same install the service runs on its
         // own when the server moves ahead. Here so it's reachable in any mode,
@@ -947,28 +911,6 @@ class _DeviceRows extends StatelessWidget {
               padding: const EdgeInsets.only(top: 2),
               child: Text(u.error!, style: glass(14, const Color(0xFFf5b942))),
             ),
-        ],
-      ),
-    );
-  }
-
-  Future<String?> _editMountPath(BuildContext context, Palette p, String current) {
-    final ctrl = TextEditingController(text: current);
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: p.tubeBg,
-        title: Text('Mount the trove at', style: glass(18, p.bright)),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          style: glass(18, p.bright),
-          cursorColor: p.a,
-          decoration: InputDecoration(hintText: '~/trove', hintStyle: glass(16, p.foot)),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('CANCEL', style: chassis(11, p.mid))),
-          TextButton(onPressed: () => Navigator.pop(context, ctrl.text), child: Text('SET', style: chassis(11, p.a))),
         ],
       ),
     );

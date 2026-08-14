@@ -25,8 +25,8 @@ cd elyxr
 
 `./elyxr.sh` installs the system build dependencies, installs Tailscale (it opens a
 browser once for sign-in), fetches Rust and the Flutter SDK if missing, builds
-lymnal, gate, and the app, puts `lymnal` (and `gate`) in `~/.local/bin`, adds elyxr
-to the applications menu, and starts lymnal as a user service that runs at boot. It
+lymnal and the app, puts `lymnal` in `~/.local/bin`, adds elyxr to the
+applications menu, and starts lymnal as a user service that runs at boot. It
 asks for your password once, for that first system-package step; after that,
 updates run without root.
 
@@ -42,9 +42,6 @@ THIS DEVICE → Server, then open PAIRING. Terminal: `lymnal bind open`, then
 finds on the tailnet. Pick yours and REQUEST ACCESS (or enter the address by hand,
 `100.x.y.z:7749`, if it isn't listed). Approve the device on the server. Terminal:
 `lymnal bind 100.x.y.z:7749`.
-
-**Trove as a file-manager folder (optional, Linux only):** Settings → Use System
-File Browser. Off by default; it mounts the trove via gate.
 
 ---
 
@@ -65,8 +62,7 @@ finds on the tailnet; pick yours and REQUEST ACCESS (or enter `100.x.y.z:7749`).
 Approve the device on the server.
 
 **Serve the trove:** a Windows desktop can also be a server; hold the wordmark →
-Settings → THIS DEVICE → Server, then open PAIRING. (The file-manager mount is
-Linux only; everything else is the same.)
+Settings → THIS DEVICE → Server, then open PAIRING.
 
 ---
 

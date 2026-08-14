@@ -92,7 +92,7 @@ class SessionController extends ChangeNotifier {
   /// read the token yet and guessing "first run" would flash that screen at
   /// someone who has been paired for months.
   bool get isFirstRun => _booted && _token == null;
-  /// The bearer token, for handing to the trove mount (never shown on screen).
+  /// The bearer token used to authenticate requests (never shown on screen).
   String? get bearerToken => _token;
 
   String _baseUrl(String address) => 'http://$address';

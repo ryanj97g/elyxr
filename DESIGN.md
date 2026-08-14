@@ -322,8 +322,10 @@ The deck has two heights. The full deck while something is playing, and a slim
 one-line bar otherwise, so it doesn't take up the tube when there is nothing to
 show.
 
-- With nothing loaded the bar rests. It shows a spinner while a tapped track is
-  being fetched, so the tap has feedback before the deck appears.
+- With nothing loaded the bar's play button starts the folder you're browsing as
+  a playlist — the same as tapping its first audio row. In **SOUNDTRACK mode** it
+  starts the built-in soundtrack instead. It shows a spinner while a tapped track
+  is being fetched, so the tap has feedback before the deck appears.
 - The full deck unfolds when a track loads.
 - Pausing it **yourself** folds it back to the bar after 30 seconds, keeping the
   track loaded. A track ending on its own does not fold it.
@@ -362,18 +364,17 @@ in the same terminal vocabulary.
   3. TYPEFACE — the face rail, with a **SCAN** button that registers `.ttf`/`.otf`
      files dropped into `assets/fonts/custom/` on disk (desktop only)
   4. TUBE — dark / light
-  5. THIS DEVICE — mode, downloads, mount path, concurrent transfers, update,
-     forget
-  6. USE SYSTEM FILE BROWSER — the optional gate mount (Linux client only), or on
-     Android, SHAKE FOR TAILSCALE — shake the phone to open the Tailscale app,
-     off by default
+  5. THIS DEVICE — mode, downloads, concurrent transfers, update, forget
+  6. (Android only) SHAKE FOR TAILSCALE — shake the phone to open the Tailscale
+     app, off by default
 - **Footer**: versions on the left, `HOLD ELYXR TO EXIT` on the right.
 
 Above the numbered sections sits the **NOSTALGIA MODE** toggle, which reveals
 **DEMO MODE**, which in turn reveals **SCREENSAVER**, **LIGHTSHOW**,
-**OSCILLOSCOPE** and **SOUNDTRACK** (see [NOSTALGIA.md](NOSTALGIA.md)). In **server
-mode** the server controls — pairing, devices, space, recent problems — appear
-here too. The **music player is not in Settings**: it is a fixture of the files
+**OSCILLOSCOPE** and **SOUNDTRACK** (see [NOSTALGIA.md](NOSTALGIA.md)). The
+diamond beside the label folds that revealed list away and back — a view control,
+not a second way to arm the mode. In **server mode** the server controls —
+pairing, devices, space, recent problems — appear here too. The **music player is not in Settings**: it is a fixture of the files
 view.
 
 Every control row shrinks its label to fit rather than overflowing its row. A
@@ -401,8 +402,7 @@ termFont   the terminal face family                   persist
 density    TIGHT | MID | ROOMY                        persist
 dark       bool (tube: glow vs paper)                 persist
 appMode    client | server                            persist
-trove      bool; is the gate mount on                 persist
-downloadDir / mountPath / atOnce / confirmDelete      persist
+downloadDir / atOnce / confirmDelete                  persist
 nostalgia  bool                                       persist
 demoMode2000s  bool                                   persist
 screensaver / lightshow / oscilloscope / soundtrack   persist

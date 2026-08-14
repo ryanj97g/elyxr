@@ -375,8 +375,7 @@ class _WordmarkGleam extends CustomPainter {
       old.t != t || old.base != base || old.highlight != highlight;
 }
 
-/// The bottom rail: TEXT/GRID rocker · status LED. (The optional file-browser
-/// mount toggle now lives in Settings, since it's off by default.)
+/// The bottom rail: TEXT/GRID rocker · status LED.
 class BottomRail extends StatelessWidget {
   final Palette palette;
   final ViewMode mode;

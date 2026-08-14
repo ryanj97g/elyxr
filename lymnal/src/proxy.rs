@@ -1,8 +1,7 @@
 //! The client proxy.
 //!
-//! On a client, lymnal runs a small local HTTP server that the app (and the
-//! gate) talk to, and forwards every call to the remote trove — with lymbo in
-//! front of it.
+//! On a client, lymnal runs a small local HTTP server that the app talks to,
+//! and forwards every call to the remote trove — with lymbo in front of it.
 //!
 //!   reads  (`/v1/download`)  stream straight from the trove and are NOT kept —
 //!                            lymbo is a write-back buffer, never a read cache.

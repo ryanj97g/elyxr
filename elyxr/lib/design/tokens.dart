@@ -149,14 +149,11 @@ class TermFace {
 const List<TermFace> kTermFaces = [
   TermFace('VT323', 'VT323'),
   TermFace('Chakra Petch', 'CHAKRA'),
-  TermFace('IBM Plex Mono', 'PLEX'),
   TermFace('Orbitron', 'ORBITRON'),
   TermFace('Silkscreen', 'SILKSCREEN'),
   TermFace('Julius Sans One', 'JULIUS'),
   TermFace('Redacted Script', 'REDACTED'),
-  TermFace('Flow Circular', 'FLOW'),
   TermFace('Ordinary Love', 'ORDINARY'),
-  TermFace('DotGothic16', 'DOTGOTHIC'),
   TermFace('Handjet', 'HANDJET'),
 ];
 

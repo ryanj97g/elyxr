@@ -18,7 +18,6 @@ import 'state/session.dart';
 import 'state/settings.dart';
 import 'state/sound.dart';
 import 'state/transfers.dart';
-import 'state/trove_mount.dart';
 import 'state/updater.dart';
 import 'util/drag_out.dart';
 import 'util/paths.dart';
@@ -49,7 +48,6 @@ class ElyxrApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: transfers),
         ChangeNotifierProvider.value(value: browse),
         ChangeNotifierProvider(create: (_) => ServerController()),
-        ChangeNotifierProvider(create: (_) => TroveMountController()),
         ChangeNotifierProvider(create: (_) => UpdateController()),
         Provider.value(value: FileActions(browse, transfers, settings)),
         Provider(create: (_) => SoundController(settings)),
@@ -82,7 +80,6 @@ class _Root extends StatefulWidget {
 class _RootState extends State<_Root> {
   bool _openedOnce = false;
   bool _serverTried = false;
-  bool _troveCleaned = false;
   LymnalClient? _dragClient;
   LinkStatus? _prevStatus;
 
@@ -149,43 +146,6 @@ class _RootState extends State<_Root> {
       // rather than being left serving as a server this device no longer is.
       WidgetsBinding.instance
           .addPostFrameCallback((_) => session.applyRole(server: false));
-    }
-
-    // The trove mount (client only): the folder is live while the TROVE switch
-    // is on and the link is up. trove is what actually mounts it; this starts
-    // and stops that.
-    final mount = context.read<TroveMountController>();
-    final wantMount = settings.appMode == AppMode.client &&
-        settings.trove &&
-        session.status == LinkStatus.ok;
-    if (wantMount && !mount.mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        final token = session.bearerToken;
-        final addr = session.serverAddress;
-        if (token != null && addr != null) {
-          await mount.mount(
-            serverAddress: addr,
-            token: token,
-            mountPath: expandTilde(settings.mountPath),
-          );
-        }
-      });
-    } else if (!wantMount && mount.mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        mount.unmount(mountPath: expandTilde(settings.mountPath));
-      });
-    } else if (settings.appMode == AppMode.client &&
-        !wantMount &&
-        !mount.mounted &&
-        !_troveCleaned) {
-      // A folder left over from a previous session (or an old build) hangs
-      // around because nothing is mounted to unmount. Clear it once at startup
-      // when the gate is off, so no phantom trove folder lingers on the Desktop.
-      // Client only: on the server this same path is the real trove.
-      _troveCleaned = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        mount.cleanupStaleMount(mountPath: expandTilde(settings.mountPath));
-      });
     }
 
     // When a token is present and the link is up, open the trove once and start

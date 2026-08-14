@@ -26,8 +26,6 @@ Ever.
 - **lymbo**: a client's small **write-back buffer**: it holds a file you've *saved*
   only until it lands back on the trove. It is **not** a read cache; opening files
   never fills it.
-- **gate**: optional, Linux-only. Surfaces the trove as a real folder in your file
-  manager.
 
 Your devices reach each other over **Tailscale**: a private network of only your
 own machines, nothing exposed to the internet. Use the **same account** on every
@@ -148,8 +146,7 @@ Filenames in other scripts — Cyrillic, Arabic, Japanese, Korean, Thai, Devanag
 half in boxes.
 
 And a few practical ones, same place: where downloads land, how many transfer at
-once, whether deleting asks first, and *(Linux)* whether the trove also shows up as
-a folder in your file manager.
+once, and whether deleting asks first.
 
 ---
 

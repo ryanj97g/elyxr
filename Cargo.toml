@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["lymnal", "gate"]
+members = ["lymnal"]
 
 [workspace.package]
 version = "2.0.5"

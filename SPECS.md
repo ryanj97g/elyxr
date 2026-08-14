@@ -23,11 +23,6 @@ layer in [NOSTALGIA.md](NOSTALGIA.md), and per-OS setup and fixes in [docs/](doc
   audio file plays and its folder becomes the playlist. Click-and-hold
   multi-selects. Terminal fonts dropped into `elyxr/assets/fonts/custom/` are
   registered at runtime, so adding a face needs no code change.
-- **gate** (Rust, FUSE) — optional, Linux-only. Surfaces the trove as a real folder
-  in your file manager (off by default; Settings → *Use System File Browser*). It
-  talks to the local lymnal proxy, so it rides the same write-back lymbo the app
-  does, and it keeps its own FUSE-level read cache on top of that for the files you
-  open through the folder.
 
 ---
 
@@ -77,9 +72,9 @@ client that `auto` calls.
   trove is a security boundary: every request path is normalised and re-checked to
   stay inside it (no `..`, no absolute/home paths, symlinks resolved and
   re-validated).
-- **A client routes through its own lymnal.** The app (and the gate) talk to
-  `127.0.0.1:7749`, the local proxy, which forwards to the remote trove with the
-  stored bearer token in front of lymbo. The app never holds the token.
+- **A client routes through its own lymnal.** The app talks to `127.0.0.1:7749`,
+  the local proxy, which forwards to the remote trove with the stored bearer token
+  in front of lymbo. The app never holds the token.
 - **The server works its own disk directly.** In server mode the app reads and
   writes the trove folder straight off local disk; no token, no network, no lymbo.
   It connects to the local lymnal's admin surface (with a machine-local admin
@@ -146,8 +141,8 @@ so they only need to request access again).
 
 ## Where things live
 
-- **Binaries:** `~/.local/bin/lymnal`, and `~/.local/bin/gate` (the optional
-  mount). User-space, which is why updates never need a password.
+- **Binaries:** `~/.local/bin/lymnal`. User-space, which is why updates never need
+  a password.
 - **Config:** `~/.config/lymnal/config.toml` (see [config.example.toml](config.example.toml)).
 - **Data dir:** `~/.local/share/lymnal/` — holds `admin.token` (machine-local,
   never sent over the network), `address` and `trove.path` (so local server-mode
@@ -364,13 +359,13 @@ approved."
 The installer sets all of this up for you; this is only for building by hand.
 
 ```sh
-cargo build --release              # lymnal + gate (Rust)
+cargo build --release              # lymnal (Rust)
 cd elyxr && flutter build linux    # the app (Flutter)
 ```
 
 **Requirements**: a Rust toolchain, the Flutter SDK, and these system packages on
-Linux (the installer lists them): `build-essential`, `pkg-config`, `git`, `fuse3`,
-`libfuse3-dev`, `clang`, `cmake`, `ninja-build`, `libgtk-3-dev`, `liblzma-dev`,
+Linux (the installer lists them): `build-essential`, `pkg-config`, `git`,
+`clang`, `cmake`, `ninja-build`, `libgtk-3-dev`, `liblzma-dev`,
 `libsecret-1-dev`, `libjsoncpp-dev`, `libgstreamer1.0-dev`,
 `libgstreamer-plugins-base1.0-dev`, `gstreamer1.0-plugins-base`,
 `gstreamer1.0-plugins-good`, `gstreamer1.0-libav`, `libasound2-dev`, `libmpv-dev`,

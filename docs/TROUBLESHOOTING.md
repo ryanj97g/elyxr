@@ -115,7 +115,7 @@ it can be added to the installer. For reference, the app build needs: `clang`,
 `libjsoncpp-dev`, `libgstreamer1.0-dev`, `libgstreamer-plugins-base1.0-dev`,
 `gstreamer1.0-plugins-base`, `gstreamer1.0-plugins-good`, `gstreamer1.0-libav`,
 `libasound2-dev`, `libmpv-dev`, `openmpt123`, `ffmpeg` (plus `build-essential`,
-`pkg-config`, `git`, `fuse3`, `libfuse3-dev`).
+`pkg-config`, `git`).
 
 ### "elyxr needs an apt-based Linux…"
 **Why:** the installer only supports apt distributions (Ubuntu, Zorin, Debian, and

@@ -7,11 +7,11 @@
 #   ./elyxr.sh
 #
 # Installs the whole stack on this device: lymnal (the service that can serve a
-# folder over your tailnet), gate (the optional client-side folder mount), and the elyxr app
-# (the UI). Every device gets all three — the app's Server/Client toggle decides
-# what this device actually does. Running it again is an update: pull, rebuild
-# only what changed, re-install a binary only if it differs, and restart the
-# service only when its binary changed. Quiet unless something fails.
+# folder over your tailnet) and the elyxr app (the UI). Every device gets both —
+# the app's Server/Client toggle decides what this device actually does. Running
+# it again is an update: pull, rebuild only what changed, re-install a binary
+# only if it differs, and restart the service only when its binary changed.
+# Quiet unless something fails.
 #
 #   --no-app        skip the GUI app (for a headless server with no display)
 #   --no-service    don't register/touch the lymnal boot service
@@ -153,7 +153,7 @@ BIN_DIR="$HOME/.local/bin"
 # install itself (a downloader and the certificates that verify its download)
 # go on first, before the Tailscale step. The heavier build tools follow it.
 BASE_PKGS=(curl ca-certificates)
-BUILD_PKGS=(build-essential pkg-config git fuse3 libfuse3-dev)
+BUILD_PKGS=(build-essential pkg-config git)
 # The app plays audio through audioplayers, which on Linux uses the system's
 # GStreamer: the -dev packages are needed to build the plugin, and the runtime
 # plugin sets (base/good + libav) provide the codecs so mp3/ogg/flac/etc. play
@@ -325,9 +325,7 @@ fi
 
 # --- build tools ------------------------------------------------------------
 # lymnal needs a C toolchain (for rusqlite and blake3). The app adds the GTK and
-# related build dependencies unless you pass --no-app. FUSE is only for the
-# optional gate; it isn't checked here, so a machine without it still installs
-# elyxr fully — the gate just won't build.
+# related build dependencies unless you pass --no-app.
 phase "build tools"
 if [ "${#BUILD_NEED[@]}" -gt 0 ]; then
   sh_ $SUDO apt-get install -y -o Dpkg::Use-Pty=0 "${BUILD_NEED[@]}"
@@ -379,18 +377,6 @@ export ELYXR_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 phase "building lymnal"
 sh_ cargo build --release -p lymnal
 done_
-
-# The gate (the optional file-browser mount) is best-effort: it's a Linux-only
-# FUSE extra, and a build failure must never block the app or an update. elyxr
-# works fully without it.
-GATE_BUILT=0
-phase "building gate"
-if sh_ cargo build --release -p gate; then
-  GATE_BUILT=1
-  done_
-else
-  printf '%s\n' "${DIM}skipped — the optional file-browser mount didn't build; elyxr works without it${RST}"
-fi
 
 if [ "$APP" = 1 ]; then
   phase "building the app"
@@ -501,8 +487,8 @@ install_if_changed() {  # $1 built, $2 dest — returns 0 if it (re)installed
 }
 LYMNAL_CHANGED=0
 if install_if_changed target/release/lymnal "$BIN_DIR/lymnal"; then LYMNAL_CHANGED=1; fi
-if [ "$GATE_BUILT" = 1 ] && install_if_changed target/release/gate "$BIN_DIR/gate"; then :; fi
-rm -f "$BIN_DIR/trove"  # old name for the mount, now 'gate'
+# Shed the retired file-browser mount binaries from any earlier install.
+rm -f "$BIN_DIR/gate" "$BIN_DIR/trove"
 # Ensure ~/.local/bin is on PATH now and in future login shells.
 case ":$PATH:" in *":$BIN_DIR:"*) ;; *) export PATH="$BIN_DIR:$PATH" ;; esac
 for rc in "$HOME/.profile" "$HOME/.bashrc"; do

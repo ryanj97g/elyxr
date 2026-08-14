@@ -13,7 +13,9 @@ import 'package:provider/provider.dart';
 
 import '../../design/text.dart';
 import '../../design/tokens.dart';
+import '../../state/browse.dart';
 import '../../state/music.dart';
+import '../../state/session.dart';
 import '../../state/settings.dart';
 import 'marquee.dart';
 
@@ -49,13 +51,43 @@ class MusicPlayerPanel extends StatelessWidget {
     return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
   }
 
+  /// Play the folder the browser is sitting in, exactly as tapping its first
+  /// audio row would. This is the play button's job whenever the built-in
+  /// soundtrack isn't the source — SOUNDTRACK mode off, or nothing bundled.
+  void _playCurrentFolder(BuildContext context) {
+    final client = context.read<SessionController>().client;
+    if (client == null) return;
+    // Capture the controllers before the await so we don't touch context across
+    // the async gap.
+    final browse = context.read<BrowseController>();
+    final music = context.read<MusicController>();
+    () async {
+      // Load the WHOLE folder first so the playlist covers every track, not just
+      // the rows scrolled into view.
+      await browse.loadAll();
+      final queue = <(String, String)>[];
+      for (final e in browse.entries) {
+        if (e.isDir || !isAudioName(e.name)) continue;
+        final path =
+            browse.path.isEmpty ? e.name : '${browse.path}/${e.name}';
+        queue.add((path, e.name));
+      }
+      if (queue.isEmpty) return;
+      music.playTroveQueue(client, queue, 0);
+    }();
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = palette;
     final m = context.watch<MusicController>();
     final settings = context.watch<SettingsController>();
     final egg = settings.nostalgia && settings.demoMode2000s;
-    final canBuiltIn = egg && m.hasTracks;
+    // The built-in assets soundtrack belongs to SOUNDTRACK mode only. With that
+    // off, the play button drives the current folder instead — same as tapping a
+    // file row. So `canBuiltIn` now also requires the soundtrack toggle.
+    final canBuiltIn = egg && settings.soundtrack && m.hasTracks;
+    final connected = context.watch<SessionController>().client != null;
 
     if (!m.deckOpen) {
       // Idle — a slim one-line bar, not the full deck, so it doesn't eat the
@@ -115,12 +147,17 @@ class MusicPlayerPanel extends StatelessWidget {
             loading
                 ? _spinner(p)
                 : GestureDetector(
-                    onTap: canBuiltIn ? () => m.toggle() : null,
+                    onTap: canBuiltIn
+                        ? () => m.toggle()
+                        : (connected
+                            ? () => _playCurrentFolder(context)
+                            : null),
                     behavior: HitTestBehavior.opaque,
                     child: Padding(
                       padding: const EdgeInsets.all(8),
                       child: Icon(Icons.play_arrow,
-                          size: 26, color: canBuiltIn ? p.a : p.foot),
+                          size: 26,
+                          color: (canBuiltIn || connected) ? p.a : p.foot),
                     ),
                   ),
             const SizedBox(width: 8),

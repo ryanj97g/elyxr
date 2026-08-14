@@ -84,7 +84,7 @@ fn run_service(config_path: PathBuf) -> anyhow::Result<()> {
 }
 
 /// The client's local caching proxy: a small HTTP server on loopback that the
-/// app and the gate talk to, forwarding to the remote trove with lymbo in front.
+/// app talks to, forwarding to the remote trove with lymbo in front.
 /// The app points here instead of at the remote, so it never holds a token and
 /// never reaches across the tailnet itself.
 async fn run_proxy(link: agent::Link) -> anyhow::Result<()> {
