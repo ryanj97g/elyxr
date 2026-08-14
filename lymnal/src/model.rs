@@ -14,6 +14,14 @@ pub struct Entry {
     pub mtime: i64,
     pub mime: Option<&'static str>,
     pub child_count: Option<u64>,
+    // Audio tags, filled by the listing for audio files (see tags.rs). Omitted
+    // from the JSON when absent, so non-audio entries stay lean.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub artist: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub album: Option<String>,
 }
 
 /// Build an entry for a directory child. Hidden entries (leading ".") are the
@@ -29,6 +37,9 @@ pub fn entry_for(name: String, meta: &std::fs::Metadata) -> Entry {
             mtime,
             child_count,
             name,
+            title: None,
+            artist: None,
+            album: None,
         }
     } else {
         let mime = mime_for(&name);
@@ -39,6 +50,10 @@ pub fn entry_for(name: String, meta: &std::fs::Metadata) -> Entry {
             mtime,
             mime,
             child_count: None,
+            // Filled in by the listing for audio files; see handlers/browse.rs.
+            title: None,
+            artist: None,
+            album: None,
         }
     }
 }
@@ -65,6 +80,28 @@ pub fn mtime_secs(meta: &std::fs::Metadata) -> i64 {
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// Title/artist/album read straight from an audio file's tags. No cache, on
+/// purpose: a listing re-reads, and the few milliseconds to re-parse a header is
+/// the cost of never keeping a private store of the user's files. lymbo is the
+/// one rolling place transient data is allowed to live; this is not that. Any
+/// failure — unreadable, no tags, a container lofty can't parse — is a quiet
+/// `(None, None, None)`, so a listing never fails over one bad file.
+pub fn audio_tags(path: &Path) -> (Option<String>, Option<String>, Option<String>) {
+    use lofty::prelude::*;
+    let Ok(file) = lofty::read_from_path(path) else {
+        return (None, None, None);
+    };
+    // A file can carry more than one tag block; prefer the one that matches the
+    // container, else take whatever it has.
+    let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) else {
+        return (None, None, None);
+    };
+    let clean = |o: Option<std::borrow::Cow<str>>| {
+        o.map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
+    };
+    (clean(tag.title()), clean(tag.artist()), clean(tag.album()))
 }
 
 /// A small, deterministic extension → MIME map. Covers what preview needs

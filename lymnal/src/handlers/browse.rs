@@ -53,6 +53,14 @@ pub(super) async fn list(
         let mut e = entry_for(name, &m);
         if e.kind == "dir" {
             e.child_count = Some(child_count(&de.path()));
+        } else if e.mime.is_some_and(|mt| mt.starts_with("audio/")) {
+            // Read title/artist/album straight from the file so the app can sort
+            // by them and the player can label the track. Read fresh each listing
+            // — no side cache (see model::audio_tags).
+            let (title, artist, album) = crate::model::audio_tags(&de.path());
+            e.title = title;
+            e.artist = artist;
+            e.album = album;
         }
         entries.push(e);
     }
@@ -98,12 +106,22 @@ fn sort_entries(entries: &mut [Entry], sort: Option<&str>, order: Option<&str>) 
         let primary = match key {
             "size" => a.size_bytes.cmp(&b.size_bytes),
             "mtime" => a.mtime.cmp(&b.mtime),
+            // Tagged files sort alphabetically; untagged (and non-audio) fall to
+            // the end, then the name tiebreak below keeps them in a stable order.
+            "artist" => tag_key(&a.artist).cmp(&tag_key(&b.artist)),
+            "album" => tag_key(&a.album).cmp(&tag_key(&b.album)),
             _ => name_cmp(&a.name, &b.name),
         };
         let primary = if desc { primary.reverse() } else { primary };
         // Deterministic tiebreak keeps paging free of repeats and gaps.
         primary.then_with(|| name_cmp(&a.name, &b.name))
     });
+}
+
+/// Sort key for an audio tag: `is_none` first so tagged files come before
+/// untagged ones, then a case-folded copy so the order is alphabetical.
+fn tag_key(t: &Option<String>) -> (bool, String) {
+    (t.is_none(), t.as_deref().unwrap_or("").to_lowercase())
 }
 
 fn name_cmp(a: &str, b: &str) -> std::cmp::Ordering {

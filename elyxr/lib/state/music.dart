@@ -59,6 +59,11 @@ const kModuleExts = {
 bool isAudioName(String name) =>
     kAudioExts.contains(name.split('.').last.toLowerCase());
 
+/// One track in a trove-folder playlist: its trove path, its filename (the
+/// fallback label), and the tags the server read — [title]/[artist] are null
+/// when the file carried none, so the UI falls back to the prettified filename.
+typedef TroveTrack = ({String path, String name, String? title, String? artist});
+
 /// Loop nothing, the whole list, or the one track.
 enum MusicRepeat { off, all, one }
 
@@ -135,13 +140,13 @@ class MusicController extends ChangeNotifier {
   // --- trove folder playlist ---
   // Streaming from a trove folder plays that whole folder: the folder's audio
   // files become one playlist handed to mpv, which advances and prefetches on its
-  // own. _byUri maps a media back to its (trove path, display name) so the title,
-  // the tracklist and the visualizer stay correct even after a shuffle reorders
-  // the playlist under us.
+  // own. _byUri maps a media back to its track (trove path, filename, and the
+  // audio tags the server read) so the title, the artist line, the tracklist and
+  // the visualizer stay correct even after a shuffle reorders the playlist.
   LymnalClient? _troveClient;
   bool _trove = false; // the folder playlist is what's loaded (not the assets)
-  List<(String, String)> _troveQueue = const []; // (full trove path, name)
-  final Map<String, (String, String)> _byUri = {};
+  List<TroveTrack> _troveQueue = const [];
+  final Map<String, TroveTrack> _byUri = {};
   Playlist? _plist; // the player's live playlist (post-shuffle order)
   bool _opening = false; // a tapped track is being opened, before mpv reports in
   bool _buffering = false; // mpv is filling its buffer for the current track
@@ -368,13 +373,32 @@ class MusicController extends ChangeNotifier {
     if (!_trove) {
       return i >= 0 && i < _tracks.length ? _pretty(_tracks[i]) : '';
     }
+    final t = _trackAt(i);
+    if (t == null) return '';
+    // A real title tag wins; otherwise the prettified filename.
+    final tag = t.title;
+    return (tag != null && tag.isNotEmpty) ? tag : _pretty(t.name);
+  }
+
+  /// The artist of whatever is playing, or '' — the built-in soundtrack and any
+  /// untagged file have none, and the player hides the line when it's empty.
+  String get artist => _trove ? artistAt(index) : '';
+
+  String artistAt(int i) {
+    if (!_trove) return '';
+    final a = _trackAt(i)?.artist;
+    return (a != null && a.isNotEmpty) ? a : '';
+  }
+
+  /// The trove track at position [i]: from the live (post-shuffle) playlist once
+  /// it has arrived, else the order we first handed to mpv.
+  TroveTrack? _trackAt(int i) {
     final medias = _plist?.medias;
     if (medias != null && i >= 0 && i < medias.length) {
       final hit = _byUri[medias[i].uri];
-      if (hit != null) return _pretty(hit.$2);
+      if (hit != null) return hit;
     }
-    // Before the first playlist event, fall back to the order we handed over.
-    return i >= 0 && i < _troveQueue.length ? _pretty(_troveQueue[i].$2) : '';
+    return i >= 0 && i < _troveQueue.length ? _troveQueue[i] : null;
   }
 
   Future<void> _restoreVolume() async {
@@ -423,7 +447,7 @@ class MusicController extends ChangeNotifier {
     final pl = _plist;
     if (pl != null && pl.index >= 0 && pl.index < pl.medias.length) {
       final hit = _byUri[pl.medias[pl.index].uri];
-      if (hit != null) return hit.$2;
+      if (hit != null) return hit.name;
     }
     if (!_trove && hasTracks) return _tracks[_index];
     return null;
@@ -547,7 +571,7 @@ class MusicController extends ChangeNotifier {
             ? _troveQueue[pl.index]
             : null);
     if (hit == null) return;
-    final trovePath = hit.$1;
+    final trovePath = hit.path;
     _analysisUri = uri;
     final token = ++_analysisToken;
     () async {
@@ -900,7 +924,7 @@ class MusicController extends ChangeNotifier {
   /// playback starts on the first chunk and mpv handles advancing and prefetching
   /// from there. Works for any folder, nested or not.
   Future<void> playTroveQueue(
-      LymnalClient client, List<(String, String)> queue, int index) async {
+      LymnalClient client, List<TroveTrack> queue, int index) async {
     if (queue.isEmpty) return;
     _resetMinimize(); // a fresh track always arrives with the deck open
     _troveClient = client;
@@ -929,17 +953,17 @@ class MusicController extends ChangeNotifier {
     final medias = <Media>[];
     var start = 0;
     for (var i = 0; i < queue.length; i++) {
-      final (path, name) = queue[i];
-      final resolved = await _sourceFor(client, path, owned);
+      final track = queue[i];
+      final resolved = await _sourceFor(client, track.path, owned);
       if (resolved == null) {
         // A module whose renderer isn't there. Leaving it in the playlist would
         // make mpv stall on a file it can't open, so it's dropped and named.
-        unplayable.add(name);
+        unplayable.add(track.name);
         continue;
       }
       if (i == index) start = medias.length;
       final media = Media(resolved.$1, httpHeaders: resolved.$2);
-      _byUri[media.uri] = (path, name);
+      _byUri[media.uri] = track;
       medias.add(media);
     }
     _queueTemps = owned;

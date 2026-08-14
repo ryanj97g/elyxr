@@ -20,6 +20,11 @@ class Entry {
   final int mtime;
   final String? mime;
   final int? childCount;
+  // Audio tags, present only for audio files the server could read (see
+  // lymnal's tags.rs). Used for the artist/album sort and the player labels.
+  final String? title;
+  final String? artist;
+  final String? album;
 
   const Entry({
     required this.name,
@@ -28,6 +33,9 @@ class Entry {
     required this.mtime,
     this.mime,
     this.childCount,
+    this.title,
+    this.artist,
+    this.album,
   });
 
   factory Entry.fromJson(Map<String, dynamic> j) => Entry(
@@ -37,6 +45,9 @@ class Entry {
         mtime: (j['mtime'] as num?)?.toInt() ?? 0,
         mime: j['mime'] as String?,
         childCount: (j['child_count'] as num?)?.toInt(),
+        title: j['title'] as String?,
+        artist: j['artist'] as String?,
+        album: j['album'] as String?,
       );
 }
 

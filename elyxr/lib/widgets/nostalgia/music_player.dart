@@ -65,12 +65,12 @@ class MusicPlayerPanel extends StatelessWidget {
       // Load the WHOLE folder first so the playlist covers every track, not just
       // the rows scrolled into view.
       await browse.loadAll();
-      final queue = <(String, String)>[];
+      final queue = <TroveTrack>[];
       for (final e in browse.entries) {
         if (e.isDir || !isAudioName(e.name)) continue;
         final path =
             browse.path.isEmpty ? e.name : '${browse.path}/${e.name}';
-        queue.add((path, e.name));
+        queue.add((path: path, name: e.name, title: e.title, artist: e.artist));
       }
       if (queue.isEmpty) return;
       music.playTroveQueue(client, queue, 0);
@@ -228,12 +228,27 @@ class MusicPlayerPanel extends StatelessWidget {
               // On the saver the title isn't here at all — a one-line strip with a
               // scrolling name is the wrong shape for a sleeping screen, and
               // squeezing a long title into it can only ellipsise or crawl. The
-              // saver draws the whole title as its own centred, wrapping block
-              // above the controls (see SaverLayer). The box stays so the
-              // visualizer, bar and buttons below don't move.
-              child: _keepSpace(SizedBox(
-                height: 22,
-                child: Marquee(text: m.title, style: glass(17, p.bright)),
+              // saver draws the whole title (and artist) as its own centred block
+              // above the controls (see SaverLayer). The box stays — now sized to
+              // hold the artist line too — so the visualizer, bar and buttons
+              // below don't move, and the saver copy reserves the same space.
+              child: _keepSpace(Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 22,
+                    child: Marquee(text: m.title, style: glass(17, p.bright)),
+                  ),
+                  // The artist rides on the track's tags (see MusicController);
+                  // absent for the built-in soundtrack or an untagged file, and
+                  // the line simply isn't drawn then.
+                  if (m.artist.isNotEmpty)
+                    Text(m.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: glass(13, p.soft)),
+                ],
               )),
             ),
             if (egg || m.isStream) ...[

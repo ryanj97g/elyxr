@@ -917,13 +917,13 @@ void _tapEntry(
     // the pages scrolled into view. Then gather its audio files in display order
     // (works at any depth — TROVE/MUSIC TEST/… too) and start on the tapped one.
     await browse.loadAll();
-    final queue = <(String, String)>[];
+    final queue = <TroveTrack>[];
     var start = 0;
     for (final e in browse.entries) {
       if (e.isDir || !isAudioName(e.name)) continue;
       final p = browse.path.isEmpty ? e.name : '${browse.path}/${e.name}';
       if (e.name == targetName) start = queue.length;
-      queue.add((p, e.name));
+      queue.add((path: p, name: e.name, title: e.title, artist: e.artist));
     }
     music.playTroveQueue(client, queue, start);
   }();

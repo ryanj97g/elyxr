@@ -13,18 +13,22 @@ import 'session.dart';
 
 enum FolderState { loading, ready, empty, gone, offline }
 
-enum SortKey { name, size, mtime }
+enum SortKey { name, size, mtime, artist, album }
 
 extension SortKeyWire on SortKey {
   String get wire => switch (this) {
         SortKey.name => 'name',
         SortKey.size => 'size',
         SortKey.mtime => 'mtime',
+        SortKey.artist => 'artist',
+        SortKey.album => 'album',
       };
   String get label => switch (this) {
         SortKey.name => 'NAME',
         SortKey.size => 'SIZE',
         SortKey.mtime => 'DATE',
+        SortKey.artist => 'ARTIST',
+        SortKey.album => 'ALBUM',
       };
 }
 
@@ -154,9 +158,15 @@ class BrowseController extends ChangeNotifier {
     await _load();
   }
 
-  /// Cycle NAME → SIZE → DATE, as the sort chip does.
+  /// Cycle NAME → SIZE → DATE → ARTIST → ALBUM, as the sort chip does.
   Future<void> cycleSort() async {
-    const order = [SortKey.name, SortKey.size, SortKey.mtime];
+    const order = [
+      SortKey.name,
+      SortKey.size,
+      SortKey.mtime,
+      SortKey.artist,
+      SortKey.album,
+    ];
     await setSort(order[(order.indexOf(_sort) + 1) % order.length]);
   }
 

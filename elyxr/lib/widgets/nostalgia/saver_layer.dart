@@ -179,10 +179,27 @@ class _SaverTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = context.select<MusicController, String>((m) => m.title);
-    return Text(
-      title,
-      textAlign: TextAlign.center,
-      style: glass(22, palette.hot, height: 1.15),
+    final artist = context.select<MusicController, String>((m) => m.artist);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: glass(22, palette.hot, height: 1.15),
+        ),
+        // Second line: the track's artist, from its tags — absent for the
+        // built-in soundtrack or an untagged file, so the line drops out.
+        if (artist.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+              artist,
+              textAlign: TextAlign.center,
+              style: glass(15, palette.soft, height: 1.1),
+            ),
+          ),
+      ],
     );
   }
 }
