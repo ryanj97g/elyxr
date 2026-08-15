@@ -54,13 +54,15 @@ pub(super) async fn list(
         if e.kind == "dir" {
             e.child_count = Some(child_count(&de.path()));
         } else if e.mime.is_some_and(|mt| mt.starts_with("audio/")) {
-            // Read title/artist/album straight from the file so the app can sort
+            // Read the tags straight from the file so the app can group and sort
             // by them and the player can label the track. Read fresh each listing
             // — no side cache (see model::audio_tags).
-            let (title, artist, album) = crate::model::audio_tags(&de.path());
-            e.title = title;
-            e.artist = artist;
-            e.album = album;
+            let t = crate::model::audio_tags(&de.path());
+            e.title = t.title;
+            e.artist = t.artist;
+            e.album = t.album;
+            e.duration_s = t.duration_s;
+            e.year = t.year;
         }
         entries.push(e);
     }
@@ -110,6 +112,12 @@ fn sort_entries(entries: &mut [Entry], sort: Option<&str>, order: Option<&str>) 
             // the end, then the name tiebreak below keeps them in a stable order.
             "artist" => tag_key(&a.artist).cmp(&tag_key(&b.artist)),
             "album" => tag_key(&a.album).cmp(&tag_key(&b.album)),
+            "title" => tag_key(&a.title).cmp(&tag_key(&b.title)),
+            // The numeric tags follow the same rule as the text ones: carrying
+            // the figure sorts before lacking it, and `desc` reverses that along
+            // with everything else, exactly as it already does for artist/album.
+            "duration" => num_key(a.duration_s).cmp(&num_key(b.duration_s)),
+            "year" => num_key(a.year.map(u64::from)).cmp(&num_key(b.year.map(u64::from))),
             _ => name_cmp(&a.name, &b.name),
         };
         let primary = if desc { primary.reverse() } else { primary };
@@ -122,6 +130,12 @@ fn sort_entries(entries: &mut [Entry], sort: Option<&str>, order: Option<&str>) 
 /// untagged ones, then a case-folded copy so the order is alphabetical.
 fn tag_key(t: &Option<String>) -> (bool, String) {
     (t.is_none(), t.as_deref().unwrap_or("").to_lowercase())
+}
+
+/// The same shape as [`tag_key`] for a numeric tag, so length and year order
+/// against each other the way artist and album already do.
+fn num_key(v: Option<u64>) -> (bool, u64) {
+    (v.is_none(), v.unwrap_or(0))
 }
 
 fn name_cmp(a: &str, b: &str) -> std::cmp::Ordering {

@@ -20,11 +20,17 @@ class Entry {
   final int mtime;
   final String? mime;
   final int? childCount;
-  // Audio tags, present only for audio files the server could read (see
-  // lymnal's tags.rs). Used for the artist/album sort and the player labels.
+  // Audio tags, present only for audio files whose tags could be read — by
+  // lymnal over the link, or by the local trove client when this device is the
+  // server. Used for the library views, the artist/album sort, and the player
+  // labels.
   final String? title;
   final String? artist;
   final String? album;
+  // Track length in whole seconds and the release year: what the song and album
+  // views sort on. Absent when the file carries neither.
+  final int? durationS;
+  final int? year;
 
   const Entry({
     required this.name,
@@ -36,7 +42,33 @@ class Entry {
     this.title,
     this.artist,
     this.album,
+    this.durationS,
+    this.year,
   });
+
+  /// A copy carrying the tags read for it. The listing builds the entry from the
+  /// directory stat first and fills the tags in a second pass, so this is how the
+  /// two halves are joined.
+  Entry withTags({
+    String? title,
+    String? artist,
+    String? album,
+    int? durationS,
+    int? year,
+  }) =>
+      Entry(
+        name: name,
+        isDir: isDir,
+        sizeBytes: sizeBytes,
+        mtime: mtime,
+        mime: mime,
+        childCount: childCount,
+        title: title,
+        artist: artist,
+        album: album,
+        durationS: durationS,
+        year: year,
+      );
 
   factory Entry.fromJson(Map<String, dynamic> j) => Entry(
         name: j['name'] as String,
@@ -48,6 +80,8 @@ class Entry {
         title: j['title'] as String?,
         artist: j['artist'] as String?,
         album: j['album'] as String?,
+        durationS: (j['duration_s'] as num?)?.toInt(),
+        year: (j['year'] as num?)?.toInt(),
       );
 }
 

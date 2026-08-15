@@ -22,6 +22,12 @@ pub struct Entry {
     pub artist: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub album: Option<String>,
+    // Track length in whole seconds, and the release year. What the song and
+    // album views sort by; neither is a tag the grouping itself needs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_s: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub year: Option<u32>,
 }
 
 /// Build an entry for a directory child. Hidden entries (leading ".") are the
@@ -40,6 +46,8 @@ pub fn entry_for(name: String, meta: &std::fs::Metadata) -> Entry {
             title: None,
             artist: None,
             album: None,
+            duration_s: None,
+            year: None,
         }
     } else {
         let mime = mime_for(&name);
@@ -54,6 +62,8 @@ pub fn entry_for(name: String, meta: &std::fs::Metadata) -> Entry {
             title: None,
             artist: None,
             album: None,
+            duration_s: None,
+            year: None,
         }
     }
 }
@@ -82,26 +92,51 @@ pub fn mtime_secs(meta: &std::fs::Metadata) -> i64 {
         .unwrap_or(0)
 }
 
-/// Title/artist/album read straight from an audio file's tags. No cache, on
-/// purpose: a listing re-reads, and the few milliseconds to re-parse a header is
-/// the cost of never keeping a private store of the user's files. lymbo is the
-/// one rolling place transient data is allowed to live; this is not that. Any
-/// failure — unreadable, no tags, a container lofty can't parse — is a quiet
-/// `(None, None, None)`, so a listing never fails over one bad file.
-pub fn audio_tags(path: &Path) -> (Option<String>, Option<String>, Option<String>) {
+/// What a listing reads off an audio file: the three tags the song, album, and
+/// artist views group by, plus the two figures they offer to sort on.
+#[derive(Debug, Clone, Default)]
+pub struct AudioTags {
+    pub title: Option<String>,
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub duration_s: Option<u64>,
+    pub year: Option<u32>,
+}
+
+/// Tags read straight from an audio file. No cache, on purpose: a listing
+/// re-reads, and the few milliseconds to re-parse a header is the cost of never
+/// keeping a private store of the user's files. lymbo is the one rolling place
+/// transient data is allowed to live; this is not that. Any failure —
+/// unreadable, no tags, a container lofty can't parse — is a quiet default, so a
+/// listing never fails over one bad file.
+pub fn audio_tags(path: &Path) -> AudioTags {
     use lofty::prelude::*;
     let Ok(file) = lofty::read_from_path(path) else {
-        return (None, None, None);
+        return AudioTags::default();
     };
+    // Length comes off the decoded properties, not a tag, so it survives a file
+    // that carries no tag block at all — which is exactly the file whose name is
+    // all the song view would otherwise have to show.
+    let secs = file.properties().duration().as_secs();
+    let duration_s = (secs > 0).then_some(secs);
     // A file can carry more than one tag block; prefer the one that matches the
     // container, else take whatever it has.
     let Some(tag) = file.primary_tag().or_else(|| file.first_tag()) else {
-        return (None, None, None);
+        return AudioTags {
+            duration_s,
+            ..AudioTags::default()
+        };
     };
     let clean = |o: Option<std::borrow::Cow<str>>| {
         o.map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
     };
-    (clean(tag.title()), clean(tag.artist()), clean(tag.album()))
+    AudioTags {
+        title: clean(tag.title()),
+        artist: clean(tag.artist()),
+        album: clean(tag.album()),
+        duration_s,
+        year: tag.year(),
+    }
 }
 
 /// A small, deterministic extension → MIME map. Covers what preview needs

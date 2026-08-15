@@ -7,10 +7,67 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
+
+import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 
 import 'api_error.dart';
 import 'lymnal_client.dart';
 import 'models.dart';
+
+/// One file's tags as the isolate hands them back, keyed by the absolute path
+/// that produced them so the listing can rejoin them without relying on order.
+typedef _TagRow = ({
+  String path,
+  String? title,
+  String? artist,
+  String? album,
+  int? durationS,
+  int? year,
+});
+
+String? _clean(String? v) {
+  final t = v?.trim();
+  return (t == null || t.isEmpty) ? null : t;
+}
+
+/// Parse a whole folder's worth of audio files. Runs in its own isolate: the
+/// parser is synchronous, so on a folder of a few thousand tracks doing this on
+/// the UI isolate would lock the app for the length of the pass. A file the
+/// parser can't handle yields a row of nulls instead of throwing, so one bad
+/// file never costs the listing everyone else's tags.
+List<_TagRow> _readTagsBatch(List<String> paths) {
+  final out = <_TagRow>[];
+  for (final p in paths) {
+    String? title;
+    String? artist;
+    String? album;
+    int? durationS;
+    int? year;
+    try {
+      // getImage stays off (its default): cover art is the one genuinely large
+      // allocation in a tag block, and nothing here displays it.
+      final m = readMetadata(File(p));
+      title = _clean(m.title);
+      artist = _clean(m.artist);
+      album = _clean(m.album);
+      final secs = m.duration?.inSeconds;
+      durationS = (secs != null && secs > 0) ? secs : null;
+      year = m.year?.year;
+    } catch (_) {
+      // Unreadable, unsupported container, or no tag block — all the same here.
+    }
+    out.add((
+      path: p,
+      title: title,
+      artist: artist,
+      album: album,
+      durationS: durationS,
+      year: year,
+    ));
+  }
+  return out;
+}
 
 class LocalTroveClient extends LymnalClient {
   /// The absolute trove folder on this machine (no trailing slash).
@@ -47,14 +104,77 @@ class LocalTroveClient extends LymnalClient {
         mtime: st.modified.millisecondsSinceEpoch ~/ 1000,
       );
 
-  int _cmp(Entry a, Entry b, String sort) {
-    switch (sort) {
-      case 'size':
-        return a.sizeBytes.compareTo(b.sizeBytes);
-      case 'mtime':
-        return a.mtime.compareTo(b.mtime);
-      default:
-        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  /// Order a folder the way lymnal's `sort_entries` does, key for key, so a
+  /// listing looks the same whichever mode produced it: folders first whatever
+  /// the order, the requested key next, then the name as a stable tiebreak.
+  int _cmp(Entry a, Entry b, String sort, bool desc) {
+    if (a.isDir != b.isDir) return a.isDir ? -1 : 1;
+    final primary = switch (sort) {
+      'size' => a.sizeBytes.compareTo(b.sizeBytes),
+      'mtime' => a.mtime.compareTo(b.mtime),
+      'artist' => _tagCmp(a.artist, b.artist),
+      'album' => _tagCmp(a.album, b.album),
+      'title' => _tagCmp(a.title, b.title),
+      'duration' => _numCmp(a.durationS, b.durationS),
+      'year' => _numCmp(a.year, b.year),
+      _ => _nameCmp(a.name, b.name),
+    };
+    final ordered = desc ? -primary : primary;
+    return ordered != 0 ? ordered : _nameCmp(a.name, b.name);
+  }
+
+  /// Mirrors lymnal's `tag_key`: a file carrying the tag sorts before one that
+  /// doesn't, then the values compare case-folded.
+  static int _tagCmp(String? a, String? b) {
+    if ((a == null) != (b == null)) return a == null ? 1 : -1;
+    return (a ?? '').toLowerCase().compareTo((b ?? '').toLowerCase());
+  }
+
+  /// Mirrors lymnal's `num_key`, the same rule for the numeric tags.
+  static int _numCmp(int? a, int? b) {
+    if ((a == null) != (b == null)) return a == null ? 1 : -1;
+    return (a ?? 0).compareTo(b ?? 0);
+  }
+
+  static int _nameCmp(String a, String b) {
+    final folded = a.toLowerCase().compareTo(b.toLowerCase());
+    return folded != 0 ? folded : a.compareTo(b);
+  }
+
+  /// Whether the tag reader has a parser for this filename. Gated on the
+  /// package's own list rather than the app's playable set, because the question
+  /// here is what can be *parsed*, not what can be played.
+  static bool _parsable(String name) {
+    final dot = name.lastIndexOf('.');
+    if (dot <= 0) return false;
+    return supportedFileExtensions.contains(name.substring(dot).toLowerCase());
+  }
+
+  /// Read the folder's audio tags in one pass and fold them into [entries].
+  /// Rejoined by absolute path rather than by position, so the isolate is free
+  /// to return rows in whatever order it finishes them.
+  Future<void> _fillTags(List<Entry> entries, String dirAbs) async {
+    final paths = <String>[];
+    final indexOf = <String, int>{};
+    for (var i = 0; i < entries.length; i++) {
+      final e = entries[i];
+      if (e.isDir || !_parsable(e.name)) continue;
+      final abs = '$dirAbs/${e.name}';
+      indexOf[abs] = i;
+      paths.add(abs);
+    }
+    if (paths.isEmpty) return;
+    final rows = await Isolate.run(() => _readTagsBatch(paths));
+    for (final r in rows) {
+      final i = indexOf[r.path];
+      if (i == null) continue;
+      entries[i] = entries[i].withTags(
+        title: r.title,
+        artist: r.artist,
+        album: r.album,
+        durationS: r.durationS,
+        year: r.year,
+      );
     }
   }
 
@@ -82,13 +202,10 @@ class LocalTroveClient extends LymnalClient {
         // A file that vanished mid-listing just gets skipped.
       }
     }
-    entries.sort((a, b) => _cmp(a, b, sort));
-    if (order == 'desc') {
-      final r = entries.reversed.toList();
-      entries
-        ..clear()
-        ..addAll(r);
-    }
+    // Tags before the sort, or an artist/album/year ordering would be sorting
+    // fields nothing has filled in yet.
+    await _fillTags(entries, _abs(path));
+    entries.sort((a, b) => _cmp(a, b, sort, order == 'desc'));
     return ListPage(
       path: path,
       entries: entries,
