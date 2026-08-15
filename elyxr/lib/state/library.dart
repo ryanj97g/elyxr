@@ -180,6 +180,36 @@ class LibraryController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The label the one chip shows: the folder's sort while the folder is what
+  /// you're looking at, otherwise the name of the view.
+  String labelFor(SortKey folderSort) =>
+      _view == LibraryView.files ? folderSort.label : _view.label;
+
+  /// Every way of arranging this folder, on ONE control. The chip was already
+  /// the app's "how is this list ordered" question; the views are more answers to
+  /// it, not a second question, so they continue the same cycle rather than
+  /// growing a second chip beside it.
+  ///
+  /// NAME → SIZE → DATE → ARTIST → ALBUM → SONGS → ALBUMS → ARTISTS → NAME.
+  Future<void> cycleArrangement(BrowseController browse) async {
+    switch (_view) {
+      case LibraryView.files:
+        // Past the last folder sort, the views take over.
+        if (browse.sort == SortKey.album) {
+          await setView(LibraryView.songs);
+        } else {
+          await browse.cycleSort();
+        }
+      case LibraryView.songs:
+        await setView(LibraryView.albums);
+      case LibraryView.albums:
+        await setView(LibraryView.artists);
+      case LibraryView.artists:
+        await setView(LibraryView.files);
+        await browse.setSort(SortKey.name);
+    }
+  }
+
   void toggleOrder() {
     _desc = !_desc;
     _invalidate();

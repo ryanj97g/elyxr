@@ -80,7 +80,6 @@ class FilesView extends StatelessWidget {
             // it is not a gate on the player.
             _deck(context, p),
             _ActionBar(palette: p),
-            _FilterBar(palette: p),
             _Breadcrumbs(palette: p),
             Expanded(child: _Body(palette: p)),
             // NOT Flexible: as a flex sibling it split the leftover space 50/50
@@ -113,98 +112,6 @@ class _Body extends StatelessWidget {
     final browse = context.watch<BrowseController>();
     return _stateOr(context, browse, p,
         () => libraryBody(context, p) ?? const SizedBox.shrink());
-  }
-}
-
-/// One field, two jobs. In FILES it drives lymnal's recursive filename search —
-/// the endpoint and its results list were already written and had nothing typing
-/// into them. In a library view there is nothing to ask the server: the folder is
-/// already loaded, so the same text filters it here on any of the metadata.
-class _FilterBar extends StatefulWidget {
-  final Palette palette;
-  const _FilterBar({required this.palette});
-
-  @override
-  State<_FilterBar> createState() => _FilterBarState();
-}
-
-class _FilterBarState extends State<_FilterBar> {
-  final _ctrl = TextEditingController();
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  // Which side the text was last aimed at, so a view switch can retire it.
-  bool _wasLibrary = false;
-
-  void _onChanged(String v) {
-    final lib = context.read<LibraryController>();
-    if (lib.isLibrary) {
-      lib.setFilter(v);
-    } else {
-      context.read<BrowseController>().setQuery(v);
-    }
-    // The ✕ appears with the first character and leaves with the last.
-    setState(() {});
-  }
-
-  void _clear() {
-    _ctrl.clear();
-    context.read<LibraryController>().setFilter('');
-    context.read<BrowseController>().clearQuery();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = widget.palette;
-    final lib = context.watch<LibraryController>();
-    // A filter typed at one view means nothing to the next one — carrying it
-    // across would silently hide rows in a view you just opened.
-    if (lib.isLibrary != _wasLibrary) {
-      _wasLibrary = lib.isLibrary;
-      if (_ctrl.text.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(_clear);
-        });
-      }
-    }
-    return Container(
-      padding: const EdgeInsets.fromLTRB(13, 0, 6, 0),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
-      child: Row(
-        children: [
-          Text(lib.isLibrary ? 'FILTER' : 'FIND',
-              style: chassis(9.5, p.foot, spacing: 0.12)),
-          const SizedBox(width: 9),
-          Expanded(
-            child: TextField(
-              controller: _ctrl,
-              onChanged: _onChanged,
-              style: glass(15, p.bright),
-              cursorColor: p.a,
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                hintText: lib.isLibrary
-                    ? 'title, artist, album'
-                    : 'name of a file or folder',
-                hintStyle: glass(14, p.dim),
-              ),
-            ),
-          ),
-          if (_ctrl.text.isNotEmpty)
-            hitTarget(
-              pad: 8,
-              onTap: () => setState(_clear),
-              child: Text('✕', style: glass(15, p.mid)),
-            ),
-        ],
-      ),
-    );
   }
 }
 
@@ -512,6 +419,17 @@ class _ActionBarState extends State<_ActionBar> {
   ResolveResult? _res;
   List<String>? _forPaths;
 
+  // FIND is off until asked for, and the bar is the verbs again the moment it
+  // closes — nothing about it is permanent.
+  bool _finding = false;
+  final _find = TextEditingController();
+
+  @override
+  void dispose() {
+    _find.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = widget.palette;
@@ -555,42 +473,76 @@ class _ActionBarState extends State<_ActionBar> {
       // rows is not a layout. With the figures label gone they fit at full size at
       // the app's width; the FittedBox is only a floor for a genuinely narrower
       // window, where a slight scale-down still beats a wrap.
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: Row(
-          children: [
-            _action(p, 'RENAME',
-                single == null ? null : () => _rename(context, browse, p, single!.name)),
-            _action(p, 'DOWNLOAD',
-                has ? () => _download(context, browse, actions) : null),
-            _action(p, 'MOVE', has ? () => _move(context, browse, p) : null),
-            _action(p, 'DELETE', has ? () => _delete(context, browse, p) : null),
-            if (has)
-              hitTarget(
-                onTap: browse.clearSelection,
-                child: Text('✕', style: glass(16, p.mid)),
+      // FIND typing takes the bar over rather than adding a strip beneath it:
+      // the field is only wanted while it's being used, and a row that is always
+      // on screen costs the list height forever to hold an empty box.
+      child: _finding
+          ? Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _find,
+                    autofocus: true,
+                    style: glass(16, p.bright),
+                    cursorColor: p.a,
+                    // No hint. The word that opened this said what it does, and
+                    // the field is the app's, not a form to be labelled.
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: 9),
+                    ),
+                    onChanged: (v) {
+                      if (lib.isLibrary) {
+                        lib.setFilter(v);
+                      } else {
+                        browse.setQuery(v);
+                      }
+                    },
+                  ),
+                ),
+                hitTarget(
+                  onTap: () {
+                    _find.clear();
+                    lib.setFilter('');
+                    browse.clearQuery();
+                    setState(() => _finding = false);
+                  },
+                  child: Text('✕', style: glass(16, p.mid)),
+                ),
+              ],
+            )
+          : FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  _action(p, 'RENAME',
+                      single == null ? null : () => _rename(context, browse, p, single!.name)),
+                  _action(p, 'DOWNLOAD',
+                      has ? () => _download(context, browse, actions) : null),
+                  _action(p, 'MOVE', has ? () => _move(context, browse, p) : null),
+                  _action(p, 'DELETE', has ? () => _delete(context, browse, p) : null),
+                  // FIND is a verb like the others and lives with them. It needs
+                  // no selection, so it is never greyed.
+                  _action(p, 'FIND', () => setState(() => _finding = true)),
+                  if (has)
+                    hitTarget(
+                      onTap: browse.clearSelection,
+                      child: Text('✕', style: glass(16, p.mid)),
+                    ),
+                  // ONE chip. Sorting the folder and grouping it into songs,
+                  // albums or artists are answers to the same question — how is
+                  // this list arranged — so they share the control that already
+                  // asked it instead of a second chip beside it.
+                  hitTarget(
+                    onTap: () => lib.cycleArrangement(browse),
+                    child: Text('${lib.labelFor(browse.sort)} ▾',
+                        style: chassis(13, lib.isLibrary ? p.a : p.mid, spacing: 0.09)),
+                  ),
+                ],
               ),
-            // The view chip sits beside the sort chip rather than in a sidebar:
-            // the chassis is a fixed 440 wide, and a rail down the side of it
-            // would cost the list a quarter of its width permanently to hold
-            // four words. Same idiom as the sort chip, one tap to cycle.
-            hitTarget(
-              onTap: lib.cycleView,
-              child: Text('${lib.view.label} ▾',
-                  style: chassis(13, lib.isLibrary ? p.a : p.mid, spacing: 0.09)),
             ),
-            // One chip, whichever ordering is in play: lymnal's for the folder
-            // listing, the view's own for a library view.
-            hitTarget(
-              onTap: lib.isLibrary ? lib.cycleSort : browse.cycleSort,
-              child: Text(
-                  '${lib.isLibrary ? lib.sortLabel : browse.sort.label} ▾',
-                  style: chassis(13, p.mid, spacing: 0.09)),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
