@@ -99,10 +99,17 @@ class MusicPlayerPanel extends StatelessWidget {
       final loading = m.loadingTrove;
       final folded = m.active;
 
-      // Folded with a track loaded: the visualizer, the name, and one target —
-      // a tap anywhere unfolds it. No transport buttons, because a button here
-      // would be a piece of the bar that does NOT unfold it.
+      // Folded with a track loaded: the visualizer across the whole bar, and one
+      // target — a tap anywhere unfolds it. No transport buttons, because a
+      // button here would be a piece of the bar that does NOT unfold it, and no
+      // track name either: the name is what unfolding is for. The bar is the
+      // spectrum and nothing else.
+      //
+      // The one exception is something the player needs to SAY — a notice, or
+      // that it is still fetching. Those take the bar for as long as they last,
+      // because a message with nowhere to go is a message that never arrives.
       if (folded) {
+        final message = loading ? 'LOADING…' : m.notice;
         return _wheel(
           m,
           GestureDetector(
@@ -110,27 +117,26 @@ class MusicPlayerPanel extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 62,
-                    height: 22,
-                    child: _Visualizer(palette: p, music: m),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      loading
-                          ? 'LOADING…'
-                          : (m.notice ?? (m.title.isEmpty ? '—' : m.title)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: glass(
-                          15, m.notice != null ? p.a : (m.playing ? p.soft : p.foot)),
-                    ),
-                  ),
-                  if (loading) ...[const SizedBox(width: 8), _spinner(p)],
-                ],
+              child: SizedBox(
+                height: 22,
+                child: message == null
+                    ? _Visualizer(palette: p, music: m)
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              message,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: glass(15, m.notice != null ? p.a : p.foot),
+                            ),
+                          ),
+                          if (loading) ...[
+                            const SizedBox(width: 8),
+                            _spinner(p)
+                          ],
+                        ],
+                      ),
               ),
             ),
           ),
