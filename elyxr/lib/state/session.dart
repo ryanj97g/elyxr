@@ -301,10 +301,22 @@ class SessionController extends ChangeNotifier {
     }
   }
 
+  /// Set by tests to a temporary directory. While it is set this controller
+  /// keeps to itself: config is read and written under that directory instead of
+  /// the real home, and the machine's lymnal service is left alone.
+  ///
+  /// boot() calls _syncLink(), which writes the REAL ~/.config/lymnal/link.json
+  /// and then restarts lymnal. Unsandboxed, running the suite on a paired device
+  /// replaced its pairing with whatever fake server a test had mocked and bounced
+  /// the service — the device silently unpaired, with nothing on screen to say so.
+  @visibleForTesting
+  static String? sandboxHome;
+
   /// The user's home directory, matching lymnal's own resolution so link.json
   /// lands where lymnal looks for it: `%USERPROFILE%` first on Windows, `$HOME`
   /// first elsewhere.
   String? _homeDir() {
+    if (sandboxHome != null) return sandboxHome;
     final env = Platform.environment;
     final order = Platform.isWindows
         ? const ['USERPROFILE', 'HOME']
@@ -322,6 +334,9 @@ class SessionController extends ChangeNotifier {
   /// the process and relaunch it hidden from where the app is installed. When
   /// [running] is false (the device was unpaired) it's only stopped.
   Future<void> _restartLymnal({required bool running}) async {
+    // The other half: bouncing lymnal is a real side effect on the developer's
+    // own device, not something a unit test may do.
+    if (sandboxHome != null) return;
     if (Platform.isLinux) {
       await Process.run('systemctl', ['--user', 'restart', 'lymnal.service']);
       return;
