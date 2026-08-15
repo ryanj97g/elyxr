@@ -53,3 +53,11 @@ app.*.map.json
 /windows/flutter/generated_plugin_registrant.cc
 /windows/flutter/generated_plugins.cmake
 /macos/Flutter/GeneratedPluginRegistrant.swift
+
+# Fonts dropped into the custom folder are personal to a device, not part of the
+# app. They were tracked, so every build shipped them to every device — a face
+# picked on a desktop appeared on a phone that had no business carrying it. The
+# folder itself stays (pubspec bundles it) so a local drop still works; nothing
+# inside it is committed.
+assets/fonts/custom/*
+!assets/fonts/custom/.gitkeep
