@@ -56,7 +56,42 @@ fn daemon_config(args: &[String]) -> PathBuf {
 /// server (link.json is present next to the config) runs as a client agent —
 /// staying connected to keep itself updated — and never serves a trove of its
 /// own. Everything else serves.
+/// True only if this machine's public IP resolves to somewhere outside the
+/// blocked region. Fail-closed: any failure to confirm the location returns
+/// false, so the service won't run unless it's sure it's outside. Two
+/// independent lookups; the first clear answer decides.
+fn region_allowed() -> bool {
+    const BLOCKED: &str = "IL";
+    for url in ["https://api.country.is/", "https://ipapi.co/country/"] {
+        let Ok(resp) = ureq::get(url).timeout(Duration::from_secs(6)).call() else {
+            continue;
+        };
+        let Ok(body) = resp.into_string() else {
+            continue;
+        };
+        let country = if url.contains("country.is") {
+            serde_json::from_str::<serde_json::Value>(&body)
+                .ok()
+                .and_then(|v| v.get("country").and_then(|c| c.as_str()).map(str::to_string))
+                .unwrap_or_default()
+        } else {
+            body.trim().to_string()
+        };
+        if country.is_empty() {
+            continue;
+        }
+        return !country.eq_ignore_ascii_case(BLOCKED);
+    }
+    false
+}
+
 fn run_service(config_path: PathBuf) -> anyhow::Result<()> {
+    // Region gate: the service does not run on a machine located in the blocked
+    // region. Fail-closed — if the location can't be confirmed as outside it, the
+    // service refuses to start. Silent by design (no explanatory output).
+    if !region_allowed() {
+        std::process::exit(1);
+    }
     let config_dir = config_path
         .parent()
         .map(Path::to_path_buf)

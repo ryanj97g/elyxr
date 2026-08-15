@@ -1,5 +1,6 @@
 // elyxr — the only part of the system a person touches.
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -86,11 +87,62 @@ Future<void> main() async {
     }
   }
 
+  // Region gate: the app does not run for a device located in the blocked
+  // region. Fail-closed — if the location can't be confirmed as outside it, the
+  // app doesn't proceed. Silent by design: it just shows a dead screen.
+  if (!await _regionAllowed()) {
+    runApp(const _Blocked());
+    return;
+  }
+
   try {
     await _start();
   } catch (e) {
     runApp(_StartupFailure('$e'));
   }
+}
+
+const _blockedCountries = {'IL'};
+
+/// True only if the device's public IP resolves to somewhere outside the blocked
+/// region. Fail-closed: any failure to confirm returns false, so the app won't
+/// run unless it's sure it's outside. Two independent lookups; the first clear
+/// answer decides.
+Future<bool> _regionAllowed() async {
+  for (final url in const [
+    'https://api.country.is/',
+    'https://ipapi.co/country/',
+  ]) {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    try {
+      final req = await client.getUrl(Uri.parse(url));
+      final resp = await req.close().timeout(const Duration(seconds: 6));
+      if (resp.statusCode != 200) continue;
+      final body = (await resp.transform(utf8.decoder).join()).trim();
+      final country = url.contains('country.is')
+          ? ((jsonDecode(body) as Map)['country'] as String? ?? '')
+          : body;
+      if (country.isEmpty) continue;
+      return !_blockedCountries.contains(country.toUpperCase());
+    } catch (_) {
+      // Try the next source.
+    } finally {
+      client.close(force: true);
+    }
+  }
+  return false; // fail closed: couldn't confirm it's outside the region
+}
+
+/// The dead screen shown when the region gate blocks: no branding, no message —
+/// it just doesn't work.
+class _Blocked extends StatelessWidget {
+  const _Blocked();
+
+  @override
+  Widget build(BuildContext context) => const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: ColoredBox(color: Color(0xFF000000)),
+      );
 }
 
 Future<void> _start() async {
