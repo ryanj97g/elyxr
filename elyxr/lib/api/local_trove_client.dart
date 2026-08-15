@@ -115,8 +115,6 @@ class LocalTroveClient extends LymnalClient {
       'artist' => _tagCmp(a.artist, b.artist),
       'album' => _tagCmp(a.album, b.album),
       'title' => _tagCmp(a.title, b.title),
-      'duration' => _numCmp(a.durationS, b.durationS),
-      'year' => _numCmp(a.year, b.year),
       _ => _nameCmp(a.name, b.name),
     };
     final ordered = desc ? -primary : primary;
@@ -128,12 +126,6 @@ class LocalTroveClient extends LymnalClient {
   static int _tagCmp(String? a, String? b) {
     if ((a == null) != (b == null)) return a == null ? 1 : -1;
     return (a ?? '').toLowerCase().compareTo((b ?? '').toLowerCase());
-  }
-
-  /// Mirrors lymnal's `num_key`, the same rule for the numeric tags.
-  static int _numCmp(int? a, int? b) {
-    if ((a == null) != (b == null)) return a == null ? 1 : -1;
-    return (a ?? 0).compareTo(b ?? 0);
   }
 
   static int _nameCmp(String a, String b) {
@@ -202,7 +194,7 @@ class LocalTroveClient extends LymnalClient {
         // A file that vanished mid-listing just gets skipped.
       }
     }
-    // Tags before the sort, or an artist/album/year ordering would be sorting
+    // Tags before the sort, or an artist or album ordering would be sorting
     // fields nothing has filled in yet.
     await _fillTags(entries, _abs(path));
     entries.sort((a, b) => _cmp(a, b, sort, order == 'desc'));

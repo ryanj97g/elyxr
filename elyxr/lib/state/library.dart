@@ -28,7 +28,7 @@ extension LibraryViewLabel on LibraryView {
   bool get isLibrary => this != LibraryView.files;
 }
 
-enum SongSort { title, artist, album, added, duration }
+enum SongSort { title, artist, album, added }
 
 extension SongSortLabel on SongSort {
   String get label => switch (this) {
@@ -36,17 +36,15 @@ extension SongSortLabel on SongSort {
         SongSort.artist => 'ARTIST',
         SongSort.album => 'ALBUM',
         SongSort.added => 'ADDED',
-        SongSort.duration => 'LENGTH',
       };
 }
 
-enum AlbumSort { name, artist, year }
+enum AlbumSort { name, artist }
 
 extension AlbumSortLabel on AlbumSort {
   String get label => switch (this) {
         AlbumSort.name => 'ALBUM',
         AlbumSort.artist => 'ARTIST',
-        AlbumSort.year => 'YEAR',
       };
 }
 
@@ -341,7 +339,6 @@ class LibraryController extends ChangeNotifier {
       SongSort.artist => _tag(a.artist, b.artist),
       SongSort.album => _tag(a.album, b.album),
       SongSort.added => a.mtime.compareTo(b.mtime),
-      SongSort.duration => _num(a.durationS, b.durationS),
     };
     final ordered = _desc ? -primary : primary;
     // Same stable tiebreak lymnal uses, so equal keys never shuffle between
@@ -395,7 +392,6 @@ class LibraryController extends ChangeNotifier {
     final primary = switch (_albumSort) {
       AlbumSort.name => _text(a.name, b.name),
       AlbumSort.artist => _text(a.artist, b.artist),
-      AlbumSort.year => _num(a.year, b.year),
     };
     final ordered = _desc ? -primary : primary;
     return ordered != 0 ? ordered : _text(a.name, b.name);
@@ -433,11 +429,6 @@ class LibraryController extends ChangeNotifier {
   static int _tag(String? a, String? b) {
     if ((a == null) != (b == null)) return a == null ? 1 : -1;
     return _text(a ?? '', b ?? '');
-  }
-
-  static int _num(int? a, int? b) {
-    if ((a == null) != (b == null)) return a == null ? 1 : -1;
-    return (a ?? 0).compareTo(b ?? 0);
   }
 
   static int _text(String a, String b) {
