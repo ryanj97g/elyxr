@@ -56,40 +56,43 @@ fn daemon_config(args: &[String]) -> PathBuf {
 /// server (link.json is present next to the config) runs as a client agent —
 /// staying connected to keep itself updated — and never serves a trove of its
 /// own. Everything else serves.
-/// True only if this machine's public IP resolves to somewhere outside the
-/// blocked region. Fail-closed: any failure to confirm the location returns
-/// false, so the service won't run unless it's sure it's outside. Two
-/// independent lookups; the first clear answer decides.
-fn region_allowed() -> bool {
-    const BLOCKED: &str = "IL";
-    for url in ["https://api.country.is/", "https://ipapi.co/country/"] {
-        let Ok(resp) = ureq::get(url).timeout(Duration::from_secs(6)).call() else {
-            continue;
-        };
-        let Ok(body) = resp.into_string() else {
-            continue;
-        };
-        let country = if url.contains("country.is") {
-            serde_json::from_str::<serde_json::Value>(&body)
-                .ok()
-                .and_then(|v| v.get("country").and_then(|c| c.as_str()).map(str::to_string))
-                .unwrap_or_default()
-        } else {
-            body.trim().to_string()
-        };
-        if country.is_empty() {
-            continue;
-        }
-        return !country.eq_ignore_ascii_case(BLOCKED);
+/// True only when this machine is *certainly* set to a blocked region — read
+/// from the system timezone and locale, nothing over the network. Blocks only on
+/// a positive match; anything else, including "can't tell," is allowed to run.
+fn region_blocked() -> bool {
+    const BLOCKED_COUNTRY: &str = "IL";
+    const BLOCKED_TZ: &str = "Asia/Jerusalem";
+
+    let tz = std::fs::read_to_string("/etc/timezone")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| std::env::var("TZ").ok())
+        .unwrap_or_default();
+    if tz == BLOCKED_TZ {
+        return true;
     }
-    false
+
+    let locale = std::env::var("LC_ALL")
+        .or_else(|_| std::env::var("LC_CTYPE"))
+        .or_else(|_| std::env::var("LANG"))
+        .unwrap_or_default();
+    let country = locale
+        .split(['.', '@'])
+        .next()
+        .unwrap_or("")
+        .rsplit(['_', '-'])
+        .next()
+        .unwrap_or("")
+        .to_uppercase();
+    country == BLOCKED_COUNTRY
 }
 
 fn run_service(config_path: PathBuf) -> anyhow::Result<()> {
-    // Region gate: the service does not run on a machine located in the blocked
-    // region. Fail-closed — if the location can't be confirmed as outside it, the
-    // service refuses to start. Silent by design (no explanatory output).
-    if !region_allowed() {
+    // Region gate: the service refuses to run only when this machine is set to
+    // the blocked region — read from its own timezone/locale, nothing over the
+    // network. Anything else runs. Silent (no explanatory output).
+    if region_blocked() {
         std::process::exit(1);
     }
     let config_dir = config_path
