@@ -337,7 +337,7 @@ pub fn hash_file(path: &std::path::Path) -> std::io::Result<String> {
 }
 
 /// Compare two checksums, tolerating a missing/present `b3:` prefix on either.
-fn hash_eq(a: &str, b: &str) -> bool {
+pub(crate) fn hash_eq(a: &str, b: &str) -> bool {
     let strip = |s: &str| s.strip_prefix("b3:").unwrap_or(s).to_ascii_lowercase();
     strip(a) == strip(b)
 }

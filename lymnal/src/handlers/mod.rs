@@ -36,6 +36,7 @@ pub fn router(state: Shared) -> Router {
         .route("/v1/stat", get(browse::stat))
         .route("/v1/search", get(browse::search))
         .route("/v1/resolve", post(transfer::resolve))
+        .route("/v1/have", get(transfer::have))
         .route("/v1/download", get(transfer::download))
         .route("/v1/zip", post(transfer::zip))
         .route("/v1/upload/init", post(transfer::upload_init))

@@ -484,6 +484,37 @@ pub(super) async fn upload_chunk(
     Ok(Json(json!({ "received_bytes": received, "complete": complete })))
 }
 
+#[derive(Deserialize)]
+pub(super) struct HaveQuery {
+    path: String,
+    checksum: String,
+    size: Option<u64>,
+}
+
+/// `GET /v1/have` — does the trove already hold this exact content at this path?
+/// Lets a client skip re-sending a file that's already there. Cheap: it stats the
+/// path first, answers false without hashing when the size differs (different
+/// size can't be the same content), and only hashes an existing, same-size file.
+pub(super) async fn have(
+    State(s): State<Shared>,
+    headers: HeaderMap,
+    Query(q): Query<HaveQuery>,
+) -> Result<Json<Value>, ApiError> {
+    require_auth(&s, &headers)?;
+    let resolved = s.trove.resolve(&q.path)?;
+    let present = match std::fs::metadata(&resolved.abs) {
+        Ok(m) if m.is_file() => {
+            let size_ok = q.size.is_none_or(|sz| sz == m.len());
+            size_ok
+                && crate::upload::hash_file(&resolved.abs)
+                    .map(|h| crate::upload::hash_eq(&h, &q.checksum))
+                    .unwrap_or(false)
+        }
+        _ => false,
+    };
+    Ok(Json(json!({ "present": present })))
+}
+
 /// `GET /v1/upload/:id` — progress, for resume after a restart.
 pub(super) async fn upload_status(
     State(s): State<Shared>,

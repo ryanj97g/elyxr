@@ -19,6 +19,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -64,6 +65,11 @@ pub struct Proxy {
     /// reconcile both drain the queue; this makes sure only one does at a time, so
     /// they can't double-push a file or run two sweeps at once.
     drain_lock: Mutex<()>,
+    /// Whether the last push reached the trove. Starts optimistic. A commit uses
+    /// this to decide whether to ask the trove "already have this?" — when it's
+    /// known-unreachable, skip the ask so an offline save isn't stalled waiting
+    /// for a connect timeout before it falls back to lymbo.
+    reachable: AtomicBool,
     /// For ordinary calls (a list, a stat): fail the connect fast and cap the
     /// whole call, so a slow or vanished trove can't hang the request forever
     /// and exhaust the blocking pool — the cause of the app sitting on "READING…".
@@ -95,9 +101,33 @@ impl Proxy {
             held_state,
             pusher: Notify::new(),
             drain_lock: Mutex::new(()),
+            reachable: AtomicBool::new(true),
             quick,
             stream,
         }
+    }
+
+    /// Blake3 of some bytes, in the same `b3:<hex>` form the server's hash_file
+    /// produces, so the trove's "already have this?" check can compare them.
+    fn hash_bytes(bytes: &[u8]) -> String {
+        format!("b3:{}", blake3::hash(bytes).to_hex())
+    }
+
+    /// Ask the trove whether it already holds `path` with this content. Any error
+    /// or uncertainty answers `false`, so a file is only ever skipped on a clear
+    /// yes — never dropped on a maybe. Blocking; call off the async workers.
+    fn trove_has(&self, path: &str, checksum: &str, size: u64) -> bool {
+        self.quick
+            .get(&self.url("/v1/have"))
+            .set("Authorization", &self.auth())
+            .query("path", path)
+            .query("checksum", checksum)
+            .query("size", &size.to_string())
+            .call()
+            .ok()
+            .and_then(|r| r.into_json::<Value>().ok())
+            .and_then(|v| v.get("present").and_then(|b| b.as_bool()))
+            .unwrap_or(false)
     }
 
     fn auth(&self) -> String {
@@ -209,7 +239,16 @@ impl Proxy {
                 changed = true;
                 continue;
             };
-            if remote_upload(&self.stream, &self.remote, &self.token, &path, &bytes, mtime).is_ok() {
+            let pushed = remote_upload(&self.stream, &self.remote, &self.token, &path, &bytes, mtime);
+            // Track whether the trove is answering: a transport failure means it's
+            // unreachable; a reached-but-refused push still means it's up. A commit
+            // reads this to decide whether the "already have?" check is worth trying.
+            match &pushed {
+                Ok(()) => self.reachable.store(true, Ordering::Relaxed),
+                Err(PushErr::Unreachable) => self.reachable.store(false, Ordering::Relaxed),
+                Err(PushErr::Rejected) => self.reachable.store(true, Ordering::Relaxed),
+            }
+            if pushed.is_ok() {
                 // Unpin only if the same version is still the one queued. If the
                 // file was re-uploaded while this push was in flight (a newer
                 // mtime), leave it held so the newer bytes get pushed next round —
@@ -360,6 +399,25 @@ async fn upload_commit(State(px): State<Arc<Proxy>>, AxPath(id): AxPath<String>)
         // before, reporting failures for files that had actually landed.
         return Json(json!({ "held": true })).into_response();
     };
+    // If the trove already holds this exact content, there's nothing to send:
+    // skip lymbo entirely so an unchanged file never even enters the buffer. Only
+    // bother when the trove is known reachable — offline, the check would just
+    // stall on a connect timeout before falling through. Any uncertain answer
+    // falls through to the normal held path, so a file is never dropped on a maybe.
+    if px.reachable.load(Ordering::Relaxed) {
+        let hash = Proxy::hash_bytes(&p.buf);
+        let size = p.buf.len() as u64;
+        let path = p.path.clone();
+        let px2 = px.clone();
+        let present = tokio::task::spawn_blocking(move || px2.trove_has(&path, &hash, size))
+            .await
+            .unwrap_or(false);
+        if present {
+            return Json(json!({ "path": p.path, "held": false, "identical": true }))
+                .into_response();
+        }
+    }
+
     // Land the whole file in lymbo, held — it's the only copy until it reaches the
     // trove. This is a local disk write, so commit returns fast and can't time the
     // app out while a large file crosses the network.
