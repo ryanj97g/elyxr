@@ -186,13 +186,24 @@ jobs:
           # safe zone). Prebuilt so the job needs no ImageMagick.
           dart run flutter_launcher_icons
 
-          # Sign every build with the SAME committed debug keystore (standard
-          # debug creds) so the app can update itself in place — a new APK signed
-          # with a different key would be rejected by Android as a signature
-          # mismatch, forcing an uninstall. Overwriting ~/.android/debug.keystore
-          # makes `--debug` use ours.
-          mkdir -p ~/.android
-          cp packaging/android/debug.keystore ~/.android/debug.keystore
+          # Sign every build with the SAME committed keystore, named by path.
+          #
+          # Copying it to ~/.android/debug.keystore did NOT work and silently did
+          # nothing: the Android plugin resolves its debug keystore through the
+          # Android preferences directory, which the runner points somewhere else,
+          # so it never read the file we put there. Finding no keystore, it
+          # generated a throwaway one per build — every APK was signed by a
+          # different key, so no build could ever install over the one before it
+          # and a sideload always failed with a signature conflict. The published
+          # build 349 was signed "CN=Android Debug" with a certificate valid from
+          # the minute that build ran, rather than this file's "CN=Elyxr Debug".
+          #
+          # Naming storeFile explicitly leaves nothing to resolve. The path is
+          # relative to the app module (android/app), so it climbs to elyxr/.
+          # These are the standard debug credentials and the keystore is committed
+          # on purpose: it is what makes an in-place update possible at all.
+          sed -i 's|^android {|android {\n    signingConfigs {\n        getByName("debug") {\n            storeFile = file("../../packaging/android/debug.keystore")\n            storePassword = "android"\n            keyAlias = "androiddebugkey"\n            keyPassword = "android"\n        }\n    }|' android/app/build.gradle.kts
+          echo "--- signing config ---"; sed -n '/^android {/,/^    }/p' android/app/build.gradle.kts | head -12
 
           # --build-number sets the Android versionCode (git commit count), so
           # every build is genuinely newer than the last — the in-app updater and
