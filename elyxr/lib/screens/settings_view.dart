@@ -868,6 +868,7 @@ class _DeviceRows extends StatelessWidget {
       UpdateStage.updating => Caps.isMobile ? '▸ DOWNLOADING UPDATE…' : '▸ UPDATING…',
       UpdateStage.waitingForUpload => '▸ FINISHING UPLOAD, THEN UPDATING…',
       UpdateStage.failed => '▸ RETRY UPDATE',
+      UpdateStage.upToDate => '▸ CHECK AGAIN',
     };
     final color = failed
         ? const Color(0xFFf5b942)
@@ -906,10 +907,11 @@ class _DeviceRows extends StatelessWidget {
               style: mono(11, p.foot, spacing: 0.1),
             ),
           ),
-          if (failed && u.error != null)
+          if ((failed || u.stage == UpdateStage.upToDate) && u.error != null)
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Text(u.error!, style: glass(14, const Color(0xFFf5b942))),
+              child: Text(u.error!,
+                  style: glass(14, failed ? const Color(0xFFf5b942) : p.foot)),
             ),
         ],
       ),

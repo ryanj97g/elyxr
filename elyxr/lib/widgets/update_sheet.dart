@@ -51,6 +51,18 @@ class UpdateBanner extends StatelessWidget {
           onTap: () => u.retry(),
           actionColor: const Color(0xFFf5b942),
         );
+      case UpdateStage.upToDate:
+        // Not a failure and not a job in progress — it's an answer, so it says
+        // so plainly instead of borrowing the amber failure strip.
+        return _strip(
+          bg: p.tubeBg,
+          border: p.dim,
+          fg: p.mid,
+          text: u.error ?? 'This device is already on the published build.',
+          action: null,
+          onTap: null,
+          actionColor: p.mid,
+        );
       case UpdateStage.idle:
         return const SizedBox.shrink();
     }

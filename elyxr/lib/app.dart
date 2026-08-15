@@ -52,7 +52,9 @@ class ElyxrApp extends StatelessWidget {
         // showing and how it is grouped.
         ChangeNotifierProvider.value(value: LibraryController(browse)),
         ChangeNotifierProvider(create: (_) => ServerController()),
-        ChangeNotifierProvider(create: (_) => UpdateController()),
+        // Given the session so it can hear the server's update announcement —
+        // that signal previously reached nothing at all.
+        ChangeNotifierProvider(create: (_) => UpdateController(session)),
         Provider.value(value: FileActions(browse, transfers, settings)),
         Provider(create: (_) => SoundController(settings)),
         ChangeNotifierProvider(create: (_) => MusicController()),

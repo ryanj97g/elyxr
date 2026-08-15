@@ -168,6 +168,17 @@ class LymnalClient {
     return _ok(r);
   }
 
+  /// Ask the fleet to update: the server announces to every connected client and
+  /// updates itself. Owner devices only, which lymnal enforces.
+  ///
+  /// Desktop reaches this by shelling out to `lymnal update`. A phone can't run
+  /// an executable, so without this call there was no way at all for the app on
+  /// Android to move anything but itself.
+  Future<void> updateFleet() async {
+    final r = await _send(() => _http.post(_uri('/v1/update'), headers: _headers()));
+    _ok(r);
+  }
+
   /// Ask the local proxy to push anything stranded in lymbo now (the reconcile /
   /// refresh action). Returns how many edits are still held afterwards.
   Future<int> reconcile() async {

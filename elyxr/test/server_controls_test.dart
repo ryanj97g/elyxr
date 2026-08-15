@@ -27,6 +27,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:elyxr/api/admin_client.dart';
 import 'package:elyxr/design/tokens.dart';
+import 'package:elyxr/state/session.dart';
 import 'package:elyxr/screens/server_view.dart';
 import 'package:elyxr/state/server.dart';
 import 'package:elyxr/state/settings.dart';
@@ -67,11 +68,15 @@ AdminClient _client({
 Future<Widget> _screen(ServerController server) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   final prefs = await SharedPreferences.getInstance();
+  // The updater listens to the session for the server's update announcement, so
+  // it needs one; this screen never exercises either, so an unbooted session is
+  // enough to build the tree.
+  final session = SessionController(prefs, MemoryTokenStore(null));
   return MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: server),
       ChangeNotifierProvider.value(value: SettingsController(prefs)),
-      ChangeNotifierProvider(create: (_) => UpdateController()),
+      ChangeNotifierProvider(create: (_) => UpdateController(session)),
     ],
     child: MaterialApp(
       home: Material(
