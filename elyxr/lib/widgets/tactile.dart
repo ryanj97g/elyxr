@@ -6,6 +6,22 @@
 
 import 'package:flutter/material.dart';
 
+/// Wrap a label or glyph in a hit box a finger can actually land on. Most
+/// controls in this app are bare text, and a GestureDetector around bare text
+/// only catches the glyph — around 12px tall, well under the ~44px a touch
+/// target needs. The padding is transparent, so the layout keeps its density and
+/// only the tappable area grows. Horizontal padding doubles as the gap between
+/// neighbours.
+Widget hitTarget({required Widget child, VoidCallback? onTap, double pad = 11}) =>
+    GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 7, vertical: pad),
+        child: child,
+      ),
+    );
+
 /// Wraps [child] and lights an accent glow when the pointer is over it (desktop
 /// hover) or pressing it (touch). Passive — stack it around anything that
 /// already handles taps.

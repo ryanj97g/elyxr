@@ -12,6 +12,7 @@ import 'design/tokens.dart';
 import 'api/lymnal_client.dart';
 import 'state/actions.dart';
 import 'state/browse.dart';
+import 'state/library.dart';
 import 'state/music.dart';
 import 'state/server.dart';
 import 'state/session.dart';
@@ -47,6 +48,9 @@ class ElyxrApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: session),
         ChangeNotifierProvider.value(value: transfers),
         ChangeNotifierProvider.value(value: browse),
+        // Reads the same entries the browser holds; owns only which view is
+        // showing and how it is grouped.
+        ChangeNotifierProvider.value(value: LibraryController(browse)),
         ChangeNotifierProvider(create: (_) => ServerController()),
         ChangeNotifierProvider(create: (_) => UpdateController()),
         Provider.value(value: FileActions(browse, transfers, settings)),

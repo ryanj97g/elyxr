@@ -17,6 +17,7 @@ import '../design/text.dart';
 import '../design/tokens.dart';
 import '../state/actions.dart';
 import '../state/browse.dart';
+import '../state/library.dart';
 import '../state/music.dart';
 import '../state/session.dart';
 import '../state/settings.dart';
@@ -31,6 +32,7 @@ import '../widgets/dialogs.dart';
 import '../widgets/nostalgia/music_player.dart';
 import '../widgets/tactile.dart';
 import '../widgets/transfer_panel.dart';
+import 'library_view.dart';
 
 class FilesView extends StatelessWidget {
   /// Where the deck ends up, published for the screensaver to cut a hole at.
@@ -78,12 +80,9 @@ class FilesView extends StatelessWidget {
             // it is not a gate on the player.
             _deck(context, p),
             _ActionBar(palette: p),
+            _FilterBar(palette: p),
             _Breadcrumbs(palette: p),
-            Expanded(
-              child: settings.mode == ViewMode.text
-                  ? _FileList(palette: p)
-                  : _FileGrid(palette: p),
-            ),
+            Expanded(child: _Body(palette: p)),
             // NOT Flexible: as a flex sibling it split the leftover space 50/50
             // with the list, so an empty queue stole half the tube. It caps
             // itself at 150px and collapses to nothing when idle, so let it size
@@ -91,6 +90,119 @@ class FilesView extends StatelessWidget {
             QueueStrip(palette: p),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The list area. FILES keeps the text/grid choice it always had; the library
+/// views replace the *contents* only, and reuse the same loading/empty/gone/
+/// offline states wrapped around them, so there is one set of those in the app.
+class _Body extends StatelessWidget {
+  final Palette palette;
+  const _Body({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = palette;
+    final lib = context.watch<LibraryController>();
+    if (!lib.isLibrary) {
+      final mode = context.select<SettingsController, ViewMode>((s) => s.mode);
+      return mode == ViewMode.text ? _FileList(palette: p) : _FileGrid(palette: p);
+    }
+    final browse = context.watch<BrowseController>();
+    return _stateOr(context, browse, p,
+        () => libraryBody(context, p) ?? const SizedBox.shrink());
+  }
+}
+
+/// One field, two jobs. In FILES it drives lymnal's recursive filename search —
+/// the endpoint and its results list were already written and had nothing typing
+/// into them. In a library view there is nothing to ask the server: the folder is
+/// already loaded, so the same text filters it here on any of the metadata.
+class _FilterBar extends StatefulWidget {
+  final Palette palette;
+  const _FilterBar({required this.palette});
+
+  @override
+  State<_FilterBar> createState() => _FilterBarState();
+}
+
+class _FilterBarState extends State<_FilterBar> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  // Which side the text was last aimed at, so a view switch can retire it.
+  bool _wasLibrary = false;
+
+  void _onChanged(String v) {
+    final lib = context.read<LibraryController>();
+    if (lib.isLibrary) {
+      lib.setFilter(v);
+    } else {
+      context.read<BrowseController>().setQuery(v);
+    }
+    // The ✕ appears with the first character and leaves with the last.
+    setState(() {});
+  }
+
+  void _clear() {
+    _ctrl.clear();
+    context.read<LibraryController>().setFilter('');
+    context.read<BrowseController>().clearQuery();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.palette;
+    final lib = context.watch<LibraryController>();
+    // A filter typed at one view means nothing to the next one — carrying it
+    // across would silently hide rows in a view you just opened.
+    if (lib.isLibrary != _wasLibrary) {
+      _wasLibrary = lib.isLibrary;
+      if (_ctrl.text.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(_clear);
+        });
+      }
+    }
+    return Container(
+      padding: const EdgeInsets.fromLTRB(13, 0, 6, 0),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.dim))),
+      child: Row(
+        children: [
+          Text(lib.isLibrary ? 'FILTER' : 'FIND',
+              style: chassis(9.5, p.foot, spacing: 0.12)),
+          const SizedBox(width: 9),
+          Expanded(
+            child: TextField(
+              controller: _ctrl,
+              onChanged: _onChanged,
+              style: glass(15, p.bright),
+              cursorColor: p.a,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                hintText: lib.isLibrary
+                    ? 'title, artist, album'
+                    : 'name of a file or folder',
+                hintStyle: glass(14, p.dim),
+              ),
+            ),
+          ),
+          if (_ctrl.text.isNotEmpty)
+            hitTarget(
+              pad: 8,
+              onTap: () => setState(_clear),
+              child: Text('✕', style: glass(15, p.mid)),
+            ),
+        ],
       ),
     );
   }
@@ -387,21 +499,6 @@ class _TickerState extends State<_Ticker> with SingleTickerProviderStateMixin {
 
 // ------------------------------------------------------------ action bar ---
 
-/// Wrap a label or glyph in a hit box a finger can actually land on. Most
-/// controls in this screen are bare text, and a GestureDetector around bare text
-/// only catches the glyph — around 12px tall, well under the ~44px a touch target
-/// needs. The padding is transparent, so the layout keeps its density and only the
-/// tappable area grows. Horizontal padding doubles as the gap between neighbours.
-Widget _tap({required Widget child, VoidCallback? onTap, double pad = 11}) =>
-    GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 7, vertical: pad),
-        child: child,
-      ),
-    );
-
 class _ActionBar extends StatefulWidget {
   final Palette palette;
   const _ActionBar({required this.palette});
@@ -419,6 +516,7 @@ class _ActionBarState extends State<_ActionBar> {
   Widget build(BuildContext context) {
     final p = widget.palette;
     final browse = context.watch<BrowseController>();
+    final lib = context.watch<LibraryController>();
     final actions = context.read<FileActions>();
     final has = browse.hasSelection;
 
@@ -469,13 +567,25 @@ class _ActionBarState extends State<_ActionBar> {
             _action(p, 'MOVE', has ? () => _move(context, browse, p) : null),
             _action(p, 'DELETE', has ? () => _delete(context, browse, p) : null),
             if (has)
-              _tap(
+              hitTarget(
                 onTap: browse.clearSelection,
                 child: Text('✕', style: glass(16, p.mid)),
               ),
-            _tap(
-              onTap: browse.cycleSort,
-              child: Text('${browse.sort.label} ▾',
+            // The view chip sits beside the sort chip rather than in a sidebar:
+            // the chassis is a fixed 440 wide, and a rail down the side of it
+            // would cost the list a quarter of its width permanently to hold
+            // four words. Same idiom as the sort chip, one tap to cycle.
+            hitTarget(
+              onTap: lib.cycleView,
+              child: Text('${lib.view.label} ▾',
+                  style: chassis(13, lib.isLibrary ? p.a : p.mid, spacing: 0.09)),
+            ),
+            // One chip, whichever ordering is in play: lymnal's for the folder
+            // listing, the view's own for a library view.
+            hitTarget(
+              onTap: lib.isLibrary ? lib.cycleSort : browse.cycleSort,
+              child: Text(
+                  '${lib.isLibrary ? lib.sortLabel : browse.sort.label} ▾',
                   style: chassis(13, p.mid, spacing: 0.09)),
             ),
           ],
@@ -498,7 +608,7 @@ class _ActionBarState extends State<_ActionBar> {
 
   // A null onTap means the action doesn't apply to the current selection: it
   // stays in place, greyed and inert, so the bar never changes shape.
-  Widget _action(Palette p, String label, VoidCallback? onTap) => _tap(
+  Widget _action(Palette p, String label, VoidCallback? onTap) => hitTarget(
         onTap: onTap,
         child: Text(label,
             style: onTap == null
@@ -615,7 +725,14 @@ class _Breadcrumbs extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = palette;
     final browse = context.watch<BrowseController>();
+    final lib = context.watch<LibraryController>();
     final parts = browse.crumbs;
+    final trail = lib.trail;
+    // The trail stops short of wherever you actually are, because tapping that
+    // crumb does nothing. Normally that's the current folder — but once you've
+    // drilled into an artist or album, the folder is no longer the end of the
+    // line, so every crumb of the path becomes somewhere you can go back to.
+    final shownParts = trail.isEmpty ? parts.length - 1 : parts.length;
     return Container(
       padding: const EdgeInsets.fromLTRB(6, 0, 6, 0),
       child: Row(
@@ -634,27 +751,42 @@ class _Breadcrumbs extends StatelessWidget {
               reverse: true,
               child: Row(
                 children: [
-                  _crumb('/ELYXR', p.glow, () => browse.goToCrumb(-1)),
-                  for (var i = 0; i < parts.length - 1; i++)
-                    _crumb(' / ${parts[i].toUpperCase()}', p.glow,
-                        () => browse.goToCrumb(i)),
+                  _crumb('/ELYXR', p.glow, () {
+                    lib.resetDrill();
+                    browse.goToCrumb(-1);
+                  }),
+                  for (var i = 0; i < shownParts; i++)
+                    _crumb(' / ${parts[i].toUpperCase()}', p.glow, () {
+                      lib.resetDrill();
+                      browse.goToCrumb(i);
+                    }),
+                  // The drill reads on as part of the same trail — it is still
+                  // "where you are", just arrived at by tag rather than by
+                  // folder. Accent, so which half is which stays legible.
+                  for (var i = 0; i < trail.length - 1; i++)
+                    _crumb(' / ${trail[i].toUpperCase()}', p.a, lib.goBack),
                 ],
               ),
             ),
           ),
           // These were 10px type with no padding at all — the smallest targets in
           // the app, sitting next to a Spacer's worth of unused room.
-          _tap(
+          hitTarget(
             onTap: () => _newFolder(context, browse, p),
             child: Text('＋ NEW', style: chassis(13, p.mid, spacing: 0.09)),
           ),
-          _tap(
+          hitTarget(
             onTap: () => _pickUpload(context),
             child: Text('▴ ADD', style: chassis(13, p.mid, spacing: 0.09)),
           ),
-          if (browse.canGoUp)
-            _tap(
-              onTap: browse.goUp,
+          // UP unwinds the drill before it unwinds the path, so the one control
+          // walks back out the same way you came in.
+          if (browse.canGoUp || trail.isNotEmpty)
+            hitTarget(
+              onTap: () {
+                if (lib.goBack()) return;
+                browse.goUp();
+              },
               child: Text('▲ UP', style: chassis(13, p.mid, spacing: 0.09)),
             ),
         ],
@@ -679,7 +811,7 @@ class _Breadcrumbs extends StatelessWidget {
     await actions.uploadPaths(files.map((f) => f.path).toList());
   }
 
-  Widget _crumb(String label, Color color, VoidCallback onTap) => _tap(
+  Widget _crumb(String label, Color color, VoidCallback onTap) => hitTarget(
         onTap: onTap,
         pad: 10,
         child: Text(label, style: glass(15, color)),
@@ -814,10 +946,10 @@ class _Row extends StatelessWidget {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      // Single click = select this one file (its details fill the box below).
-      // Double click = open it (a folder navigates in; a file downloads to lymbo
-      // and opens in your default app, edits syncing back — no dialog, no second
-      // click). Click-and-hold = multi-select. Shift-click extends a range.
+      // Single click = act on it: an audio file plays, a folder opens, anything
+      // else downloads to lymbo and opens in your default app with edits syncing
+      // back — no dialog, no second click. Click-and-hold = select, and it is the
+      // only thing that selects. Shift-click extends a range from the last one.
       onTap: () {
         if (HardwareKeyboard.instance.isShiftPressed) {
           browse.selectRange(index);
@@ -896,12 +1028,12 @@ class _Row extends StatelessWidget {
   }
 }
 
-/// A plain single click: select just this entry (its details fill the box
-/// below). If it's an audio file, one click also starts it in the in-app
-/// player — no extra button, no long-press.
+/// A plain single click acts on the entry and nothing else: an audio file starts
+/// playing, a folder opens, anything else opens in its default app. It does NOT
+/// select — click-and-hold is what picks things, so a tap that both selected and
+/// played was doing two jobs and made every play leave a selection behind.
 void _tapEntry(
     BuildContext context, BrowseController browse, int index, Entry entry) {
-  browse.selectOnly(index);
   if (entry.isDir || !isAudioName(entry.name)) {
     _openEntry(context, browse, entry);
     return;

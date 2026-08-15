@@ -13,3 +13,15 @@ String fmtGb(int bytes) => (bytes / 1e9).toStringAsFixed(1);
 
 /// A whole-file count phrased for a person: "1 file", "12 files".
 String fmtCount(int n, String noun) => '$n $noun${n == 1 ? '' : 's'}';
+
+/// A track length as a clock reads it: `3:07`, and `1:04:22` once it runs past
+/// an hour. A dash when the file never said how long it was, so the column stays
+/// aligned instead of going blank.
+String fmtDuration(int? seconds) {
+  if (seconds == null || seconds <= 0) return '–';
+  final h = seconds ~/ 3600;
+  final m = (seconds % 3600) ~/ 60;
+  final s = seconds % 60;
+  final ss = s.toString().padLeft(2, '0');
+  return h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$ss' : '$m:$ss';
+}
