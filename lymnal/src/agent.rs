@@ -173,6 +173,18 @@ pub fn trigger_local_update(config_path: PathBuf) {
 /// `update_fleet_and_self`), the `lymnal update` command, and this agent's own
 /// auto-update. Guarded so one process can't launch two at once.
 fn run_installer(config_path: &Path) {
+    // On Android the app applies updates: it fetches the published APK and hands
+    // it to the system installer, the only way an app may be replaced there.
+    // lymnal cannot do it — it has no Context to launch the installer with — and
+    // the Linux path rebuilds from a repo a phone has no copy of. So this was a
+    // minute-by-minute failure with nothing to succeed at.
+    #[cfg(target_os = "android")]
+    {
+        let _ = config_path;
+        return;
+    }
+    #[cfg(not(target_os = "android"))]
+    {
     if INSTALLING.swap(true, Ordering::SeqCst) {
         return;
     }
@@ -183,6 +195,7 @@ fn run_installer(config_path: &Path) {
     {
         let _ = config_path; // the Windows update doesn't need the repo
         update_from_release();
+    }
     }
 }
 
