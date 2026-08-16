@@ -459,9 +459,6 @@ class _ActionBarState extends State<_ActionBar> {
   ResolveResult? _res;
   List<String>? _forPaths;
 
-  // FIND is off until asked for, and the bar is the verbs again the moment it
-  // closes — nothing about it is permanent.
-  bool _finding = false;
   final _find = TextEditingController();
 
   @override
@@ -513,46 +510,8 @@ class _ActionBarState extends State<_ActionBar> {
       // rows is not a layout. With the figures label gone they fit at full size at
       // the app's width; the FittedBox is only a floor for a genuinely narrower
       // window, where a slight scale-down still beats a wrap.
-      // FIND typing takes the bar over rather than adding a strip beneath it:
-      // the field is only wanted while it's being used, and a row that is always
-      // on screen costs the list height forever to hold an empty box.
-      child: _finding
-          ? Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _find,
-                    autofocus: true,
-                    style: glass(16, p.bright),
-                    cursorColor: p.a,
-                    // No hint. The word that opened this said what it does, and
-                    // the field is the app's, not a form to be labelled.
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(vertical: 9),
-                    ),
-                    onChanged: (v) {
-                      if (lib.isLibrary) {
-                        lib.setFilter(v);
-                      } else {
-                        browse.setQuery(v);
-                      }
-                    },
-                  ),
-                ),
-                hitTarget(
-                  onTap: () {
-                    _find.clear();
-                    lib.setFilter('');
-                    browse.clearQuery();
-                    setState(() => _finding = false);
-                  },
-                  child: Text('✕', style: glass(16, p.mid)),
-                ),
-              ],
-            )
-          : FittedBox(
+      child: has
+          ? FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
               child: Row(
@@ -560,28 +519,52 @@ class _ActionBarState extends State<_ActionBar> {
                   _action(p, 'RENAME',
                       single == null ? null : () => _rename(context, browse, p, single!.name)),
                   _action(p, 'DOWNLOAD',
-                      has ? () => _download(context, browse, actions) : null),
-                  _action(p, 'MOVE', has ? () => _move(context, browse, p) : null),
-                  _action(p, 'DELETE', has ? () => _delete(context, browse, p) : null),
-                  // FIND is a verb like the others and lives with them. It needs
-                  // no selection, so it is never greyed.
-                  _action(p, 'FIND', () => setState(() => _finding = true)),
-                  if (has)
-                    hitTarget(
-                      onTap: browse.clearSelection,
-                      child: Text('✕', style: glass(16, p.mid)),
-                    ),
-                  // ONE chip. Sorting the folder and grouping it into songs,
-                  // albums or artists are answers to the same question — how is
-                  // this list arranged — so they share the control that already
-                  // asked it instead of a second chip beside it.
+                      () => _download(context, browse, actions)),
+                  _action(p, 'MOVE', () => _move(context, browse, p)),
+                  _action(p, 'DELETE', () => _delete(context, browse, p)),
                   hitTarget(
-                    onTap: () => lib.cycleArrangement(browse),
-                    child: Text('${lib.labelFor(browse.sort)} ▾',
-                        style: chassis(13, lib.isLibrary ? p.a : p.mid, spacing: 0.09)),
+                    onTap: browse.clearSelection,
+                    child: Text('✕', style: glass(16, p.mid)),
                   ),
                 ],
               ),
+            )
+          : Row(
+              children: [
+                Text('FIND', style: chassis(9.5, p.foot, spacing: 0.12)),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: TextField(
+                    controller: _find,
+                    style: glass(16, p.bright),
+                    cursorColor: p.a,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    onChanged: (v) {
+                      if (lib.isLibrary) {
+                        lib.setFilter(v);
+                      } else {
+                        browse.setQuery(v);
+                      }
+                      setState(() {});
+                    },
+                  ),
+                ),
+                if (_find.text.isNotEmpty)
+                  hitTarget(
+                    pad: 8,
+                    onTap: () {
+                      _find.clear();
+                      lib.setFilter('');
+                      browse.clearQuery();
+                      setState(() {});
+                    },
+                    child: Text('✕', style: glass(16, p.mid)),
+                  ),
+              ],
             ),
     );
   }
@@ -781,6 +764,11 @@ class _Breadcrumbs extends StatelessWidget {
               },
               child: Text('▲ UP', style: chassis(13, p.mid, spacing: 0.09)),
             ),
+          hitTarget(
+            onTap: () => lib.cycleArrangement(browse),
+            child: Text('${lib.labelFor(browse.sort)} ▾',
+                style: chassis(13, lib.isLibrary ? p.a : p.mid, spacing: 0.09)),
+          ),
         ],
       ),
     );
