@@ -40,6 +40,27 @@ class UpdateController extends ChangeNotifier {
 
   UpdateController(this.session) {
     session.addListener(_onSession);
+    _readBlockedNote();
+  }
+
+  /// Set when this device's own agent has given up updating. lymnal writes the
+  /// reason beside its config; without this the only trace was a systemd log.
+  String? blockedNote;
+
+  Future<void> _readBlockedNote() async {
+    if (!Caps.canExec) return;
+    final home = Platform.environment['HOME'];
+    if (home == null) return;
+    try {
+      final f = File('$home/.config/lymnal/update-blocked');
+      final note = await f.exists() ? (await f.readAsString()).trim() : null;
+      if (note != blockedNote) {
+        blockedNote = note;
+        notifyListeners();
+      }
+    } catch (_) {
+      // Nothing readable means nothing to report.
+    }
   }
 
   UpdateStage stage = UpdateStage.idle;

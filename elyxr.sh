@@ -402,6 +402,17 @@ if [ "$APP" = 1 ]; then
   # baseline still has to be present up front; you need a compiler before you can
   # compile. This covers the per-plugin libraries on top of it.)
   BUILD_LOG="$(mktemp -t elyxr-appbuild.XXXXXX.log)"
+  # CMake records absolute paths in its cache, so a repo that has been renamed or
+  # moved leaves a build tree pointing at a folder that no longer exists and
+  # every build fails with "CMakeCache.txt directory is different". Nothing
+  # recovers from that on its own, and a background update just retries forever.
+  # If the cache does not name this checkout, the build tree is stale: drop it.
+  cache="elyxr/build/linux/x64/release/CMakeCache.txt"
+  if [ -f "$cache" ] && ! grep -q "$PWD/elyxr/linux" "$cache" 2>/dev/null; then
+    printf 'build tree was generated for another path; clearing it\n' >>"$LOG"
+    rm -rf elyxr/build/linux
+  fi
+
   build_app() {
     local rc
     ( cd elyxr && flutter config --enable-linux-desktop && flutter pub get \

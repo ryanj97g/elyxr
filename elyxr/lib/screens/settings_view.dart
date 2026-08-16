@@ -963,6 +963,12 @@ class _DeviceRows extends StatelessWidget {
               style: mono(11, p.foot, spacing: 0.1),
             ),
           ),
+          if (u.blockedNote != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(u.blockedNote!,
+                  style: glass(14, const Color(0xFFf5b942))),
+            ),
           if ((failed || u.stage == UpdateStage.upToDate) && u.error != null)
             Padding(
               padding: const EdgeInsets.only(top: 2),

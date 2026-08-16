@@ -58,6 +58,15 @@ pub fn run(link: Link, config_path: PathBuf) -> ! {
 /// arrived (the watcher was between connections when the server announced).
 fn poll_build(link: &Link, config_path: &Path) -> ! {
     let local: u64 = env!("ELYXR_BUILD").parse().unwrap_or(0);
+    // An update that cannot succeed will never succeed by being run again, and
+    // this loop has no other way of learning that: the installer runs detached,
+    // so the only evidence is that the build number never moves. Left uncapped
+    // it retried every minute forever, burning minutes of CPU per attempt, with
+    // the reason buried in a transient systemd scope log and nothing on screen.
+    // Give up after three, and leave a note the app can read out.
+    const GIVE_UP_AFTER: u32 = 3;
+    let mut tried_for: u64 = 0;
+    let mut tries: u32 = 0;
     loop {
         std::thread::sleep(Duration::from_secs(60));
         let resp = ureq::get(&format!("http://{}/v1/health", link.server))
@@ -67,12 +76,52 @@ fn poll_build(link: &Link, config_path: &Path) -> ! {
             if let Ok(v) = r.into_json::<serde_json::Value>() {
                 let remote = v.get("build").and_then(|b| b.as_u64()).unwrap_or(0);
                 if remote > local {
-                    tracing::info!(remote, local, "server is ahead — updating this device");
+                    // A newer target than the one we kept failing on is worth a
+                    // fresh set of attempts — the fix may be in it.
+                    if remote != tried_for {
+                        tried_for = remote;
+                        tries = 0;
+                        clear_update_block(config_path);
+                    }
+                    if tries >= GIVE_UP_AFTER {
+                        continue;
+                    }
+                    tries += 1;
+                    tracing::info!(remote, local, attempt = tries, "server is ahead — updating this device");
                     run_installer(config_path);
+                    if tries == GIVE_UP_AFTER {
+                        tracing::warn!(
+                            remote, local,
+                            "update failed {GIVE_UP_AFTER} times and is not being retried;                              run ./elyxr.sh in a terminal to see why"
+                        );
+                        write_update_block(config_path, remote, local);
+                    }
                 }
             }
         }
     }
+}
+
+/// Where the app looks to find out that this device has stopped trying.
+fn update_block_path(config_path: &Path) -> PathBuf {
+    config_path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("update-blocked")
+}
+
+fn write_update_block(config_path: &Path, remote: u64, local: u64) {
+    let msg = format!(
+        "This device is on build {local} and the server is on {remote}, but the \
+update has failed {GIVE_UP_AFTER} times and has stopped retrying. Run ./elyxr.sh \
+in a terminal on this device to see what it is failing on.",
+        GIVE_UP_AFTER = 3
+    );
+    let _ = std::fs::write(update_block_path(config_path), msg);
+}
+
+fn clear_update_block(config_path: &Path) {
+    let _ = std::fs::remove_file(update_block_path(config_path));
 }
 
 fn listen(link: &Link, config_path: &Path) -> anyhow::Result<()> {
