@@ -15,8 +15,8 @@ class ShakeDetector {
 
   static const int debounceMs = 90;
 
-  static const int joltsToFire = 4;
-  static const int windowMs = 1200;
+  static const int joltsToFire = 8;
+  static const int windowMs = 2400;
 
   static const int cooldownMs = 4000;
 

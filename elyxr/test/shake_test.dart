@@ -39,7 +39,7 @@ void main() {
     expect(fireCount(d, ShakeDetector.joltsToFire), 1);
   });
 
-  test('three jolts are not enough', () {
+  test('one jolt short of the count is not enough', () {
     final d = ShakeDetector();
     expect(fireCount(d, ShakeDetector.joltsToFire - 1), 0);
   });
@@ -60,7 +60,11 @@ void main() {
   test('it can fire again after the cooldown', () {
     final d = ShakeDetector();
     expect(fireCount(d, ShakeDetector.joltsToFire), 1);
-    final later = ShakeDetector.cooldownMs + 1000;
+    // Measured from when the first shake actually fired — the last jolt of the
+    // run, not the first — so raising the jolt count doesn't quietly start the
+    // second shake inside the cooldown and make this look like a real failure.
+    final firstFiredAt = (ShakeDetector.joltsToFire - 1) * 150;
+    final later = firstFiredAt + ShakeDetector.cooldownMs + 1000;
     expect(fireCount(d, ShakeDetector.joltsToFire, from: later), 1);
   });
 
