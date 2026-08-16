@@ -477,7 +477,9 @@ class BottomRail extends StatelessWidget {
       LinkStatus.ok => p.a,
       LinkStatus.connecting => p.glow,
       LinkStatus.firstRun => p.mt,
-      _ => const Color(0xFFf5b942), // a warning cast for the unreachable states
+      // The user's accent, held back so it still reads as "not connected"
+      // without introducing a colour they never chose.
+      _ => p.a.withValues(alpha: 0.45),
     };
     return Container(
       width: 8,

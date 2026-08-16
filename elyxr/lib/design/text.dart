@@ -24,6 +24,7 @@ TextStyle glass(double size, Color color, {double height = 1.0, double? spacing}
       color: color,
       height: height,
       letterSpacing: spacing,
+      decoration: TextDecoration.none,
     );
 
 /// Chakra Petch — chassis labels, section headers, rail buttons.
@@ -36,6 +37,7 @@ TextStyle chassis(double size, Color color,
       color: color,
       fontWeight: weight,
       letterSpacing: size * kChassisScale * spacing,
+      decoration: TextDecoration.none,
     );
 
 /// IBM Plex Mono — the ticker and version strings. Nothing else.
@@ -48,4 +50,5 @@ TextStyle mono(double size, Color color,
       color: color,
       fontWeight: weight,
       letterSpacing: size * kMonoScale * spacing,
+      decoration: TextDecoration.none,
     );

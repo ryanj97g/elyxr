@@ -283,19 +283,17 @@ extension AccentLabel on Accent {
 }
 
 extension DensityLabel on Density {
-  /// The label names how the SCREEN reads, not how big the type is: smaller text
-  /// fits more rows, so the screen has more room. That inverts the enum names on
-  /// purpose — Density.tight is shown as ROOMY. The names are persisted, so they
-  /// stay put and only the words shown change.
+  /// Named for the type, which is what the control changes. The enum names are
+  /// persisted, so they stay put and only the words shown change.
   String get label => switch (this) {
-        Density.tight => 'ROOMY',
+        Density.tight => 'SMALL',
         Density.mid => 'MID',
-        Density.roomy => 'TIGHT',
+        Density.roomy => 'LARGE',
       };
 
   double get pad => switch (this) {
-        // Row padding. A file row is a touch target, so even TIGHT keeps a row
-        // near the ~44px a finger needs; MID and ROOMY go past it.
+        // Row padding. A file row is a touch target, so even the smallest keeps
+        // a row near the ~44px a finger needs; the other two go past it.
         Density.tight => 9,
         Density.mid => 13,
         Density.roomy => 18,
@@ -310,9 +308,9 @@ extension DensityLabel on Density {
   /// unaffected — physical controls keep their fixed size. Containers that hold
   /// scalable text grow with it; fixed slots ellipsis or fit rather than clip.
   double get scale => switch (this) {
-        Density.tight => 0.9,
-        Density.mid => 1.0,
-        Density.roomy => 1.15,
+        Density.tight => 0.75,
+        Density.mid => 0.9,
+        Density.roomy => 1.05,
       };
 }
 
