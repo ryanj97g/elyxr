@@ -199,20 +199,22 @@ struct PairReq {
 /// PAIRING_CLOSED when pairing is off.
 async fn pair(
     State(s): State<Shared>,
-    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    peer: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<PairReq>,
 ) -> Result<Json<Value>, ApiError> {
-    let ip = peer.ip().to_string();
+    // No address means no way to tell who is asking, so there is nothing to
+    // recognise and the request takes the ordinary route.
+    let ip = peer.map(|ConnectInfo(a)| a.ip().to_string());
     // A device already on the approved list, asking again from the same tailnet
     // address it was approved from, is one that lost its token — a reinstall
     // wipes it, and the server only ever kept a hash, so it cannot be given
     // back. Issue a new one instead of making someone walk to the server. The
     // tailnet is the wall this leans on: nothing else can reach this port.
-    if let Some(rec) = s.devices.get(&req.device) {
-        if rec.addr.as_deref() == Some(ip.as_str()) {
+    if let (Some(ip), Some(rec)) = (ip.as_deref(), s.devices.get(&req.device)) {
+        if rec.addr.as_deref() == Some(ip) {
             let role = rec.role;
             let max_bytes = rec.max_bytes;
-            let token = s.reissue_device(&rec, Some(ip));
+            let token = s.reissue_device(&rec, Some(ip.to_string()));
             tracing::info!(device = %req.device, "known device returned; re-issued its token");
             return Ok(Json(json!({
                 "token": token,
@@ -228,7 +230,7 @@ async fn pair(
             "This server isn't accepting new devices right now. Open pairing in elyxr's server settings.",
         ));
     }
-    let rx = s.pairing.register(req.device.clone(), req.client.clone(), Some(ip));
+    let rx = s.pairing.register(req.device.clone(), req.client.clone(), ip);
     match tokio::time::timeout(Duration::from_secs(120), rx).await {
         Ok(Ok(Decision::Approve {
             token,
