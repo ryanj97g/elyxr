@@ -23,6 +23,7 @@ import '../state/session.dart';
 import '../state/settings.dart';
 import '../state/transfers.dart';
 import '../util/drag_out.dart';
+import '../util/disk_free.dart';
 import '../util/format.dart';
 import '../util/lymnal_host.dart';
 import '../util/open_external.dart';
@@ -117,15 +118,35 @@ class _Body extends StatelessWidget {
 
 // ------------------------------------------------------------- console ---
 
-class _Console extends StatelessWidget {
+class _Console extends StatefulWidget {
   final Palette palette;
   const _Console({required this.palette});
 
   @override
+  State<_Console> createState() => _ConsoleState();
+}
+
+class _ConsoleState extends State<_Console> {
+  int? _localFree;
+  String? _measured;
+
+  void _measure(String folder) {
+    if (_measured == folder) return;
+    _measured = folder;
+    freeBytesOn(folder).then((b) {
+      if (mounted) setState(() => _localFree = b);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final p = palette;
+    final p = widget.palette;
     final browse = context.watch<BrowseController>();
     final session = context.watch<SessionController>();
+    final settings = context.watch<SettingsController>();
+    final local = settings.localMode;
+    final folder = settings.localFolder;
+    if (local && folder != null) _measure(folder);
     final h = session.health;
     final used = browse.usedBytes;
     final max = browse.maxBytes;
@@ -139,12 +160,17 @@ class _Console extends StatelessWidget {
     final xfers = context.select<TransferController, int>((t) => t.active.length);
     final up = session.status == LinkStatus.ok;
     final items = <String>[
-      up ? 'Link to lymnal up' : 'Link to lymnal down',
-      if (h != null) 'Trove ${fmtGb(used)} of ${fmtGb(max)} GB used',
-      if (h != null) '${fmtGb(h.driveFreeBytes)} GB free on the drive',
+      if (local)
+        'Reading ${folder ?? ''}'
+      else
+        (up ? 'Link to lymnal up' : 'Link to lymnal down'),
+      if (local && _localFree != null)
+        '${fmtGb(_localFree!)} GB free on the drive',
+      if (!local && h != null) 'Trove ${fmtGb(used)} of ${fmtGb(max)} GB used',
+      if (!local && h != null) '${fmtGb(h.driveFreeBytes)} GB free on the drive',
       if (xfers > 0) '$xfers ${xfers == 1 ? 'transfer' : 'transfers'} running',
       if (playing != null) 'Now playing $playing',
-      if (up && xfers == 0 && playing == null) 'Ready',
+      if ((local || up) && xfers == 0 && playing == null) 'Ready',
     ];
 
     return Container(
@@ -166,8 +192,13 @@ class _Console extends StatelessWidget {
                     // serverName is the server's address with the port stripped,
                     // so this row IS the IP. Never truncate it.
                     _stat('HOST', session.serverName ?? '—', whole: true),
-                    _stat('LINK', session.status == LinkStatus.ok ? 'UP' : 'DOWN'),
-                    _stat('FREE', h != null ? '${fmtGb(h.driveFreeBytes)}G' : '—'),
+                    _stat('LINK',
+                        local ? 'LOCAL' : (session.status == LinkStatus.ok ? 'UP' : 'DOWN')),
+                    _stat(
+                        'FREE',
+                        local
+                            ? (_localFree != null ? '${fmtGb(_localFree!)}G' : '—')
+                            : (h != null ? '${fmtGb(h.driveFreeBytes)}G' : '—')),
                   ],
                 ),
               ),
@@ -182,19 +213,28 @@ class _Console extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('CAPACITY ${pct.toStringAsFixed(1)}%',
+                    Text(local ? 'FOLDER' : 'CAPACITY ${pct.toStringAsFixed(1)}%',
                         style: glass(14, p.mid)),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(fmtGb(used),
-                            style: glass(28, p.bright, height: 1.02)),
-                        Text(' / ${fmtGb(max)}G', style: glass(15, p.glow)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    _CapacityBars(palette: p, fraction: max > 0 ? used / max : 0),
+                    if (local)
+                      Text(
+                        folder == null ? '—' : folder.split('/').last,
+                        style: glass(28, p.bright, height: 1.02),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    else ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(fmtGb(used),
+                              style: glass(28, p.bright, height: 1.02)),
+                          Text(' / ${fmtGb(max)}G', style: glass(15, p.glow)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      _CapacityBars(palette: p, fraction: max > 0 ? used / max : 0),
+                    ],
                   ],
                 ),
               ),
@@ -214,7 +254,7 @@ class _Console extends StatelessWidget {
   /// "…" is not an address, and the whole reason it is on screen is so it can be
   /// read off and typed into another device.
   Widget _stat(String label, String value, {bool whole = false}) {
-    final p = palette;
+    final p = widget.palette;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
