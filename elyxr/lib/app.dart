@@ -161,13 +161,21 @@ class _RootState extends State<_Root> {
     if (localFolder != null && _localOpened != localFolder) {
       _localOpened = localFolder;
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        // The server's change stream belongs to the server's client; it is put
+        // down on the way in and picked up again on the way out. The pairing,
+        // the token and lymnal's role are untouched either way.
+        browse.disconnectEvents();
         session.useLocalTrove(localFolder);
         browse.open('');
       });
     }
     if (localFolder == null && _localOpened != null) {
       _localOpened = null;
-      session.useRemote();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        session.useRemote();
+        browse.open('');
+        browse.connectEvents();
+      });
     }
 
     // When a token is present and the link is up, open the trove once and start

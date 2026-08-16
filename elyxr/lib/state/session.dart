@@ -494,6 +494,10 @@ class SessionController extends ChangeNotifier {
   void useRemote() {
     if (_serverAddress != null) {
       _client = _factory(_clientBase, token: _token);
+      // Local browsing overwrote the displayed name with the folder's; the saved
+      // pairing still knows what the server is called.
+      _serverName = _prefs.getString('serverName') ?? _serverAddress;
+      notifyListeners();
       refresh();
     }
   }
