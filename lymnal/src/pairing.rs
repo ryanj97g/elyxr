@@ -25,6 +25,7 @@ pub enum Decision {
 
 struct PendingEntry {
     client: String,
+    addr: Option<String>,
     tx: oneshot::Sender<Decision>,
 }
 
@@ -64,13 +65,23 @@ impl PairingState {
     /// Register a waiting request and return the receiver the pair handler
     /// awaits. Keyed by device — a new request from the same device replaces
     /// the old one.
-    pub fn register(&self, device: String, client: String) -> oneshot::Receiver<Decision> {
+    pub fn register(
+        &self,
+        device: String,
+        client: String,
+        addr: Option<String>,
+    ) -> oneshot::Receiver<Decision> {
         let (tx, rx) = oneshot::channel();
         self.pending
             .lock()
             .unwrap()
-            .insert(device, PendingEntry { client, tx });
+            .insert(device, PendingEntry { client, addr, tx });
         rx
+    }
+
+    /// The address a waiting request came from, recorded when it is approved.
+    pub fn addr_of(&self, device: &str) -> Option<String> {
+        self.pending.lock().unwrap().get(device).and_then(|e| e.addr.clone())
     }
 
     /// Drop a request that timed out or whose connection went away.

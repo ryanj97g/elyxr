@@ -170,7 +170,32 @@ impl AppState {
 
     /// Approve a paired device: mint a token, persist the device, add it to the
     /// live set, and hand the raw token back for the waiting pair call.
+    /// Mint a fresh token for a device already approved, keeping its role and
+    /// limit. A reinstall wipes the device's copy and the server only ever held
+    /// a hash, so there is nothing to hand back — only something to replace.
+    pub fn reissue_device(&self, rec: &DeviceRecord, addr: Option<String>) -> String {
+        let raw = format!("lym_{}", ulid::Ulid::new());
+        let hash = auth::hash_token(&raw);
+        let updated = DeviceRecord {
+            hash: hash.clone(),
+            last_seen: now(),
+            addr,
+            ..rec.clone()
+        };
+        self.devices.add(&updated);
+        let mut tokens = self.tokens.write().unwrap();
+        tokens.retain(|t| t.label != rec.label);
+        tokens.push(TokenCfg {
+            label: rec.label.clone(),
+            hash,
+            role: rec.role,
+            max_bytes: rec.max_bytes,
+        });
+        raw
+    }
+
     pub fn approve_device(&self, device: &str, role: Role, max_bytes: u64) -> String {
+        let addr = self.pairing.addr_of(device);
         let raw = format!("lym_{}", ulid::Ulid::new());
         let hash = auth::hash_token(&raw);
         let rec = DeviceRecord {
@@ -180,6 +205,7 @@ impl AppState {
             max_bytes,
             approved_at: now(),
             last_seen: 0,
+            addr,
         };
         self.devices.add(&rec);
         self.tokens.write().unwrap().push(TokenCfg {

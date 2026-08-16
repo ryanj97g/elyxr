@@ -10,9 +10,10 @@ mod mutate;
 mod stream;
 mod transfer;
 
+use std::net::SocketAddr;
 use std::time::Duration;
 
-use axum::extract::{DefaultBodyLimit, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, State};
 use axum::http::HeaderMap;
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
@@ -196,14 +197,38 @@ struct PairReq {
 /// Pair a new device. Registers the request and blocks until a person at the
 /// server approves or denies it by name, or 120s pass. Refused with
 /// PAIRING_CLOSED when pairing is off.
-async fn pair(State(s): State<Shared>, Json(req): Json<PairReq>) -> Result<Json<Value>, ApiError> {
+async fn pair(
+    State(s): State<Shared>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Json(req): Json<PairReq>,
+) -> Result<Json<Value>, ApiError> {
+    let ip = peer.ip().to_string();
+    // A device already on the approved list, asking again from the same tailnet
+    // address it was approved from, is one that lost its token — a reinstall
+    // wipes it, and the server only ever kept a hash, so it cannot be given
+    // back. Issue a new one instead of making someone walk to the server. The
+    // tailnet is the wall this leans on: nothing else can reach this port.
+    if let Some(rec) = s.devices.get(&req.device) {
+        if rec.addr.as_deref() == Some(ip.as_str()) {
+            let role = rec.role;
+            let max_bytes = rec.max_bytes;
+            let token = s.reissue_device(&rec, Some(ip));
+            tracing::info!(device = %req.device, "known device returned; re-issued its token");
+            return Ok(Json(json!({
+                "token": token,
+                "label": req.device,
+                "role": role_str(role),
+                "max_bytes": max_bytes,
+            })));
+        }
+    }
     if !s.pairing.is_open() {
         return Err(ApiError::new(
             ErrCode::PairingClosed,
             "This server isn't accepting new devices right now. Open pairing in elyxr's server settings.",
         ));
     }
-    let rx = s.pairing.register(req.device.clone(), req.client.clone());
+    let rx = s.pairing.register(req.device.clone(), req.client.clone(), Some(ip));
     match tokio::time::timeout(Duration::from_secs(120), rx).await {
         Ok(Ok(Decision::Approve {
             token,

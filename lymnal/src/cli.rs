@@ -115,6 +115,7 @@ fn token(config_path: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
                 max_bytes,
                 approved_at: now(),
                 last_seen: 0,
+                addr: None,
             });
             println!("Approved {label}. The token is shown once — copy it now:");
             println!("{raw}");
