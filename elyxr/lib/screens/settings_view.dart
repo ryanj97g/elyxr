@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -98,6 +99,11 @@ class SettingsView extends StatelessWidget {
                   _section(p, '06', 'SHAKE FOR TAILSCALE',
                       _ShakeTailscaleRow(palette: p)),
                 ],
+                if (Caps.isDesktop) ...[
+                  const SizedBox(height: 13),
+                  _section(p, Caps.isAndroid ? '07' : '06', 'LOCAL MODE',
+                      _LocalModeRow(palette: p)),
+                ],
                 const SizedBox(height: 16),
                 // Buried at the very bottom, unnumbered, undocumented: a dev
                 // escape hatch to unlock the fixed window's size. In-memory only
@@ -164,9 +170,6 @@ class _NostalgiaRow extends StatefulWidget {
 }
 
 class _NostalgiaRowState extends State<_NostalgiaRow> {
-  // The diamond folds the sub-toggle list away; purely a view state, not a
-  // setting, so it lives here and resets when Settings is reopened.
-  bool _collapsed = false;
 
   Widget _toggle(Palette p, bool on) => Container(
         width: 34,
@@ -226,13 +229,11 @@ class _NostalgiaRowState extends State<_NostalgiaRow> {
               // control, not a second way to arm Nostalgia. It only has anything
               // to fold while the mode is on, so off it's inert decoration.
               GestureDetector(
-                onTap: on
-                    ? () => setState(() => _collapsed = !_collapsed)
-                    : null,
+                onTap: on ? () => s.nostalgiaFolded = !s.nostalgiaFolded : null,
                 behavior: HitTestBehavior.opaque,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: Text(on && _collapsed ? '◇' : '◈',
+                  child: Text(on && s.nostalgiaFolded ? '◇' : '◈',
                       style: glass(20, on ? p.a : p.foot)),
                 ),
               ),
@@ -314,7 +315,7 @@ class _NostalgiaRowState extends State<_NostalgiaRow> {
         // DEMO MODE holds the four pieces below it. Off by default, so nothing
         // auto-starts and no visual turns itself on the moment Nostalgia does.
         // The whole list folds away behind the diamond.
-        if (on && !_collapsed)
+        if (on && !s.nostalgiaFolded)
           _subToggle(p, 'DEMO MODE', s.demoMode2000s, 29, () {
             final now = !s.demoMode2000s;
             s.demoMode2000s = now;
@@ -327,7 +328,7 @@ class _NostalgiaRowState extends State<_NostalgiaRow> {
           }),
         // Demo Mode's contents, one toggle each, so no one is stuck taking a
         // screensaver to get an oscilloscope.
-        if (on && !_collapsed && s.demoMode2000s) ...[
+        if (on && !s.nostalgiaFolded && s.demoMode2000s) ...[
           _subToggle(p, 'SCREENSAVER', s.screensaver, 46,
               () => s.screensaver = !s.screensaver),
           _subToggle(p, 'LIGHTSHOW', s.lightshow, 46,
@@ -347,6 +348,61 @@ class _NostalgiaRowState extends State<_NostalgiaRow> {
         ],
         Container(height: 1, color: p.dim),
       ],
+    );
+  }
+}
+
+class _LocalModeRow extends StatelessWidget {
+  final Palette palette;
+  const _LocalModeRow({required this.palette});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<SettingsController>();
+    final p = palette;
+    final on = s.localMode;
+    return GestureDetector(
+      onTap: () async {
+        if (on) {
+          s.setLocalMode(false);
+          return;
+        }
+        final folder = s.localFolder ?? await getDirectoryPath();
+        if (folder != null) s.setLocalMode(true, folder: folder);
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              on
+                  ? 'On — reading ${s.localFolder}. Turn this off to go back to a server.'
+                  : 'Off — turn this on to browse a folder on this device instead of pairing with a server.',
+              style: glass(15, p.mid),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Container(
+            width: 34,
+            height: 18,
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            alignment: on ? Alignment.centerRight : Alignment.centerLeft,
+            decoration: BoxDecoration(
+              color: p.mv1,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Container(
+              width: 13,
+              height: 13,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: on ? p.a : p.mb,
+                boxShadow: on ? [BoxShadow(color: p.a, blurRadius: 6)] : null,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

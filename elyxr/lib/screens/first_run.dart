@@ -4,6 +4,7 @@
 // pairing-not-open are three different messages. Manual address entry is the
 // only place an address is typed, and only when discovery fails.
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -100,6 +101,13 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
     );
   }
 
+  Future<void> _browseLocally(BuildContext context) async {
+    final settings = context.read<SettingsController>();
+    final chosen = await getDirectoryPath();
+    if (chosen == null) return;
+    settings.setLocalMode(true, folder: chosen);
+  }
+
   Widget _railStub(Palette p) => Padding(
         padding: const EdgeInsets.fromLTRB(3, 1, 3, 2),
         child: Row(
@@ -142,6 +150,16 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: Text('THIS DEVICE IS THE SERVER ▸',
+                      style: chassis(10, p.mid, spacing: 0.1)),
+                ),
+              ),
+            if (_phase != _Phase.waiting && Caps.isDesktop)
+              GestureDetector(
+                onTap: () => _browseLocally(context),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text('BROWSE A FOLDER ON THIS DEVICE ▸',
                       style: chassis(10, p.mid, spacing: 0.1)),
                 ),
               ),

@@ -86,6 +86,7 @@ class _Root extends StatefulWidget {
 class _RootState extends State<_Root> {
   bool _openedOnce = false;
   bool _serverTried = false;
+  String? _localOpened;
   LymnalClient? _dragClient;
   LinkStatus? _prevStatus;
 
@@ -154,6 +155,21 @@ class _RootState extends State<_Root> {
           .addPostFrameCallback((_) => session.applyRole(server: false));
     }
 
+    // Local mode: read a folder on this device. It does not touch lymnal's role
+    // or the pairing — it only points the browser somewhere else.
+    final localFolder = settings.localMode ? settings.localFolder : null;
+    if (localFolder != null && _localOpened != localFolder) {
+      _localOpened = localFolder;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        session.useLocalTrove(localFolder);
+        browse.open('');
+      });
+    }
+    if (localFolder == null && _localOpened != null) {
+      _localOpened = null;
+      session.useRemote();
+    }
+
     // When a token is present and the link is up, open the trove once and start
     // listening for live changes.
     if (!session.isFirstRun && session.status == LinkStatus.ok && !_openedOnce) {
@@ -168,7 +184,7 @@ class _RootState extends State<_Root> {
     // In server mode this device manages its own lymnal (no client pairing
     // needed), so it goes straight to the connected home. Otherwise, no token
     // yet means first run.
-    final child = settings.appMode == AppMode.server
+    final child = (settings.appMode == AppMode.server || settings.localMode)
         ? const HomeScreen()
         : (session.isFirstRun ? const FirstRunScreen() : const HomeScreen());
 

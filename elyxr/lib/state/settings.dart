@@ -54,6 +54,9 @@ class SettingsController extends ChangeNotifier {
   bool _oscilloscope = true;
   bool _soundtrack = true;
   bool _shakeForTailscale = false;
+  bool _nostalgiaFolded = false;
+  bool _localMode = false;
+  String? _localFolder;
   // Whether the settings screen is showing. Kept here, not in the home widget's
   // own state, so a rebuild (e.g. while dragging a colour swatch) can never wipe
   // it and bounce you out of settings. In-memory; resets to the files view on
@@ -74,6 +77,11 @@ class SettingsController extends ChangeNotifier {
   bool get nostalgia => _nostalgia;
   bool get demoMode2000s => _demoMode2000s;
   bool get shakeForTailscale => _shakeForTailscale;
+
+  bool get nostalgiaFolded => _nostalgiaFolded;
+
+  bool get localMode => _localMode && _localFolder != null;
+  String? get localFolder => _localFolder;
   bool get inSettings => _inSettings;
 
   /// The four sub-toggles as stored, whether or not they're reachable.
@@ -115,6 +123,9 @@ class SettingsController extends ChangeNotifier {
     _oscilloscope = _prefs.getBool('oscilloscope') ?? true;
     _soundtrack = _prefs.getBool('soundtrack') ?? true;
     _shakeForTailscale = _prefs.getBool('shakeForTailscale') ?? false;
+    _nostalgiaFolded = _prefs.getBool('nostalgiaFolded') ?? false;
+    _localMode = _prefs.getBool('localMode') ?? false;
+    _localFolder = _prefs.getString('localFolder');
     // Apply the chosen terminal face before the first frame builds. It governs
     // everything on the glass — the body text and the ticker/readouts alike —
     // since the ticker is part of the screen, not a separate face. Only the
@@ -166,6 +177,20 @@ class SettingsController extends ChangeNotifier {
     if (_shakeForTailscale == v) return;
     _set('shakeForTailscale', () => _shakeForTailscale = v,
         () => _prefs.setBool('shakeForTailscale', v));
+  }
+
+  set nostalgiaFolded(bool v) {
+    if (_nostalgiaFolded == v) return;
+    _set('nostalgiaFolded', () => _nostalgiaFolded = v,
+        () => _prefs.setBool('nostalgiaFolded', v));
+  }
+
+  void setLocalMode(bool on, {String? folder}) {
+    _localMode = on;
+    if (folder != null) _localFolder = folder;
+    _prefs.setBool('localMode', on);
+    if (folder != null) _prefs.setString('localFolder', folder);
+    notifyListeners();
   }
 
   /// Re-scan the on-disk custom-fonts folder (uncommitted drops included) and
