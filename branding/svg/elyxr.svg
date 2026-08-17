@@ -49,9 +49,6 @@
     </g>
   </defs>
 
-  <ellipse cx="512" cy="836" rx="236" ry="34" fill="#5c3b0b" opacity=".3" filter="url(#blur3)"></ellipse>
-  <ellipse cx="512" cy="852" rx="200" ry="46" fill="#f2cf5f" opacity=".5" filter="url(#blur3b)"></ellipse>
-  <ellipse cx="500" cy="858" rx="96" ry="26" fill="#e8563f" opacity=".6" filter="url(#blur3c)"></ellipse>
 
   <g mask="url(#refl3)">
     <g transform="translate(0,1636) scale(1,-1)">
