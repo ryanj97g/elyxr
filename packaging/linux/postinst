@@ -1,0 +1,45 @@
+#!/bin/sh
+set -e
+
+case "$1" in configure) ;; *) exit 0 ;; esac
+
+# Menu entry and icon caches, so the app appears without a logout.
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database -q /usr/share/applications || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -qtf /usr/share/icons/hicolor || true
+fi
+systemctl daemon-reload >/dev/null 2>&1 || true
+
+# The person installing, not root. Everything below is per-user on purpose:
+# lymnal serves YOUR folder as YOU, and your trove and pairing stay yours.
+u="${SUDO_USER:-}"
+[ -z "$u" ] && [ -n "${PKEXEC_UID:-}" ] && u="$(getent passwd "$PKEXEC_UID" | cut -d: -f1)"
+if [ -z "$u" ] || [ "$u" = root ]; then
+  echo "elyxr: installed. Run 'systemctl --user enable --now lymnal' to start it."
+  exit 0
+fi
+
+uid="$(id -u "$u")"
+
+# An older install put lymnal in the home folder with its own service unit.
+# Stop that one first or two copies fight over the same port.
+old="/home/$u/.config/systemd/user/lymnal.service"
+if [ -f "$old" ]; then
+  runuser -u "$u" -- systemctl --user disable --now lymnal.service >/dev/null 2>&1 || true
+  rm -f "$old"
+  echo "elyxr: replaced the older per-user service with the packaged one"
+fi
+
+# A trove server is meant to sit with nobody logged in, so the service has to
+# survive logout.
+loginctl enable-linger "$u" >/dev/null 2>&1 || true
+
+runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$uid" \
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$uid" \
+  systemctl --user enable --now lymnal.service >/dev/null 2>&1 \
+  || echo "elyxr: couldn't start lymnal for $u — run 'systemctl --user enable --now lymnal'"
+
+exit 0

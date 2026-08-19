@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+case "$1" in remove|purge) ;; *) exit 0 ;; esac
+
+u="${SUDO_USER:-}"
+[ -z "$u" ] && [ -n "${PKEXEC_UID:-}" ] && u="$(getent passwd "$PKEXEC_UID" | cut -d: -f1)"
+if [ -n "$u" ] && [ "$u" != root ]; then
+  uid="$(id -u "$u")"
+  runuser -u "$u" -- env XDG_RUNTIME_DIR="/run/user/$uid" \
+    systemctl --user disable --now lymnal.service >/dev/null 2>&1 || true
+fi
+
+# Your trove, pairing and token live in your home folder and are never touched
+# by installing or removing this package.
+exit 0

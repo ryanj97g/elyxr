@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>elyxr</vendor>
+  <vendor_url>https://github.com/ryanj97g/elyxr</vendor_url>
+
+  <!--
+    One action, one program. This says the update helper may run as root without
+    a password. It grants nothing else: no shell, no arguments, no other program.
+
+    allow_any (rather than allow_active) is deliberate. A trove server is meant to
+    sit with nobody logged in, and "active" means someone is signed in at the
+    screen. Restricting to active sessions would mean a headless server silently
+    never updates, which is the failure this is meant to remove.
+  -->
+  <action id="org.elyxr.update">
+    <description>Install an elyxr update</description>
+    <message>Authentication is required to install an elyxr update</message>
+    <icon_name>com.elyxr.elyxr</icon_name>
+    <defaults>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/elyxr-update</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">false</annotate>
+  </action>
+</policyconfig>

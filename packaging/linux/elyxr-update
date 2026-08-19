@@ -1,0 +1,42 @@
+#!/bin/sh
+# Installs a published elyxr update. Runs as root, via pkexec, and is the ONLY
+# thing on the machine allowed to do so without a password.
+#
+# It takes no arguments and reads nothing from the caller. lymnal runs as the
+# user, so anything the user could hand it is something the user chose — this
+# fetches from a fixed address instead, so nothing user-supplied ever reaches
+# root. The whole surface is: one URL, one package name.
+set -eu
+
+URL="https://github.com/ryanj97g/elyxr/releases/download/linux-latest/elyxr.deb"
+PKG="elyxr"
+WORK="/var/lib/elyxr/update"
+
+umask 077
+mkdir -p "$WORK"
+DEB="$WORK/candidate.deb"
+rm -f "$DEB"
+
+curl -fsSL --max-time 600 -o "$DEB" "$URL"
+
+# It must be a real package, and it must be ours. A file that is neither gets
+# thrown away without ever being handed to the installer.
+name="$(dpkg-deb -f "$DEB" Package 2>/dev/null || true)"
+if [ "$name" != "$PKG" ]; then
+  rm -f "$DEB"
+  echo "elyxr-update: that download is not the $PKG package (got '${name:-nothing}')" >&2
+  exit 3
+fi
+
+new="$(dpkg-deb -f "$DEB" Version)"
+cur="$(dpkg-query -W -f='${Version}' "$PKG" 2>/dev/null || echo '')"
+if [ -n "$cur" ] && dpkg --compare-versions "$new" le "$cur"; then
+  rm -f "$DEB"
+  echo "elyxr-update: already on $cur; published is $new"
+  exit 0
+fi
+
+# apt-get, not dpkg, so any new system libraries the build needs come with it.
+DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades "$DEB"
+rm -f "$DEB"
+echo "elyxr-update: installed $new"
