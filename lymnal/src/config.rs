@@ -41,6 +41,39 @@ fn tailscale_ip() -> Result<String, String> {
     Ok(ip)
 }
 
+/// This machine's name on the tailnet, as Tailscale itself reports it (the
+/// fully-qualified MagicDNS name, e.g. `trove.tail0123.ts.net`, with the
+/// trailing dot removed). A tailnet name follows the machine: it survives the
+/// node being removed and re-added, which a tailnet IP does not. Published in
+/// health so a paired device can save the name and stop depending on the number
+/// it happened to dial.
+///
+/// `None` whenever Tailscale can't be asked or has nothing to say — a server
+/// that reports no name simply leaves its clients on the address they have.
+pub fn tailscale_hostname() -> Option<String> {
+    let out = run_tailscale(&["status", "--json"]).ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    hostname_from_status(&out.stdout)
+}
+
+/// Pull this machine's name out of `tailscale status --json`. Split out from the
+/// command so the parsing can be tested without Tailscale installed.
+fn hostname_from_status(json: &[u8]) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_slice(json).ok()?;
+    let me = v.get("Self")?;
+    // DNSName is the resolvable one. HostName is the short label, which also
+    // resolves while MagicDNS is on, and is the better fallback than nothing.
+    me.get("DNSName")
+        .and_then(|d| d.as_str())
+        .map(|d| d.trim_end_matches('.'))
+        .filter(|s| !s.is_empty())
+        .or_else(|| me.get("HostName").and_then(|h| h.as_str()))
+        .map(str::to_string)
+        .filter(|s| !s.is_empty())
+}
+
 /// Run the Tailscale CLI. It's on PATH on Linux; on Windows it installs to
 /// `C:\Program Files\Tailscale\tailscale.exe` and isn't on PATH by default, so
 /// try the standard install locations too. This is what lets a Windows machine
@@ -331,5 +364,35 @@ impl Config {
                 reason: e.to_string(),
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod hostname_tests {
+    use super::hostname_from_status;
+
+    #[test]
+    fn takes_the_resolvable_name_without_its_trailing_dot() {
+        let j = br#"{"Self":{"DNSName":"ryang5mini.tail182ffa.ts.net.","HostName":"ryang5mini"}}"#;
+        assert_eq!(
+            hostname_from_status(j).as_deref(),
+            Some("ryang5mini.tail182ffa.ts.net")
+        );
+    }
+
+    #[test]
+    fn falls_back_to_the_short_label_when_there_is_no_dns_name() {
+        let j = br#"{"Self":{"DNSName":"","HostName":"ryang5mini"}}"#;
+        assert_eq!(hostname_from_status(j).as_deref(), Some("ryang5mini"));
+        let j = br#"{"Self":{"HostName":"ryang5mini"}}"#;
+        assert_eq!(hostname_from_status(j).as_deref(), Some("ryang5mini"));
+    }
+
+    #[test]
+    fn nothing_to_report_is_not_an_error() {
+        assert_eq!(hostname_from_status(b"{}"), None);
+        assert_eq!(hostname_from_status(b"not json at all"), None);
+        assert_eq!(hostname_from_status(br#"{"Self":{}}"#), None);
+        assert_eq!(hostname_from_status(br#"{"Self":{"HostName":""}}"#), None);
     }
 }

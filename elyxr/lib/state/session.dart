@@ -78,6 +78,12 @@ class SessionController extends ChangeNotifier {
 
   String? _token;
   String? _serverAddress; // host:port
+  /// What the server calls itself on the tailnet, as `name:port` — the same
+  /// shape as [_serverAddress], so either can be dialled. A tailnet name follows
+  /// the machine and a tailnet number does not, so this is the address that
+  /// survives the server being removed from the tailnet and added back. Null
+  /// until a server reports a name (an older one never will).
+  String? _serverHost;
   String? _serverName;
   LinkStatus _status = LinkStatus.connecting;
   LymnalClient? _client;
@@ -86,6 +92,11 @@ class SessionController extends ChangeNotifier {
   LinkStatus get status => _status;
   String? get serverName => _serverName;
   String? get serverAddress => _serverAddress;
+  /// The server's tailnet name with its port, when it has told us one.
+  String? get serverHost => _serverHost;
+  /// What to show as the server's address: the tailnet name when we have one,
+  /// since that's the durable half of the pairing.
+  String? get displayAddress => _serverHost ?? _serverAddress;
   Health? get health => _health;
   LymnalClient? get client => _client;
   /// Never paired. False until [booted], because before that we simply haven't
@@ -96,6 +107,74 @@ class SessionController extends ChangeNotifier {
   String? get bearerToken => _token;
 
   String _baseUrl(String address) => 'http://$address';
+
+  /// Split an `address:port` into its two halves, defaulting the port. Written
+  /// out rather than inlined because a tailnet name may itself contain dots and
+  /// the port is always the last colon-separated piece.
+  static (String, String) _split(String address) {
+    final i = address.lastIndexOf(':');
+    if (i <= 0) return (address, '$_defaultPort');
+    return (address.substring(0, i), address.substring(i + 1));
+  }
+
+  static const _defaultPort = 7749;
+
+  /// Fill in the port when someone typed a bare name or number. Nobody should
+  /// have to know the port to reach their own trove.
+  static String _withPort(String address) {
+    final a = address.trim();
+    return a.contains(':') ? a : '$a:$_defaultPort';
+  }
+
+  /// True when [host] is already a bare number rather than a name, in which case
+  /// there is nothing to look up and nothing durable to remember.
+  static bool _isNumeric(String host) =>
+      InternetAddress.tryParse(host.replaceAll(RegExp(r'^\[|\]$'), '')) != null;
+
+  /// Remember the name a server reports for itself, keeping the port we're
+  /// already talking to it on. Does nothing when the server reports no name, so
+  /// an older server simply leaves the pairing as it was.
+  Future<void> _adoptHost(Health h) async {
+    final reported = h.host;
+    if (reported == null || reported.isEmpty) return;
+    if (_serverAddress == null) return;
+    final (_, port) = _split(_serverAddress!);
+    final host = '$reported:$port';
+    if (_serverHost == host) return;
+    _serverHost = host;
+    await _prefs.setString('serverHost', host);
+    notifyListeners();
+  }
+
+  /// Look up the server's tailnet name and, if it now answers to a different
+  /// number than the one on file, adopt that number. This is what lets the app
+  /// follow the server after the tailnet hands it a new address: the name is
+  /// unchanged, so the lookup quietly produces the new number.
+  ///
+  /// Returns true when the address changed, so the caller knows to pass the new
+  /// one on to the local proxy. A lookup that fails changes nothing and returns
+  /// false — the saved number is still the best guess we have, and on a device
+  /// whose platform can't resolve tailnet names it's the only one.
+  Future<bool> _resolveHost() async {
+    final host = _serverHost;
+    if (host == null) return false;
+    final (name, port) = _split(host);
+    if (_isNumeric(name)) return false;
+    try {
+      final found = await InternetAddress.lookup(name)
+          .timeout(const Duration(seconds: 5));
+      final v4 = found.firstWhere((a) => a.type == InternetAddressType.IPv4,
+          orElse: () => found.first);
+      final resolved = '${v4.address}:$port';
+      if (resolved == _serverAddress) return false;
+      _serverAddress = resolved;
+      await _prefs.setString('serverAddress', resolved);
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// A paired client on desktop talks to its *own* lymnal, which proxies to the
   /// trove with lymbo in front. Discovery and pairing still use the remote
@@ -130,7 +209,12 @@ class SessionController extends ChangeNotifier {
     await _importPendingBind();
     _token = await _tokens.read();
     _serverAddress = _prefs.getString('serverAddress');
+    _serverHost = _prefs.getString('serverHost');
     _serverName = _prefs.getString('serverName');
+    // Before anything dials: if the server's tailnet name now points somewhere
+    // new, pick that up first, so the client and the local proxy are both
+    // pointed at where the server actually is rather than where it used to be.
+    await _resolveHost();
 
     if (_token == null || _serverAddress == null) {
       await _syncLink(); // no pairing: make sure lymnal isn't left as an agent
@@ -385,13 +469,40 @@ class SessionController extends ChangeNotifier {
     }
     try {
       _health = await c.health();
+      await _adoptHost(_health!);
       _setStatus(LinkStatus.ok);
     } on ConnectionError catch (e) {
+      // Unreachable is what a server that has moved looks like from here. Ask
+      // the tailnet where its name points now; if that's somewhere new, tell the
+      // local proxy and try once more before reporting the failure.
+      if (await _recoverAddress()) {
+        try {
+          _health = await c.health();
+          await _adoptHost(_health!);
+          _setStatus(LinkStatus.ok);
+          return;
+        } on ConnectionError catch (e2) {
+          _setStatus(_statusFor(e2.fault));
+          return;
+        } on LymnalError {
+          _setStatus(LinkStatus.ok);
+          return;
+        }
+      }
       _setStatus(_statusFor(e.fault));
     } on LymnalError {
       // A coded error from health is unexpected; treat as reachable-but-odd.
       _setStatus(LinkStatus.ok);
     }
+  }
+
+  /// Re-resolve the server's tailnet name after a failed call and, if it moved,
+  /// hand the new address to the local proxy (which is what actually carries the
+  /// traffic). True when something changed and the call is worth retrying.
+  Future<bool> _recoverAddress() async {
+    if (!await _resolveHost()) return false;
+    await _syncLink();
+    return true;
   }
 
   LinkStatus _statusFor(ConnectionFault f) => switch (f) {
@@ -406,8 +517,10 @@ class SessionController extends ChangeNotifier {
   /// server address by hand.
   Future<List<DiscoveredServer>> discover({List<String> extra = const []}) async {
     final candidates = <String>{
+      // The name is tried before the number: it's the half that stays true.
+      if (_serverHost != null) _serverHost!,
       if (_serverAddress != null) _serverAddress!,
-      ...extra,
+      ...extra.map(_withPort),
     };
     final found = <DiscoveredServer>[];
     for (final addr in candidates) {
@@ -446,10 +559,63 @@ class SessionController extends ChangeNotifier {
     await _tokens.write(result.token);
     await _prefs.setString('serverAddress', address);
     await _prefs.setString('serverName', _serverName!);
+    // Ask the server what it calls itself and keep that, so this pairing is tied
+    // to the machine rather than to the number it happens to answer on today. If
+    // the address typed was already a name, that's what we keep.
+    _serverHost = null;
+    await _prefs.remove('serverHost');
+    try {
+      await _adoptHost(await c.health());
+    } on ConnectionError {
+      // It just approved us, so it's reachable; a name is a nicety, not a
+      // requirement. Fall back to whatever was typed.
+    } on LymnalError {
+      // Same.
+    }
+    if (_serverHost == null && !_isNumeric(_split(address).$1)) {
+      _serverHost = address;
+      await _prefs.setString('serverHost', address);
+    }
     _client = _factory(_clientBase, token: _token);
     // Write link.json first so lymnal (re)starts as this device's local proxy,
     // then refresh. On Android the just-started service needs a moment to bind,
     // so retry until the loopback proxy answers.
+    await _syncLink();
+    if (Caps.isAndroid) {
+      await _connectWithRetry();
+    } else {
+      await refresh();
+    }
+  }
+
+  /// Point this device at a new address for the SAME server, keeping the access
+  /// token. The token is the server's, not the address's: a machine that moved on
+  /// the tailnet never revoked anything, so correcting the address is all that's
+  /// needed — no re-pairing, and no one has to be at the server to approve it.
+  ///
+  /// [address] may be a tailnet name or a number, with or without a port. A name
+  /// is kept as the durable half of the pairing and looked up straight away.
+  Future<void> setAddress(String address) async {
+    if (_token == null) return;
+    var addr = address.trim();
+    if (addr.isEmpty) return;
+    addr = _withPort(addr);
+    final (host, _) = _split(addr);
+    _serverAddress = addr;
+    await _prefs.setString('serverAddress', addr);
+    if (_isNumeric(host)) {
+      // A number was given. Keep any name we already had: the lookup below will
+      // correct the number again on its own next time, and if the name is what
+      // has gone stale, the server will report its current one on connecting.
+    } else {
+      _serverHost = addr;
+      await _prefs.setString('serverHost', addr);
+      await _resolveHost();
+    }
+    _serverName = host;
+    await _prefs.setString('serverName', _serverName!);
+    _client = _factory(_clientBase, token: _token);
+    _setStatus(LinkStatus.connecting);
     await _syncLink();
     if (Caps.isAndroid) {
       await _connectWithRetry();
@@ -464,9 +630,11 @@ class SessionController extends ChangeNotifier {
   Future<void> forget() async {
     await _tokens.delete();
     await _prefs.remove('serverAddress');
+    await _prefs.remove('serverHost');
     await _prefs.remove('serverName');
     _token = null;
     _serverAddress = null;
+    _serverHost = null;
     _serverName = null;
     _client = null;
     _health = null;

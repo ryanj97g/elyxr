@@ -18,6 +18,7 @@ import '../state/sound.dart';
 import '../util/platform_caps.dart';
 import '../state/updater.dart';
 import '../util/device.dart';
+import '../widgets/dialogs.dart';
 import 'server_view.dart';
 
 class SettingsView extends StatelessWidget {
@@ -886,6 +887,22 @@ class _DeviceRows extends StatelessWidget {
         // own when the server moves ahead. Here so it's reachable in any mode,
         // not just on the server. Reflects the update's state while it runs.
         _updateRow(context, p, update),
+        // The server's address, editable. A server that moves on the tailnet
+        // leaves every paired device pointed at a number that answers to
+        // nothing; the token is still good, so correcting the address here is
+        // the whole repair — no re-pairing, and no one needed at the server.
+        if (session.displayAddress != null)
+          row(
+            'ADDRESS',
+            GestureDetector(
+              onTap: () => _editAddress(context, session),
+              behavior: HitTestBehavior.opaque,
+              child: Text('${session.displayAddress}  ✎',
+                  style: glass(20, p.a),
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ),
         if (session.serverName != null)
           Padding(
             padding: const EdgeInsets.only(top: 6),
@@ -978,6 +995,14 @@ class _DeviceRows extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _editAddress(
+      BuildContext context, SessionController session) async {
+    final entered = await showServerAddress(
+        context, palette, session.displayAddress ?? '');
+    if (entered == null) return;
+    await session.setAddress(entered);
   }
 
   void _confirmForget(BuildContext context, SessionController session) {

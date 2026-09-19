@@ -53,6 +53,10 @@ pub struct AppState {
     /// The last failures, newest last, capped at twenty.
     pub problems: Mutex<VecDeque<ProblemLine>>,
     pub bound_ok: AtomicBool,
+    /// This machine's tailnet name, worked out once at startup. Published in
+    /// health so a paired device can save the name rather than the address, and
+    /// keep working when the tailnet hands this machine a new number.
+    host_name: Option<String>,
     /// How this device updates itself, registered by the binary at startup. Lets
     /// a fleet-update request from a client make the server follow, without the
     /// lib depending on the binary's platform-specific installer code.
@@ -89,6 +93,7 @@ impl AppState {
             admin_token: mint_admin_token(),
             problems: Mutex::new(VecDeque::with_capacity(20)),
             bound_ok: AtomicBool::new(true),
+            host_name: None,
             update_trigger: Mutex::new(None),
         })
     }
@@ -97,6 +102,15 @@ impl AppState {
     pub fn with_config_path(self: &mut Arc<Self>, path: std::path::PathBuf) {
         if let Some(inner) = Arc::get_mut(self) {
             inner.config_path = Some(path);
+        }
+    }
+
+    /// Record this machine's tailnet name, called once at startup before the
+    /// state is shared. Left unset, health reports no name and a client stays on
+    /// whatever address it already has.
+    pub fn with_host_name(self: &mut Arc<Self>, name: Option<String>) {
+        if let Some(inner) = Arc::get_mut(self) {
+            inner.host_name = name;
         }
     }
 
@@ -124,6 +138,11 @@ impl AppState {
 
     pub fn trove_name(&self) -> String {
         self.cfg.read().unwrap().trove.name.clone()
+    }
+
+    /// This machine's tailnet name, if it has one.
+    pub fn host_name(&self) -> Option<&str> {
+        self.host_name.as_deref()
     }
 
     pub fn bind_addr(&self) -> String {

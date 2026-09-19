@@ -125,6 +125,11 @@ class Health {
   final int maxBytes;
   final int driveFreeBytes;
   final bool pairingOpen;
+  /// What the server calls itself on the tailnet, when it knows. A tailnet name
+  /// follows the machine, so a device that saves this keeps working after the
+  /// server is handed a new tailnet address. Null from an older server, or one
+  /// that couldn't ask Tailscale.
+  final String? host;
 
   const Health({
     required this.version,
@@ -136,6 +141,7 @@ class Health {
     required this.maxBytes,
     required this.driveFreeBytes,
     required this.pairingOpen,
+    this.host,
   });
 
   factory Health.fromJson(Map<String, dynamic> j) => Health(
@@ -148,6 +154,9 @@ class Health {
         maxBytes: (j['max_bytes'] as num?)?.toInt() ?? 0,
         driveFreeBytes: (j['drive_free_bytes'] as num?)?.toInt() ?? 0,
         pairingOpen: j['pairing_open'] as bool? ?? false,
+        host: (j['host'] as String?)?.trim().isNotEmpty == true
+            ? (j['host'] as String).trim()
+            : null,
       );
 }
 

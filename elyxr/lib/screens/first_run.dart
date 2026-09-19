@@ -239,7 +239,8 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
           Text("Couldn't find a server on the tailnet.",
               style: glass(18, p.bright)),
           const SizedBox(height: 6),
-          Text('Enter its address by hand.', style: glass(15, p.mid)),
+          Text("Enter its Tailscale name by hand — a name keeps working if the "
+              "server's number ever changes.", style: glass(15, p.mid)),
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -254,7 +255,7 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
                     decoration: InputDecoration(
                       isDense: true,
                       border: InputBorder.none,
-                      hintText: '100.x.x.x:7749',
+                      hintText: 'name-of-server',
                       hintStyle: glass(16, p.foot),
                     ),
                   ),

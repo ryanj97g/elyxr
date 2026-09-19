@@ -258,6 +258,10 @@ async fn serve(
     let trove_name = cfg.trove.name.clone();
     let mut state = AppState::new(cfg, trove, usage, uploads, devices);
     state.with_config_path(config_path.clone());
+    // Asked once: this machine's tailnet name is fixed for the life of the
+    // process, and health hands it to every device that pairs so none of them
+    // has to remember a tailnet IP that can change under them.
+    state.with_host_name(lymnal::config::tailscale_hostname());
     // How the server updates itself when an owner device asks the fleet to
     // update (POST /v1/update), so an update triggered from a client makes the
     // server follow too. The lib holds only the callback; the platform-specific

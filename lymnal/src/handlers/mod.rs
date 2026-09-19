@@ -163,6 +163,9 @@ async fn health(State(s): State<Shared>) -> Json<Value> {
         "max_bytes": s.usage.limits().max_bytes,
         "drive_free_bytes": s.usage.drive_free(),
         "pairing_open": s.pairing.is_open(),
+        // This machine's tailnet name, so a client can save the name instead of
+        // the number and follow the machine if its tailnet address changes.
+        "host": s.host_name(),
     }))
 }
 

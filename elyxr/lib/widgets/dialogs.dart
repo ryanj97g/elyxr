@@ -104,6 +104,56 @@ Future<String?> showNewFolder(BuildContext context, Palette p) async {
   );
 }
 
+/// Correct the server's address, keeping this device's pairing. Offered for the
+/// case the server moved on the tailnet: the access token is still good, so only
+/// the address needs putting right. A tailnet name is the better answer than a
+/// number, and the hint says so.
+Future<String?> showServerAddress(
+    BuildContext context, Palette p, String current) async {
+  final ctrl = TextEditingController(text: current);
+  return showDialog<String>(
+    context: context,
+    builder: (context) => _frame(
+      p,
+      "Server's address",
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Use the name the server has on Tailscale rather than its '
+              'number: a name keeps working if the number ever changes. This '
+              'device stays paired either way.',
+              style: glass(15, p.soft)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            autofocus: true,
+            style: glass(18, p.bright),
+            cursorColor: p.a,
+            decoration: InputDecoration(
+              hintText: 'name-of-server',
+              hintStyle: glass(18, p.foot),
+              enabledBorder:
+                  UnderlineInputBorder(borderSide: BorderSide(color: p.dim)),
+              focusedBorder:
+                  UnderlineInputBorder(borderSide: BorderSide(color: p.a)),
+            ),
+            onSubmitted: (v) =>
+                Navigator.pop(context, v.trim().isEmpty ? null : v.trim()),
+          ),
+        ],
+      ),
+      [
+        _btn(p, 'CANCEL', () => Navigator.pop(context, null)),
+        _btn(p, 'SAVE', () {
+          final v = ctrl.text.trim();
+          Navigator.pop(context, v.isEmpty ? null : v);
+        }, accent: true),
+      ],
+    ),
+  );
+}
+
 /// Rename an entry.
 Future<String?> showRename(BuildContext context, Palette p, String current) async {
   final ctrl = TextEditingController(text: current);
