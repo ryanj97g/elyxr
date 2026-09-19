@@ -4,3 +4,6 @@ Cargo.lock.orig
 
 # Built packages
 elyxr_*.deb
+
+# Code index, built locally
+.codegraph/
